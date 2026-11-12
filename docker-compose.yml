@@ -1,0 +1,66 @@
+# StockSense Inventory Management System (NX-2026-014)
+# Usage:  docker compose up --build
+# Web UI: http://localhost:8080   API: http://localhost:4000/api/health
+#
+# All settings can be overridden with environment variables or a .env file next to
+# this compose file (see .env.example). Defaults are for local evaluation only.
+
+name: stocksense
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-stocksense}
+      POSTGRES_USER: ${POSTGRES_USER:-stocksense}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stocksense_local_password}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-stocksense}:${POSTGRES_PASSWORD:-stocksense_local_password}@db:5432/${POSTGRES_DB:-stocksense}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-jwt-secret-change-me-before-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      TRUST_PROXY: "true"
+      LOGIN_RATE_LIMIT_WINDOW_MS: ${LOGIN_RATE_LIMIT_WINDOW_MS:-900000}
+      LOGIN_RATE_LIMIT_MAX: ${LOGIN_RATE_LIMIT_MAX:-5}
+      API_RATE_LIMIT_MAX: ${API_RATE_LIMIT_MAX:-300}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}
+      SEED_ON_START: ${SEED_ON_START:-true}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_MANAGER_PASSWORD: ${SEED_MANAGER_PASSWORD:-}
+      SEED_STAFF_PASSWORD: ${SEED_STAFF_PASSWORD:-}
+    ports:
+      - "${API_PORT:-4000}:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SHOW_DEMO_ACCOUNTS: ${VITE_SHOW_DEMO_ACCOUNTS:-true}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  db-data:

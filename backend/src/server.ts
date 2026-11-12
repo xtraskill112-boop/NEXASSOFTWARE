@@ -3,6 +3,10 @@ import { createApp } from './app';
 import { prisma } from './lib/prisma';
 
 async function main() {
+  if (env.NODE_ENV === 'production' && /change|insecure|example|dev-only/i.test(env.JWT_SECRET)) {
+    // eslint-disable-next-line no-console
+    console.warn('[security] JWT_SECRET looks like a placeholder. Set a strong random secret before going live.');
+  }
   await prisma.$connect();
   const app = createApp();
   const server = app.listen(env.PORT, () => {

@@ -10,16 +10,17 @@ function asRecord(value: Prisma.JsonValue | null): Details {
 export function describeActivity(action: string, rawDetails: Prisma.JsonValue | null): string {
   const d = asRecord(rawDetails) ?? {};
   const s = (k: string) => (d[k] === undefined || d[k] === null ? '' : String(d[k]));
+  const units = (k: string) => `${s(k)} unit${Number(d[k]) === 1 ? '' : 's'}`;
 
   switch (action) {
     case 'STOCK_IN':
-      return `Received ${s('quantity')} units of ${s('sku')} into ${s('warehouse')}`;
+      return `Received ${units('quantity')} of ${s('sku')} into ${s('warehouse')}`;
     case 'STOCK_OUT':
-      return `Dispatched ${s('quantity')} units of ${s('sku')} from ${s('warehouse')}`;
+      return `Dispatched ${units('quantity')} of ${s('sku')} from ${s('warehouse')}`;
     case 'STOCK_TRANSFER':
-      return `Transferred ${s('quantity')} units of ${s('sku')} from ${s('from')} to ${s('to')}`;
+      return `Transferred ${units('quantity')} of ${s('sku')} from ${s('from')} to ${s('to')}`;
     case 'STOCK_OPERATION_REJECTED':
-      return `Rejected ${s('type').replace('_', ' ').toLowerCase()} of ${s('requested')} units of ${s('sku')} (only ${s('available')} available)`;
+      return `Rejected ${s('type').replace('_', ' ').toLowerCase()} of ${units('requested')} of ${s('sku')} (only ${s('available')} available)`;
     case 'PRODUCT_CREATED':
       return `Created product ${s('sku')} - ${s('name')}`;
     case 'PRODUCT_UPDATED':
