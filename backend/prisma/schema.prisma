@@ -1,0 +1,150 @@
+// StockSense Inventory Management System - database schema
+// Project NX-2026-014 · Kaveri Distributors Pvt. Ltd.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum MovementType {
+  STOCK_IN
+  STOCK_OUT
+  TRANSFER
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String    @db.VarChar(120)
+  email        String    @unique @db.VarChar(254)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  role         Role      @default(STAFF)
+  isActive     Boolean   @default(true) @map("is_active")
+  // Incremented on password change / deactivation to invalidate issued JWTs.
+  tokenVersion Int       @default(0) @map("token_version")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  movements StockMovement[]
+  auditLogs AuditLog[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Warehouse {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(20)
+  name      String   @db.VarChar(120)
+  city      String   @db.VarChar(80)
+  address   String?  @db.VarChar(255)
+  // Maximum number of stock units the warehouse is designed to hold (for utilisation).
+  capacity  Int?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  stockLevels   StockLevel[]
+  movementsFrom StockMovement[] @relation("MovementFromWarehouse")
+  movementsTo   StockMovement[] @relation("MovementToWarehouse")
+
+  @@map("warehouses")
+}
+
+model Product {
+  id           String   @id @default(uuid()) @db.Uuid
+  sku          String   @unique @db.VarChar(40)
+  name         String   @db.VarChar(160)
+  description  String?  @db.VarChar(1000)
+  category     String   @db.VarChar(80)
+  unit         String   @default("pcs") @db.VarChar(20)
+  // Selling / valuation price per unit (INR)
+  unitPrice    Decimal  @map("unit_price") @db.Decimal(12, 2)
+  // Total stock (all warehouses) at or below which the product is "low stock"
+  reorderLevel Int      @default(10) @map("reorder_level")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  stockLevels StockLevel[]
+  movements   StockMovement[]
+
+  @@index([category])
+  @@index([isActive])
+  @@index([name])
+  @@map("products")
+}
+
+model StockLevel {
+  id          String   @id @default(uuid()) @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  // Guarded by CHECK (quantity >= 0) constraint in the migration
+  quantity    Int      @default(0)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, warehouseId])
+  @@index([warehouseId])
+  @@map("stock_levels")
+}
+
+model StockMovement {
+  id              String       @id @default(uuid()) @db.Uuid
+  type            MovementType
+  productId       String       @map("product_id") @db.Uuid
+  fromWarehouseId String?      @map("from_warehouse_id") @db.Uuid
+  toWarehouseId   String?      @map("to_warehouse_id") @db.Uuid
+  // Guarded by CHECK (quantity > 0) constraint in the migration
+  quantity        Int
+  reference       String?      @db.VarChar(80)
+  notes           String?      @db.VarChar(500)
+  performedById   String       @map("performed_by") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  product       Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  fromWarehouse Warehouse? @relation("MovementFromWarehouse", fields: [fromWarehouseId], references: [id], onDelete: Restrict)
+  toWarehouse   Warehouse? @relation("MovementToWarehouse", fields: [toWarehouseId], references: [id], onDelete: Restrict)
+  performedBy   User       @relation(fields: [performedById], references: [id], onDelete: Restrict)
+
+  @@index([productId, createdAt])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([type, createdAt])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  // e.g. AUTH_LOGIN, PRODUCT_CREATED, STOCK_OUT ...
+  action     String   @db.VarChar(60)
+  entityType String   @map("entity_type") @db.VarChar(40)
+  entityId   String?  @map("entity_id") @db.VarChar(64)
+  details    Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(64)
+  userAgent  String?  @map("user_agent") @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
