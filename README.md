@@ -262,7 +262,7 @@ Old `.xls` files must first be saved as `.xlsx` in Excel. The file is read insid
 
 [`mobile/`](mobile) packages the Firebase edition as an Android app with **Capacitor 8**. It has every screen and feature, the same Firebase project and the same accounts, plus:
 
-- **Install:** copy `StockSense-<version>.apk` to the phone, open it and allow *Install unknown apps* for your browser or file manager when Android asks. Android 7.0 or newer is required.
+- **Download:** **https://github.com/xtraskill112-boop/NEXASSOFTWARE/raw/claude/stocksense-inventory-system-e47qsb/mobile/release/StockSense.apk** (signed release, version 1.2.0). Open the link on the phone, then open the downloaded file and allow *Install unknown apps* for your browser or file manager when Android asks. Android 7.0 or newer is required.
 - **In-app updates, no reinstall:** like the desktop app, the Android app checks the update channel ([`updates/latest.json`](updates/latest.json)) on start-up and every 6 hours. It downloads newer versions, verifies their size and SHA-256, keeps them on the phone and shows **Restart now**. A damaged or mismatching download is ignored, and the working version keeps running. The same in-app updater also runs when `index.html` is opened in a phone or PC browser.
 - **Files:** Excel and CSV exports, templates and reports open Android's share sheet, so they can be saved to Files or Drive or sent by WhatsApp or email. *Import from Excel* uses the normal Android file picker.
 

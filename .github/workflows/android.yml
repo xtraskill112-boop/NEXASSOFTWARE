@@ -81,7 +81,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdir -p mobile/release
-          rm -f mobile/release/*.apk
+          rm -f mobile/release/*-unsigned.apk
           cp out/*-unsigned.apk mobile/release/
           git add -A mobile/release
           git commit -m "build: unsigned Android APK for signing [skip ci]"
