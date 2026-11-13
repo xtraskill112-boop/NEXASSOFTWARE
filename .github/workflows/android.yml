@@ -13,12 +13,15 @@ on:
     branches: ['**']
     paths:
       - 'mobile/**'
+      - '!mobile/release/**'
       - 'firebase/hosting/index.html'
       - '.github/workflows/android.yml'
 
 jobs:
   apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -65,6 +68,19 @@ jobs:
             cp "$UNSIGNED" "out/StockSense-$VERSION-unsigned.apk"
           fi
           ls -l out
+      # Development branches without signing secrets: keep the unsigned APK in the branch so it
+      # can be signed with the release keystore outside GitHub (artifacts expire).
+      - name: Store unsigned APK in the development branch
+        if: ${{ github.event_name == 'push' && startsWith(github.ref_name, 'claude/') && hashFiles('out/*-unsigned.apk') != '' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p mobile/release
+          rm -f mobile/release/*.apk
+          cp out/*-unsigned.apk mobile/release/
+          git add -A mobile/release
+          git commit -m "build: unsigned Android APK for signing [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@v4
         with:
           name: StockSense-Android
