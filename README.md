@@ -16,6 +16,7 @@ StockSense is a full-stack, multi-warehouse inventory management platform. It tr
 4. [Demo accounts & seed data](#demo-accounts--seed-data)
    - [Standalone single-file demo](#standalone-single-file-demo-indexhtml)
    - [Firebase edition (real logins, cloud data)](#firebase-edition-real-logins-cloud-data)
+   - [Windows desktop app (.exe)](#windows-desktop-app-exe)
 5. [Local development](#local-development)
 6. [Configuration](#configuration)
 7. [Architecture](#architecture)
@@ -197,6 +198,31 @@ cp dist-firebase/index.html ../firebase/hosting/index.html
 ```
 
 A project ID starting with `demo-` connects to the local Firebase emulators (`npm run emulators` in `firebase/`), which is how the end-to-end tests run.
+
+## Windows desktop app (.exe)
+
+The Firebase edition is also packaged as a Windows desktop app ([`desktop/`](desktop), built with Electron). It opens StockSense in its own window, with a Start-menu entry and a desktop shortcut, and uses the same Firebase project and accounts as the web version.
+
+| File | Use |
+|---|---|
+| `StockSense-Setup-1.0.0.exe` | Installer: choose the install folder; creates Start-menu and desktop shortcuts; uninstall from *Settings → Apps* |
+| `StockSense-Portable-1.0.0.exe` | Portable: no installation, just double-click (also runs from a USB drive) |
+
+**Requirements:** Windows 10 or 11 (64-bit) and an internet connection, because data lives in Firebase.
+
+**First launch:** the app is not code-signed (signing needs a paid certificate), so Windows SmartScreen may show *"Windows protected your PC"*. Click **More info → Run anyway**. Sign in with your StockSense account. You stay signed in between launches; use *Sign out* in the user menu to switch accounts.
+
+Desktop extras: the window size and position are remembered, only one copy runs at a time, Firebase console links open in your default browser, and CSV exports open a *Save as* dialog. If your network requires a proxy, set the environment variable `STOCKSENSE_PROXY=http://host:port`.
+
+**Build the .exe files**
+
+```bash
+cd frontend && npm run build:firebase && cp dist-firebase/index.html ../firebase/hosting/index.html
+cd ../desktop && npm install
+npm run dist:win              # -> desktop/release/StockSense-Setup-*.exe and StockSense-Portable-*.exe
+```
+
+On Windows this works as-is. On Linux the installer step needs Wine (32-bit support included). You can also run the **Desktop app (Windows)** workflow from the GitHub Actions tab, which builds both files on a Windows runner and attaches them to the run. To publish a new version, raise `version` in `desktop/package.json`.
 
 ## Local development
 

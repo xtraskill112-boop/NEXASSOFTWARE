@@ -1,0 +1,55 @@
+{
+  "name": "stocksense-desktop",
+  "productName": "StockSense",
+  "version": "1.0.0",
+  "private": true,
+  "description": "StockSense Inventory Management - desktop app for Kaveri Distributors Pvt. Ltd.",
+  "author": "Kaveri Distributors Pvt. Ltd.",
+  "main": "main.js",
+  "scripts": {
+    "prepare-app": "node scripts/prepare-app.js",
+    "start": "npm run prepare-app && electron .",
+    "dist:win": "npm run prepare-app && electron-builder --win nsis portable --x64",
+    "dist:linux": "npm run prepare-app && electron-builder --linux dir"
+  },
+  "devDependencies": {
+    "electron": "^45.3.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "in.kaveridistributors.stocksense",
+    "productName": "StockSense",
+    "copyright": "Copyright \u00a9 2026 Kaveri Distributors Pvt. Ltd.",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "app/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "StockSense",
+      "artifactName": "StockSense-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "StockSense-Portable-${version}.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office"
+    },
+    "publish": null
+  }
+}

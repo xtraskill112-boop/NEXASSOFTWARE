@@ -1,0 +1,36 @@
+name: Desktop app (Windows)
+
+# Builds the StockSense Windows installer and portable .exe on a Windows runner.
+# Run it from the Actions tab ("Run workflow") or by pushing a tag like desktop-v1.0.0.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build Firebase single-file edition
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build:firebase
+          Copy-Item dist-firebase/index.html ../firebase/hosting/index.html -Force
+      - name: Build Windows installer and portable exe
+        working-directory: desktop
+        run: |
+          npm ci
+          npm run prepare-app
+          npx electron-builder --win nsis portable --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StockSense-Windows
+          path: |
+            desktop/release/StockSense-Setup-*.exe
+            desktop/release/StockSense-Portable-*.exe
+          if-no-files-found: error

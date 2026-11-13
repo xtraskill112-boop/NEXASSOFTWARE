@@ -28,3 +28,6 @@ Thumbs.db
 
 # Firebase CLI cache
 .firebase/
+
+# Desktop app build resources (icons) are source files
+!desktop/build/
