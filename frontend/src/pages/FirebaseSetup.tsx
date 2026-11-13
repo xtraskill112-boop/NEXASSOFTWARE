@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AlertTriangle, CheckCircle2, Cloud, Flame, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, Cloud, Copy, ExternalLink, Flame, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
 import { ApiError, apiRequest, BACKEND, errorMessage } from '@/lib/api';
 import { clearFirebaseConfig, getFirebaseConfig, isConfigEditable, parseConfigSnippet, saveFirebaseConfig, usesEmulator } from '@/firebase/config';
 import { useAuth } from '@/context/AuthContext';
@@ -80,10 +80,25 @@ function FirebaseConnect() {
   );
 }
 
+interface SetupCheck {
+  id: string;
+  ok: boolean;
+  title: string;
+  message: string;
+  fixUrl?: string;
+}
+interface SetupStatus {
+  ready: boolean;
+  needsAdmin: boolean;
+  projectId: string;
+  checks: SetupCheck[];
+  rules: string;
+}
+
 function FirebaseStatus({ projectId, emulator, children }: { projectId: string; emulator: boolean; children: ReactNode }) {
   const status = useQuery({
     queryKey: ['firebase', 'setup-status'],
-    queryFn: () => apiRequest<{ needsAdmin: boolean; projectId: string }>('/setup/status', { skipAuthRedirect: true }),
+    queryFn: () => apiRequest<SetupStatus>('/setup/status', { skipAuthRedirect: true }),
     retry: false,
   });
 
@@ -130,6 +145,15 @@ function FirebaseStatus({ projectId, emulator, children }: { projectId: string; 
     );
   }
 
+  if (status.data && !status.data.ready) {
+    return (
+      <>
+        <SetupChecklist status={status.data} checking={status.isFetching} onRecheck={() => status.refetch()} />
+        {footer}
+      </>
+    );
+  }
+
   if (status.data?.needsAdmin) {
     return (
       <>
@@ -144,6 +168,93 @@ function FirebaseStatus({ projectId, emulator, children }: { projectId: string; 
       {children}
       {footer}
     </>
+  );
+}
+
+function SetupChecklist({ status, checking, onRecheck }: { status: SetupStatus; checking: boolean; onRecheck: () => void }) {
+  const toast = useToast();
+  const [showRules, setShowRules] = useState(false);
+  const rulesPending = status.checks.some((c) => c.id === 'rules' && !c.ok) || status.checks.some((c) => c.id === 'firestore' && !c.ok);
+  const steps: SetupCheck[] = [
+    ...status.checks,
+    ...(status.checks.some((c) => c.id === 'rules') ? [] : [{ id: 'rules', ok: false, title: 'Publish the StockSense security rules', message: 'After creating the database, open Firestore Database → Rules, paste the StockSense rules and click Publish.', fixUrl: `https://console.firebase.google.com/project/${status.projectId}/firestore/rules` }]),
+  ];
+  const pending = (c: SetupCheck) => !c.ok && !status.checks.includes(c);
+
+  const copyRules = async () => {
+    try {
+      await navigator.clipboard.writeText(status.rules);
+      toast.success('Security rules copied', 'Paste them into Firestore Database → Rules and click Publish.');
+    } catch {
+      setShowRules(true);
+      toast.info('Select and copy the rules', 'Your browser blocked automatic copying.');
+    }
+  };
+
+  return (
+    <div>
+      <div className="mb-2 flex size-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
+        <Flame className="size-6" />
+      </div>
+      <h2 className="text-2xl font-semibold tracking-tight text-ink">Finish setting up Firebase</h2>
+      <p className="mt-1.5 text-sm text-ink-2">
+        StockSense reached your Firebase project, but it is not ready yet. Complete the steps marked below in the Firebase console, then check again.
+      </p>
+
+      <ol className="mt-6 space-y-3">
+        {steps.map((c) => (
+          <li key={c.id} className={`rounded-lg border px-3.5 py-3 ${c.ok ? 'border-line bg-surface-2' : 'border-amber-300 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/5'}`}>
+            <div className="flex items-start gap-2.5">
+              {c.ok ? (
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[var(--status-good)]" aria-label="Done" />
+              ) : pending(c) ? (
+                <Circle className="mt-0.5 size-4 shrink-0 text-ink-3" aria-label="Next" />
+              ) : (
+                <XCircle className="mt-0.5 size-4 shrink-0 text-[var(--status-critical)]" aria-label="Needs action" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-ink">{c.title}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-ink-2">{c.message}</p>
+                {!c.ok && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {c.fixUrl && (
+                      <a href={c.fixUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-700">
+                        Open in Firebase console <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                    {c.id === 'rules' && (
+                      <>
+                        <button type="button" onClick={copyRules} className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-surface-3">
+                          <Copy className="size-3" /> Copy security rules
+                        </button>
+                        <button type="button" onClick={() => setShowRules((v) => !v)} className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
+                          {showRules ? 'Hide rules' : 'Show rules'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {showRules && rulesPending && (
+        <textarea
+          readOnly
+          value={status.rules}
+          onFocus={(e) => e.currentTarget.select()}
+          className="scrollbar-thin mt-3 h-56 w-full rounded-lg border border-line-strong bg-surface p-2 font-mono text-[11px] leading-snug text-ink-2"
+          aria-label="StockSense Firestore security rules"
+        />
+      )}
+
+      <Button className="mt-5 w-full" size="lg" onClick={onRecheck} loading={checking} icon={<RefreshCw className="size-4" />}>
+        Check again
+      </Button>
+      <p className="mt-3 text-xs text-ink-3">Changes in the Firebase console can take a minute or two to take effect.</p>
+    </div>
   );
 }
 

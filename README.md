@@ -137,11 +137,13 @@ cp dist-standalone/index.html ../standalone/index.html
 
 It runs on Firebase's free **Spark** plan, with no server to maintain.
 
+The file is fully self-contained: the app, the Firebase connection and the security rules (with a **Copy** button) are all inside `index.html`. When opened, it checks the Firebase project and, if anything is missing, shows a **setup checklist** (Authentication, Firestore database, security rules) with a button to the exact Firebase console page for each step.
+
 ### One-time setup in the Firebase console
 
 1. **Authentication → Get started → Sign-in method → Email/Password → Enable.**
 2. **Firestore Database → Create database**: Native mode, location `asia-south1` (Mumbai), **production mode**. This is separate from the Realtime Database, which StockSense does not use.
-3. **Firestore Database → Rules**: replace the contents with [`firebase/firestore.rules`](firebase/firestore.rules) and click **Publish**. Alternatively, run `cd firebase && npm install && npx firebase login && npm run deploy:rules`.
+3. **Firestore Database → Rules**: replace the contents with the StockSense rules (use **Copy security rules** on the app's setup screen, or [`firebase/firestore.rules`](firebase/firestore.rules)) and click **Publish**. Alternatively, run `cd firebase && npm install && npx firebase login && npm run deploy:rules`.
 4. Open `firebase/hosting/index.html` and **create the administrator account straight away**. The first account created on an empty project becomes the administrator.
 5. On the dashboard, click **Load demo catalogue** for the Kaveri Distributors demo data, or add your own warehouses and products. Add managers and staff under **User Management**.
 

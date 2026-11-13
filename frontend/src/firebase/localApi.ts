@@ -68,6 +68,8 @@ import {
 } from '@/standalone/server';
 import type { AuditRec, DB, MovementRec, ProductRec, Role, StockLevelRec, UserRec, WarehouseRec } from '@/standalone/store';
 import { seedProducts, seedWarehouses } from '@/standalone/seedData';
+// The security rules ship inside the single file so the setup screen can show and copy them.
+import firestoreRules from '../../../firebase/firestore.rules?raw';
 
 const SESSION_TOKEN = 'firebase-session';
 const HISTORY_DAYS = 90;
@@ -740,10 +742,111 @@ async function login(body: unknown) {
   return ok(await finishSignIn(cred.user.uid));
 }
 
+interface SetupCheck {
+  id: 'network' | 'auth' | 'firestore' | 'rules';
+  ok: boolean;
+  title: string;
+  message: string;
+  fixUrl?: string;
+}
+
+async function fetchJson(url: string, init?: RequestInit, timeoutMs = 10_000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: ctrl.signal });
+    let body: { error?: { message?: string; status?: string; details?: { reason?: string }[] } } = {};
+    try {
+      body = await res.json();
+    } catch {
+      /* empty body */
+    }
+    return { status: res.status, body };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * Checks the Firebase project directly over REST so the app can say precisely what is missing
+ * (Authentication not set up, Firestore not created, rules not published, or no network)
+ * instead of a generic "cannot connect".
+ */
+async function diagnoseProject(config: FirebaseWebConfig) {
+  const emulator = usesEmulator(config);
+  const consoleUrl = `https://console.firebase.google.com/project/${config.projectId}`;
+  const authBase = emulator ? 'http://127.0.0.1:9099/identitytoolkit.googleapis.com' : 'https://identitytoolkit.googleapis.com';
+  const fsBase = emulator ? 'http://127.0.0.1:8085' : 'https://firestore.googleapis.com';
+  const checks: SetupCheck[] = [];
+
+  let authRes: Awaited<ReturnType<typeof fetchJson>>;
+  let fsRes: Awaited<ReturnType<typeof fetchJson>>;
+  try {
+    [authRes, fsRes] = await Promise.all([
+      // A sign-in attempt for an address that cannot exist tells us whether Email/Password is enabled.
+      fetchJson(`${authBase}/v1/accounts:signInWithPassword?key=${encodeURIComponent(config.apiKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'connection-check@stocksense.invalid', password: 'connection-check-0', returnSecureToken: false }),
+      }),
+      // The setup flag is readable by anyone under the StockSense rules.
+      fetchJson(`${fsBase}/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents/config/setup?key=${encodeURIComponent(config.apiKey)}`),
+    ]);
+  } catch {
+    checks.push({
+      id: 'network',
+      ok: false,
+      title: 'Connect to the internet',
+      message:
+        'Firebase could not be reached from this browser. Check your internet connection. If you opened the file inside another app\'s preview, download it and open it in Chrome, Edge or Firefox instead. Firewalls or ad-blockers that block googleapis.com also cause this.',
+    });
+    return { ready: false, needsAdmin: false, checks };
+  }
+  checks.push({ id: 'network', ok: true, title: 'Internet connection', message: 'Firebase servers are reachable.' });
+
+  const authMsg = authRes.body.error?.message ?? '';
+  if (/CONFIGURATION_NOT_FOUND/.test(authMsg)) {
+    checks.push({ id: 'auth', ok: false, title: 'Set up Firebase Authentication', message: 'Authentication has not been started for this project. Open Authentication, click "Get started", then enable the Email/Password sign-in method.', fixUrl: `${consoleUrl}/authentication/providers` });
+  } else if (/OPERATION_NOT_ALLOWED|PASSWORD_LOGIN_DISABLED/.test(authMsg)) {
+    checks.push({ id: 'auth', ok: false, title: 'Enable Email/Password sign-in', message: 'Open Authentication → Sign-in method, choose Email/Password and enable it.', fixUrl: `${consoleUrl}/authentication/providers` });
+  } else if (/API key not valid|API_KEY_INVALID/i.test(authMsg)) {
+    checks.push({ id: 'auth', ok: false, title: 'Check the Firebase API key', message: 'Firebase rejected the API key in this configuration. Copy the web app config again from Project settings → General → Your apps.', fixUrl: `${consoleUrl}/settings/general` });
+  } else {
+    checks.push({ id: 'auth', ok: true, title: 'Email/Password sign-in', message: 'Firebase Authentication is set up with Email/Password.' });
+  }
+
+  const fsMsg = fsRes.body.error?.message ?? '';
+  const fsReason = fsRes.body.error?.details?.find((d) => d.reason)?.reason ?? '';
+  let needsAdmin = false;
+  let firestoreOk = false;
+  if (fsRes.status === 200) {
+    firestoreOk = true;
+  } else if (fsReason === 'SERVICE_DISABLED' || /has not been used in project|is disabled/i.test(fsMsg) || /database .* does not exist/i.test(fsMsg)) {
+    checks.push({ id: 'firestore', ok: false, title: 'Create the Cloud Firestore database', message: 'This project has no Cloud Firestore database yet (a Realtime Database is a different product). Open Firestore Database → Create database, choose Native mode, location asia-south1 (Mumbai) and production mode. It can take a minute or two to become available.', fixUrl: `${consoleUrl}/firestore` });
+  } else if (/Datastore Mode/i.test(fsMsg)) {
+    checks.push({ id: 'firestore', ok: false, title: 'Use Firestore in Native mode', message: 'The database was created in Datastore mode. StockSense needs Cloud Firestore in Native mode.', fixUrl: `${consoleUrl}/firestore` });
+  } else if (fsRes.status === 403) {
+    firestoreOk = true;
+    checks.push({ id: 'firestore', ok: true, title: 'Cloud Firestore database', message: 'The Firestore database exists.' });
+    checks.push({ id: 'rules', ok: false, title: 'Publish the StockSense security rules', message: 'The database is still using the default rules, which block everything. Open Firestore Database → Rules, replace all of the text with the StockSense rules below and click Publish.', fixUrl: `${consoleUrl}/firestore/rules` });
+    return { ready: false, needsAdmin: false, checks };
+  } else if (fsRes.status === 404) {
+    firestoreOk = true;
+    needsAdmin = true;
+  } else {
+    checks.push({ id: 'firestore', ok: false, title: 'Cloud Firestore', message: `Firestore answered with an unexpected error: ${fsMsg || `HTTP ${fsRes.status}`}`, fixUrl: `${consoleUrl}/firestore` });
+  }
+  if (firestoreOk) {
+    checks.push({ id: 'firestore', ok: true, title: 'Cloud Firestore database', message: 'The Firestore database exists.' });
+    checks.push({ id: 'rules', ok: true, title: 'StockSense security rules', message: 'The StockSense rules are published.' });
+  }
+  return { ready: checks.every((c) => c.ok), needsAdmin, checks };
+}
+
 async function setupStatus() {
-  const { db, config } = firebase();
-  const snap = await getDoc(doc(db, 'config', 'setup'));
-  return ok({ needsAdmin: !snap.exists(), projectId: config.projectId, emulator: usesEmulator(config) });
+  const { config } = firebase();
+  const result = await diagnoseProject(config);
+  return ok({ ...result, projectId: config.projectId, emulator: usesEmulator(config), rules: firestoreRules });
 }
 
 const setupAdminSchema = z.object({
@@ -876,6 +979,8 @@ function mapFirebaseError(err: unknown): unknown {
     case 'auth/network-request-failed':
     case 'unavailable':
       return new HttpError(503, 'NETWORK_ERROR', 'Cannot reach Firebase. Check your internet connection and try again.');
+    case 'auth/configuration-not-found':
+      return new HttpError(503, 'FIREBASE_SETUP', 'Firebase Authentication is not set up for this project. In the Firebase console open Authentication, click "Get started" and enable Email/Password.');
     case 'auth/operation-not-allowed':
       return new HttpError(503, 'FIREBASE_SETUP', 'Email/Password sign-in is not enabled for this Firebase project. Enable it in the Firebase console under Authentication > Sign-in method.');
     case 'permission-denied':
