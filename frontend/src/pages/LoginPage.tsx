@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { AlertTriangle, BarChart3, Boxes, Eye, EyeOff, Lock, Mail, ShieldCheck, Warehouse } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { ApiError, IS_STANDALONE } from '@/lib/api';
+import { ApiError, BACKEND, IS_STANDALONE } from '@/lib/api';
+import { FirebaseGate } from './FirebaseSetup';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 
@@ -16,7 +17,8 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-const showDemo = import.meta.env.VITE_SHOW_DEMO_ACCOUNTS !== 'false';
+// Demo accounts exist only in the server seed and the offline demo; Firebase uses real accounts.
+const showDemo = import.meta.env.VITE_SHOW_DEMO_ACCOUNTS !== 'false' && BACKEND !== 'firebase';
 const demoAccounts = [
   { role: 'Admin', email: 'admin@kaveridistributors.in', password: 'Admin@123' },
   { role: 'Manager', email: 'manager@kaveridistributors.in', password: 'Manager@123' },
@@ -111,6 +113,7 @@ export function LoginPage() {
             </div>
           </div>
 
+          <FirebaseGate>
           <h2 className="text-2xl font-semibold tracking-tight text-ink">Sign in</h2>
           <p className="mt-1.5 text-sm text-ink-2">Use your company account to access the inventory console.</p>
 
@@ -192,6 +195,7 @@ export function LoginPage() {
               </p>
             </div>
           )}
+          </FirebaseGate>
         </div>
       </div>
     </div>

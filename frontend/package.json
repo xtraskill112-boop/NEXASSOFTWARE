@@ -9,12 +9,14 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "build:standalone": "tsc -b && vite build --mode standalone"
+    "build:standalone": "tsc -b && vite build --mode standalone",
+    "build:firebase": "tsc -b && vite build --mode firebase"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.2",
     "@tanstack/react-query": "^5.107.1",
     "clsx": "^2.1.1",
+    "firebase": "^13.3.0",
     "lucide-react": "^1.72.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

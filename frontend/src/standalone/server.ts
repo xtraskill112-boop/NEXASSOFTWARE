@@ -29,7 +29,7 @@ import {
 /* Infrastructure                                                            */
 /* ------------------------------------------------------------------------- */
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(
     public status: number,
     public code: string,
@@ -39,12 +39,12 @@ class HttpError extends Error {
     super(message);
   }
 }
-const badRequest = (m: string, d?: unknown) => new HttpError(400, 'BAD_REQUEST', m, d);
-const unauthorized = (m = 'Authentication required') => new HttpError(401, 'UNAUTHORIZED', m);
-const forbidden = (m: string) => new HttpError(403, 'FORBIDDEN', m);
-const notFound = (e = 'Resource') => new HttpError(404, 'NOT_FOUND', `${e} not found`);
-const conflict = (m: string, d?: unknown) => new HttpError(409, 'CONFLICT', m, d);
-const insufficient = (d: { available: number; requested: number; productId: string; warehouseId: string }) =>
+export const badRequest = (m: string, d?: unknown) => new HttpError(400, 'BAD_REQUEST', m, d);
+export const unauthorized = (m = 'Authentication required') => new HttpError(401, 'UNAUTHORIZED', m);
+export const forbidden = (m: string) => new HttpError(403, 'FORBIDDEN', m);
+export const notFound = (e = 'Resource') => new HttpError(404, 'NOT_FOUND', `${e} not found`);
+export const conflict = (m: string, d?: unknown) => new HttpError(409, 'CONFLICT', m, d);
+export const insufficient = (d: { available: number; requested: number; productId: string; warehouseId: string }) =>
   new HttpError(409, 'INSUFFICIENT_STOCK', `Insufficient stock: requested ${d.requested}, only ${d.available} available`, d);
 
 export interface LocalRequest {
@@ -61,7 +61,7 @@ export interface LocalResponse {
   headers?: Record<string, string>;
 }
 
-const PERMISSIONS = {
+export const PERMISSIONS = {
   'dashboard:view': ['ADMIN', 'MANAGER', 'STAFF'],
   'products:view': ['ADMIN', 'MANAGER', 'STAFF'],
   'products:create': ['ADMIN', 'MANAGER'],
@@ -78,8 +78,8 @@ const PERMISSIONS = {
   'audit:view': ['ADMIN', 'MANAGER'],
   'users:manage': ['ADMIN'],
 } as const satisfies Record<string, readonly Role[]>;
-type Permission = keyof typeof PERMISSIONS;
-const permissionsFor = (role: Role) => (Object.keys(PERMISSIONS) as Permission[]).filter((p) => (PERMISSIONS[p] as readonly Role[]).includes(role));
+export type Permission = keyof typeof PERMISSIONS;
+export const permissionsFor = (role: Role) => (Object.keys(PERMISSIONS) as Permission[]).filter((p) => (PERMISSIONS[p] as readonly Role[]).includes(role));
 
 const SESSION_MS = 8 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -112,7 +112,8 @@ const passwordSchema = z
   .max(72, 'Password must be at most 72 characters')
   .regex(/[A-Za-z]/, 'Password must contain at least one letter')
   .regex(/[0-9]/, 'Password must contain at least one number');
-const uuidSchema = z.uuid({ error: 'Must be a valid UUID' });
+// Record ids: UUIDs in the standalone edition, 20-character auto ids in Cloud Firestore.
+const uuidSchema = z.string({ error: 'Id is required' }).trim().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/, { error: 'Must be a valid id' });
 const optionalTrimmed = (max: number) =>
   z.string().trim().max(max).optional().nullable().transform((v) => (v === undefined ? undefined : v === null || v === '' ? null : v));
 const booleanQuery = z.enum(['true', 'false']).transform((v) => v === 'true').optional();
@@ -127,7 +128,7 @@ const codeSchema = z.string({ error: 'Code is required' }).trim().toUpperCase().
 const capacitySchema = z.coerce.number().int('Capacity must be a whole number').min(1, 'Capacity must be at least 1').max(1_000_000_000).nullable().optional();
 const dateQuery = z.coerce.date({ error: 'Invalid date' }).optional();
 
-const S = {
+export const S = {
   login: z.object({ email: emailSchema, password: z.string({ error: 'Password is required' }).min(1, 'Password is required').max(200) }),
   changePassword: z
     .object({ currentPassword: z.string().min(1, 'Current password is required'), newPassword: passwordSchema })
@@ -233,7 +234,7 @@ function q<T extends z.ZodType>(schema: T, query: Record<string, string>): z.inf
 /* Serializers                                                               */
 /* ------------------------------------------------------------------------- */
 
-const publicUser = (u: UserRec) => ({ id: u.id, name: u.name, email: u.email, role: u.role, isActive: u.isActive, lastLoginAt: u.lastLoginAt, createdAt: u.createdAt, updatedAt: u.updatedAt });
+export const publicUser = (u: UserRec) => ({ id: u.id, name: u.name, email: u.email, role: u.role, isActive: u.isActive, lastLoginAt: u.lastLoginAt, createdAt: u.createdAt, updatedAt: u.updatedAt });
 
 function stockStatus(total: number, reorder: number) {
   if (total <= 0) return 'OUT_OF_STOCK' as const;
@@ -251,7 +252,7 @@ function warehouseRef(db: DB, id: string | null) {
   return w ? { id: w.id, code: w.code, name: w.name } : null;
 }
 
-function serializeMovement(db: DB, m: MovementRec) {
+export function serializeMovement(db: DB, m: MovementRec) {
   const p = db.products.find((x) => x.id === m.productId);
   const u = db.users.find((x) => x.id === m.performedById);
   return {
@@ -289,7 +290,7 @@ function productSummary(db: DB, p: ProductRec) {
   };
 }
 
-function productDetail(db: DB, id: string) {
+export function productDetail(db: DB, id: string) {
   const p = db.products.find((x) => x.id === id);
   if (!p) throw notFound('Product');
   const levels = new Map(db.stockLevels.filter((l) => l.productId === id).map((l) => [l.warehouseId, l]));
@@ -319,7 +320,7 @@ function productDetail(db: DB, id: string) {
   };
 }
 
-function warehouseWithStats(db: DB, w: WarehouseRec) {
+export function warehouseWithStats(db: DB, w: WarehouseRec) {
   let totalUnits = 0;
   let skuCount = 0;
   let stockValue = 0;
@@ -343,7 +344,7 @@ function warehouseWithStats(db: DB, w: WarehouseRec) {
   };
 }
 
-function warehouseDetail(db: DB, id: string) {
+export function warehouseDetail(db: DB, id: string) {
   const w = db.warehouses.find((x) => x.id === id);
   if (!w) throw notFound('Warehouse');
   return {
@@ -366,7 +367,7 @@ const AUDIT_ACTIONS = [
   'WAREHOUSE_UPDATED', 'WAREHOUSE_ACTIVATED', 'WAREHOUSE_DEACTIVATED', 'STOCK_IN', 'STOCK_OUT', 'STOCK_TRANSFER', 'STOCK_OPERATION_REJECTED',
 ];
 
-function describe(action: string, details: Record<string, unknown> | null): string {
+export function describe(action: string, details: Record<string, unknown> | null): string {
   const d = details ?? {};
   const s = (k: string) => (d[k] === undefined || d[k] === null ? '' : String(d[k]));
   const units = (k: string) => `${s(k)} unit${Number(d[k]) === 1 ? '' : 's'}`;
@@ -419,7 +420,7 @@ function authenticate(db: DB, token: string | null): UserRec {
   return user;
 }
 
-function requirePerm(user: UserRec, permission: Permission) {
+export function requirePerm(user: UserRec, permission: Permission) {
   if (!(PERMISSIONS[permission] as readonly Role[]).includes(user.role)) throw forbidden(`Your role (${user.role}) is not allowed to perform this action`);
 }
 
@@ -1084,6 +1085,34 @@ route('GET', '/audit-logs/filters', ({ db, user }) => {
 /* ------------------------------------------------------------------------- */
 /* Entry point                                                               */
 /* ------------------------------------------------------------------------- */
+
+/** Maps any thrown error to an API error response (same shape as the Express error handler). */
+export function errorResponse(err: unknown): LocalResponse {
+  if (err instanceof HttpError) return { status: err.status, body: { error: { code: err.code, message: err.message, details: err.details } } };
+  if (err instanceof ZodError) {
+    return { status: 400, body: { error: { code: 'VALIDATION_ERROR', message: 'Request validation failed', details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) } } };
+  }
+  console.error('[local api] unexpected error', err);
+  return { status: 500, body: { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' } } };
+}
+
+/**
+ * Runs a read-only (GET) route against a caller-supplied data snapshot and user.
+ * Used by the Firebase edition, which loads data from Firestore and performs writes itself.
+ */
+export function runReadRoute(db: DB, req: LocalRequest, user: UserRec): LocalResponse {
+  const path = req.path.split('?')[0]!.replace(/\/+$/, '') || '/';
+  const match = routes.find((r) => r.method === 'GET' && r.pattern.test(path));
+  if (!match) return { status: 404, body: { error: { code: 'NOT_FOUND', message: `Route ${req.method} ${path} not found` } } };
+  const params: Record<string, string> = {};
+  const m = match.pattern.exec(path)!;
+  match.keys.forEach((k, i) => (params[k] = decodeURIComponent(m[i + 1]!)));
+  try {
+    return match.handler({ db, req, params, user: () => user });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
 
 export function handleLocalRequest(req: LocalRequest): LocalResponse {
   const db = getDb();

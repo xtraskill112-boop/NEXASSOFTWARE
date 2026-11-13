@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, errorMessage } from '@/lib/api';
+import { api, ApiError, BACKEND, errorMessage } from '@/lib/api';
 import { qk } from '@/lib/queries';
 import type { Role, User } from '@/lib/types';
 import { useToast } from '@/context/ToastContext';
@@ -93,8 +93,14 @@ export function UserFormModal({ open, onClose, user, currentUserId }: { open: bo
         <Field label="Full name" htmlFor="u-name" required error={errors.name?.message}>
           <Input id="u-name" autoComplete="off" invalid={!!errors.name} {...register('name')} />
         </Field>
-        <Field label="Email" htmlFor="u-email" required error={errors.email?.message}>
-          <Input id="u-email" type="email" autoComplete="off" invalid={!!errors.email} {...register('email')} />
+        <Field
+          label="Email"
+          htmlFor="u-email"
+          required
+          error={errors.email?.message}
+          hint={isEdit && BACKEND === 'firebase' ? 'The email is the sign-in identity and cannot be changed.' : undefined}
+        >
+          <Input id="u-email" type="email" autoComplete="off" readOnly={isEdit && BACKEND === 'firebase'} invalid={!!errors.email} {...register('email')} />
         </Field>
         <Field label="Role" htmlFor="u-role" required error={errors.role?.message} hint={isSelf ? 'You cannot change your own role.' : role ? roleDescriptions[role] : undefined}>
           {isSelf ? (
@@ -138,15 +144,41 @@ export function ResetPasswordModal({ user, onClose }: { user: User | null; onClo
     if (user) reset({ password: '', confirm: '' });
   }, [user, reset]);
 
+  const byEmail = BACKEND === 'firebase';
   const mutation = useMutation({
-    mutationFn: (password: string) => api.post(`/users/${user!.id}/reset-password`, { password }),
-    onSuccess: () => {
+    mutationFn: (password: string) => api.post<{ message: string }>(`/users/${user!.id}/reset-password`, byEmail ? {} : { password }),
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: qk.audit });
-      toast.success('Password reset', `${user!.name} must sign in again with the new password.`);
+      toast.success(byEmail ? 'Reset email sent' : 'Password reset', byEmail ? res.message : `${user!.name} must sign in again with the new password.`);
       onClose();
     },
     onError: (err) => toast.error('Could not reset password', errorMessage(err)),
   });
+
+  if (byEmail) {
+    return (
+      <Modal
+        open={!!user}
+        onClose={onClose}
+        locked={mutation.isPending}
+        size="sm"
+        title="Reset password"
+        description={user ? `Firebase will email ${user.email} a secure link to choose a new password.` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" onClick={onClose} disabled={mutation.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={() => mutation.mutate('')} loading={mutation.isPending}>
+              Send reset email
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-2">The user keeps their current password until they follow the link in the email.</p>
+      </Modal>
+    );
+  }
 
   return (
     <Modal

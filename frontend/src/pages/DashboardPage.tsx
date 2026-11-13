@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import {
   Activity,
@@ -19,11 +19,12 @@ import {
   Warehouse as WarehouseIcon,
   XCircle,
 } from 'lucide-react';
-import { api, errorMessage } from '@/lib/api';
-import { qk } from '@/lib/queries';
+import { api, BACKEND, errorMessage } from '@/lib/api';
+import { qk, stockKeys } from '@/lib/queries';
 import type { DashboardSummary } from '@/lib/types';
 import { formatAxisCurrency, formatAxisNumber, formatCompact, formatCurrency, formatCurrencyCompact, formatNumber, timeAgo } from '@/lib/format';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { Card, ErrorState, PageHeader } from '@/components/ui/Common';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Spinner';
@@ -64,6 +65,37 @@ const activityIcon: Record<string, ReactNode> = {
   STOCK_OPERATION_REJECTED: <ShieldAlert className="size-4 text-amber-600 dark:text-amber-400" />,
 };
 
+/** Firebase edition: offer to load the demo catalogue into an empty project (administrators only). */
+function EmptyFirebaseCard() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const seed = useMutation({
+    mutationFn: () => api.post<{ products: number; warehouses: number; movements: number }>('/setup/demo-data'),
+    onSuccess: (res) => {
+      [...stockKeys, qk.categories].forEach((k) => qc.invalidateQueries({ queryKey: k }));
+      toast.success('Demo catalogue loaded', `${res.warehouses} warehouses, ${res.products} products and ${res.movements} opening stock receipts saved to Firebase.`);
+    },
+    onError: (err) => toast.error('Could not load demo data', errorMessage(err)),
+  });
+  return (
+    <div className="card mb-6 flex flex-col gap-4 border-dashed p-6 sm:flex-row sm:items-center">
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
+        <Boxes className="size-6" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-ink">Your Firebase database is empty</p>
+        <p className="mt-0.5 text-sm text-ink-2">
+          Load the Kaveri Distributors demo catalogue (3 warehouses, 32 products with opening stock), or start adding your own warehouses and products.
+          {seed.isPending && ' Saving to Firebase. This can take up to a minute…'}
+        </p>
+      </div>
+      <Button onClick={() => seed.mutate()} loading={seed.isPending} icon={<PackagePlus className="size-4" />}>
+        Load demo catalogue
+      </Button>
+    </div>
+  );
+}
+
 function greeting() {
   const h = new Date().getHours();
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
@@ -98,6 +130,8 @@ export function DashboardPage() {
           </>
         }
       />
+
+      {BACKEND === 'firebase' && user?.role === 'ADMIN' && data && data.kpis.totalSkus === 0 && data.kpis.inactiveProducts === 0 && <EmptyFirebaseCard />}
 
       {isError ? (
         <div className="card">

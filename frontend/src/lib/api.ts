@@ -87,6 +87,8 @@ interface RequestOptions {
 
 /** True for the single-file standalone demo build, where the API runs inside the browser. */
 export const IS_STANDALONE = localApi !== null;
+/** Which data backend this build talks to. */
+export const BACKEND: 'server' | 'standalone' | 'firebase' = localApi ? localApi.kind : 'server';
 
 async function rawRequest(path: string, opts: RequestOptions = {}): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/json' };

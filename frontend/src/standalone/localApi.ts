@@ -3,6 +3,7 @@ import { handleLocalRequest } from './server';
 import { resetDb } from './store';
 
 export const localApi: LocalApi = {
+  kind: 'standalone',
   async fetch(method, path, query, body, token) {
     // Round-trip the body through JSON exactly like an HTTP request would.
     const parsed = body !== undefined ? JSON.parse(JSON.stringify(body)) : undefined;

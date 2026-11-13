@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 dist-standalone/
+dist-firebase/
 build/
 coverage/
 *.tsbuildinfo
@@ -24,3 +25,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Firebase CLI cache
+.firebase/

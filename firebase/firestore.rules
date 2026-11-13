@@ -1,0 +1,234 @@
+rules_version = '2';
+
+// =============================================================================
+// StockSense - Firestore security rules (Firebase edition)
+//
+// These rules are the server-side authority for the Firebase edition: they run on
+// Google's servers for every read and write, so they cannot be bypassed from the
+// browser. They enforce:
+//   * authentication + active account for every access
+//   * role-based permissions (ADMIN / MANAGER / STAFF), read live from users/{uid}
+//   * stock can never become negative
+//   * every stock change is tied to a new, immutable ledger movement written in the
+//     same transaction with a matching quantity delta (balances cannot be edited directly)
+//   * append-only audit log and movement ledger
+//   * unique SKUs / warehouse codes via index documents
+//   * one-time bootstrap of the first administrator
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- helpers
+    function signedIn() { return request.auth != null; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function active() {
+      return signedIn() && exists(userPath(request.auth.uid)) && get(userPath(request.auth.uid)).data.isActive == true;
+    }
+    function role() { return get(userPath(request.auth.uid)).data.role; }
+    function isAdmin() { return active() && role() == 'ADMIN'; }
+    function isManager() { return active() && role() in ['ADMIN', 'MANAGER']; }
+
+    function optString(v, max) { return v == null || (v is string && v.size() <= max); }
+    function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+
+    function productAfter(id) { return getAfter(/databases/$(database)/documents/products/$(id)).data; }
+    function warehouseAfter(id) { return getAfter(/databases/$(database)/documents/warehouses/$(id)).data; }
+    function levelAfter(productId, warehouseId) {
+      return getAfter(/databases/$(database)/documents/stock_levels/$(productId + '_' + warehouseId)).data;
+    }
+
+    // ------------------------------------------------------------- bootstrap
+    // Readable by anyone so the app can tell whether first-time setup is needed.
+    match /config/setup {
+      allow get: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['adminUid', 'createdAt'])
+        && request.resource.data.adminUid == request.auth.uid
+        && existsAfter(userPath(request.auth.uid));
+      allow update, delete: if false;
+    }
+
+    // ----------------------------------------------------------------- users
+    function validUser(d) {
+      return d.keys().hasOnly(['name', 'email', 'role', 'isActive', 'lastLoginAt', 'createdAt', 'updatedAt'])
+        && str(d.name, 2, 120)
+        && str(d.email, 3, 254)
+        && d.role in ['ADMIN', 'MANAGER', 'STAFF']
+        && d.isActive is bool;
+    }
+
+    match /users/{uid} {
+      // Own profile is always readable (so a deactivated user can be told why);
+      // active users can read profiles to show "performed by" names.
+      allow get: if signedIn() && (request.auth.uid == uid || active());
+      allow list: if active();
+
+      allow create: if
+        // administrators create accounts for others
+        (isAdmin() && validUser(request.resource.data))
+        // first-time setup: the very first account becomes ADMIN, exactly once
+        || (signedIn() && request.auth.uid == uid
+            && validUser(request.resource.data)
+            && request.resource.data.role == 'ADMIN'
+            && request.resource.data.isActive == true
+            && !exists(/databases/$(database)/documents/config/setup)
+            && getAfter(/databases/$(database)/documents/config/setup).data.adminUid == uid);
+
+      allow update: if
+        // administrators manage accounts, but never their own role or active flag; email is immutable
+        (isAdmin() && validUser(request.resource.data)
+            && request.resource.data.email == resource.data.email
+            && (uid != request.auth.uid
+                || (request.resource.data.role == resource.data.role && request.resource.data.isActive == true)))
+        // users may only stamp their own last sign-in
+        || (active() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLoginAt', 'updatedAt']));
+
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------ warehouses
+    function validWarehouse(d) {
+      return d.keys().hasOnly(['code', 'name', 'city', 'address', 'capacity', 'isActive', 'createdAt', 'updatedAt'])
+        && str(d.code, 2, 20) && d.code.matches('^[A-Z0-9][A-Z0-9_-]*$')
+        && str(d.name, 2, 120)
+        && str(d.city, 2, 80)
+        && optString(d.address, 255)
+        && (d.capacity == null || (d.capacity is int && d.capacity > 0))
+        && d.isActive is bool;
+    }
+    function codeOwnedBy(code, warehouseId) {
+      return getAfter(/databases/$(database)/documents/warehouse_codes/$(code)).data.warehouseId == warehouseId;
+    }
+
+    match /warehouses/{warehouseId} {
+      allow read: if active();
+      allow create: if isAdmin() && validWarehouse(request.resource.data) && codeOwnedBy(request.resource.data.code, warehouseId);
+      allow update: if isAdmin() && validWarehouse(request.resource.data)
+        && (request.resource.data.code == resource.data.code || codeOwnedBy(request.resource.data.code, warehouseId));
+      allow delete: if false;
+    }
+
+    match /warehouse_codes/{code} {
+      allow read: if active();
+      allow create: if isAdmin() && request.resource.data.keys().hasOnly(['warehouseId'])
+        && warehouseAfter(request.resource.data.warehouseId).code == code;
+      allow delete: if isAdmin() && warehouseAfter(resource.data.warehouseId).code != code;
+      allow update: if false;
+    }
+
+    // -------------------------------------------------------------- products
+    function validProduct(d) {
+      return d.keys().hasOnly(['sku', 'name', 'description', 'category', 'unit', 'unitPrice', 'reorderLevel', 'isActive', 'createdAt', 'updatedAt'])
+        && str(d.sku, 2, 40) && d.sku.matches('^[A-Z0-9][A-Z0-9._/-]*$')
+        && str(d.name, 2, 160)
+        && optString(d.description, 1000)
+        && str(d.category, 2, 80)
+        && str(d.unit, 1, 20)
+        && (d.unitPrice is int || d.unitPrice is float) && d.unitPrice >= 0
+        && d.reorderLevel is int && d.reorderLevel >= 0
+        && d.isActive is bool;
+    }
+    function skuOwnedBy(sku, productId) {
+      return getAfter(/databases/$(database)/documents/product_skus/$(sku)).data.productId == productId;
+    }
+
+    match /products/{productId} {
+      allow read: if active();
+      allow create: if isManager() && validProduct(request.resource.data) && skuOwnedBy(request.resource.data.sku, productId);
+      allow update: if isManager() && validProduct(request.resource.data)
+        && (request.resource.data.sku == resource.data.sku || skuOwnedBy(request.resource.data.sku, productId));
+      // Products with history must be deactivated instead; the app checks history before deleting.
+      allow delete: if isAdmin();
+    }
+
+    match /product_skus/{sku} {
+      allow read: if active();
+      allow create: if isManager() && request.resource.data.keys().hasOnly(['productId'])
+        && productAfter(request.resource.data.productId).sku == sku;
+      allow delete: if isManager()
+        && (!existsAfter(/databases/$(database)/documents/products/$(resource.data.productId))
+            || productAfter(resource.data.productId).sku != sku);
+      allow update: if false;
+    }
+
+    // ---------------------------------------------------------- stock levels
+    // A balance may only change together with a NEW movement in the same write, and the
+    // change must equal that movement's quantity. Quantities can never be negative.
+    match /stock_levels/{levelId} {
+      allow read: if active();
+      allow create, update: if active() && validLevelChange(levelId);
+      allow delete: if false;
+    }
+
+    function validLevelChange(levelId) {
+      let d = request.resource.data;
+      let movementPath = /databases/$(database)/documents/movements/$(d.lastMovementId);
+      let m = getAfter(movementPath).data;
+      let before = resource == null ? 0 : resource.data.quantity;
+      let delta = d.quantity - before;
+      return d.keys().hasOnly(['productId', 'warehouseId', 'quantity', 'lastMovementId', 'updatedAt'])
+        && levelId == d.productId + '_' + d.warehouseId
+        && (resource == null || (resource.data.productId == d.productId && resource.data.warehouseId == d.warehouseId))
+        && d.quantity is int && d.quantity >= 0
+        && d.lastMovementId is string
+        && !exists(movementPath) && existsAfter(movementPath)
+        && m.productId == d.productId
+        && ((m.type == 'STOCK_IN' && m.toWarehouseId == d.warehouseId && delta == m.quantity)
+            || (m.type == 'STOCK_OUT' && m.fromWarehouseId == d.warehouseId && delta == -m.quantity)
+            || (m.type == 'TRANSFER' && m.fromWarehouseId == d.warehouseId && delta == -m.quantity)
+            || (m.type == 'TRANSFER' && m.toWarehouseId == d.warehouseId && delta == m.quantity));
+    }
+
+    // ------------------------------------------------------ movement ledger
+    function linked(productId, warehouseId, movementId) {
+      return levelAfter(productId, warehouseId).lastMovementId == movementId;
+    }
+
+    match /movements/{movementId} {
+      allow read: if active();
+      allow create: if active() && validMovement(movementId);
+      allow update, delete: if false;
+    }
+
+    function validMovement(movementId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['type', 'productId', 'fromWarehouseId', 'toWarehouseId', 'quantity', 'reference', 'notes', 'performedById', 'createdAt'])
+        && d.performedById == request.auth.uid
+        && d.createdAt == request.time
+        && d.quantity is int && d.quantity > 0 && d.quantity <= 1000000
+        && optString(d.reference, 80)
+        && optString(d.notes, 500)
+        && productAfter(d.productId).isActive == true
+        && ((d.type == 'STOCK_IN' && d.fromWarehouseId == null && d.toWarehouseId is string
+                && warehouseAfter(d.toWarehouseId).isActive == true
+                && linked(d.productId, d.toWarehouseId, movementId))
+            || (d.type == 'STOCK_OUT' && d.toWarehouseId == null && d.fromWarehouseId is string
+                && warehouseAfter(d.fromWarehouseId).isActive == true
+                && linked(d.productId, d.fromWarehouseId, movementId))
+            || (d.type == 'TRANSFER' && isManager()
+                && d.fromWarehouseId is string && d.toWarehouseId is string && d.fromWarehouseId != d.toWarehouseId
+                && warehouseAfter(d.fromWarehouseId).isActive == true && warehouseAfter(d.toWarehouseId).isActive == true
+                && linked(d.productId, d.fromWarehouseId, movementId)
+                && linked(d.productId, d.toWarehouseId, movementId)));
+    }
+
+    // ------------------------------------------------------------- audit log
+    match /audit_logs/{logId} {
+      allow read: if isManager();
+      allow create: if active()
+        && request.resource.data.keys().hasOnly(['userId', 'action', 'entityType', 'entityId', 'details', 'ipAddress', 'userAgent', 'createdAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && str(request.resource.data.action, 2, 60)
+        && str(request.resource.data.entityType, 2, 40);
+      allow update, delete: if false;
+    }
+
+    // Deny everything else.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

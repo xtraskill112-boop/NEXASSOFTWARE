@@ -15,6 +15,7 @@ StockSense is a full-stack, multi-warehouse inventory management platform. It tr
 3. [Quick start (Docker)](#quick-start-docker)
 4. [Demo accounts & seed data](#demo-accounts--seed-data)
    - [Standalone single-file demo](#standalone-single-file-demo-indexhtml)
+   - [Firebase edition (real logins, cloud data)](#firebase-edition-real-logins-cloud-data)
 5. [Local development](#local-development)
 6. [Configuration](#configuration)
 7. [Architecture](#architecture)
@@ -125,6 +126,75 @@ cd frontend
 npm run build:standalone          # writes dist-standalone/index.html
 cp dist-standalone/index.html ../standalone/index.html
 ```
+
+## Firebase edition (real logins, cloud data)
+
+[`firebase/hosting/index.html`](firebase/hosting/index.html) is the same single-file app connected to the Firebase project **`stocksense-7893c`**:
+
+- **Firebase Authentication** (email + password) for real user accounts
+- **Cloud Firestore** for shared, permanent storage, so every user and device sees the same live data
+- **Firestore security rules** ([`firebase/firestore.rules`](firebase/firestore.rules)) that act as the server and enforce the business rules on Google's servers
+
+It runs on Firebase's free **Spark** plan, with no server to maintain.
+
+### One-time setup in the Firebase console
+
+1. **Authentication → Get started → Sign-in method → Email/Password → Enable.**
+2. **Firestore Database → Create database**: Native mode, location `asia-south1` (Mumbai), **production mode**. This is separate from the Realtime Database, which StockSense does not use.
+3. **Firestore Database → Rules**: replace the contents with [`firebase/firestore.rules`](firebase/firestore.rules) and click **Publish**. Alternatively, run `cd firebase && npm install && npx firebase login && npm run deploy:rules`.
+4. Open `firebase/hosting/index.html` and **create the administrator account straight away**. The first account created on an empty project becomes the administrator.
+5. On the dashboard, click **Load demo catalogue** for the Kaveri Distributors demo data, or add your own warehouses and products. Add managers and staff under **User Management**.
+
+### A shareable link (Firebase Hosting)
+
+```bash
+cd firebase
+npm install
+npx firebase login
+npm run deploy:hosting        # publishes firebase/hosting/index.html
+```
+
+The app is then available at **https://stocksense-7893c.web.app**.
+
+### What the security rules enforce on the server
+
+- every read and write requires a signed-in, **active** StockSense account; deactivated users lose access immediately
+- role permissions: Staff record stock in and stock out; Manager also handles products and transfers; Admin also handles users and warehouses
+- **stock can never be negative**, and every balance change must be written together with a new ledger movement of exactly the same quantity, so balances cannot be edited directly
+- the stock ledger and audit log can only be added to, never edited or deleted
+- unique SKUs and warehouse codes; users cannot change their own role or reactivate themselves; the first-administrator setup can happen only once
+
+Stock operations use **Firestore transactions**: if two people dispatch the same stock at the same moment, one succeeds and the other is refused with *Insufficient stock*. This is verified in the automated end-to-end test.
+
+### Known limits of the Firebase edition
+
+Firestore rules cannot count or search across documents, so these checks run in the app rather than in the rules:
+
+- warehouses holding stock cannot be deactivated
+- products with history cannot be deleted
+- at least one administrator must remain (the rules do prevent admins demoting or deactivating themselves)
+- catalogue and user changes write their audit entries in the same transaction, but the rules do not require them
+
+Other limits:
+- Login rate limiting is Firebase Authentication's built-in brute-force protection. Failed sign-ins are not audited.
+- Administrators create accounts from the browser, so sign-ups must stay enabled in Firebase Authentication. An account created outside the app has no StockSense profile and the rules deny it all data access. Fully locking down sign-ups needs Cloud Functions (Blaze plan).
+- Admins reset passwords by sending Firebase's password-reset email. Email addresses cannot be changed.
+- History screens (movements, audit log) load the last 90 days by default. Use the date filters for older records.
+
+The Firebase web config in [`firebase/web-config.json`](firebase/web-config.json) is public by design: access is controlled by Authentication and the rules. For extra protection, restrict the API key to your app's domains in the Google Cloud console.
+
+### Developing and testing the Firebase edition
+
+```bash
+cd firebase && npm install
+npm run test:rules            # 22 security-rule tests in the Firestore emulator (needs Java 11+)
+
+cd ../frontend
+npm run build:firebase        # uses firebase/web-config.json (or VITE_FIREBASE_CONFIG)
+cp dist-firebase/index.html ../firebase/hosting/index.html
+```
+
+A project ID starting with `demo-` connects to the local Firebase emulators (`npm run emulators` in `firebase/`), which is how the end-to-end tests run.
 
 ## Local development
 

@@ -9,8 +9,11 @@ import { ConfirmProvider } from '@/context/ConfirmContext';
 import { AuthProvider } from '@/context/AuthContext';
 import App from './App';
 
-// The single-file standalone build is opened from disk (file://), so it uses hash-based routing.
-const Router = import.meta.env.VITE_STANDALONE === 'true' ? HashRouter : BrowserRouter;
+import { localApi } from '@local-api';
+
+// Single-file builds (standalone demo, Firebase edition) may be opened from disk or any static host,
+// so they use hash-based routing.
+const Router = localApi ? HashRouter : BrowserRouter;
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(

@@ -8,8 +8,8 @@ import { useConfirm } from '@/context/ConfirmContext';
 export function StandaloneBanner() {
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
-  if (!localApi) return null;
-  const api = localApi;
+  if (!localApi || localApi.kind !== 'standalone' || !localApi.resetData) return null;
+  const resetData = localApi.resetData;
 
   const reset = async () => {
     const ok = await confirm({
@@ -19,7 +19,7 @@ export function StandaloneBanner() {
     });
     if (!ok) return;
     setBusy(true);
-    api.resetData();
+    resetData();
     tokenStore.clear();
     window.location.hash = '#/login';
     window.location.reload();
