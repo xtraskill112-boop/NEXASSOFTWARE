@@ -17,6 +17,7 @@ StockSense is a full-stack, multi-warehouse inventory management platform. It tr
    - [Standalone single-file demo](#standalone-single-file-demo-indexhtml)
    - [Firebase edition (real logins, cloud data)](#firebase-edition-real-logins-cloud-data)
    - [Windows desktop app (.exe)](#windows-desktop-app-exe)
+   - [Bulk import / export with Excel](#bulk-import--export-with-excel)
 5. [Local development](#local-development)
 6. [Configuration](#configuration)
 7. [Architecture](#architecture)
@@ -37,7 +38,7 @@ StockSense is a full-stack, multi-warehouse inventory management platform. It tr
 |---|---|
 | **Authentication** | Email/password sign-in, JWT sessions, bcrypt password hashing, login rate limiting, change password, automatic sign-out when a session is invalidated |
 | **Dashboard** | Live KPIs (total SKUs, total inventory, low-stock products, total stock value), warehouse-wise stock chart with utilisation, 14-day movement trend (chart or table view), stock value by category, low-stock alerts, recent activity feed |
-| **Products** | Add, edit, activate/deactivate and permanently delete (when no history) products; opening stock on creation; search by name/SKU/category/description; filters for category, stock status, active status and warehouse; sorting by name, SKU, stock, value or price; paginated table; detail drawer with per-warehouse stock and recent movements |
+| **Products** | Add, edit, activate/deactivate and permanently delete (when no history) products; **bulk import from Excel/CSV and export to Excel**; opening stock on creation; search by name/SKU/category/description; filters for category, stock status, active status and warehouse; sorting by name, SKU, stock, value or price; paginated table; detail drawer with per-warehouse stock and recent movements |
 | **Warehouses** | Three seeded warehouses with live units, SKU count, share, value, capacity utilisation and low-stock count; add/edit/activate/deactivate (Admin); warehouse detail page with searchable stock list and movements |
 | **Inventory operations** | Stock In, Stock Out and Transfer forms with product search, live per-warehouse availability, balance preview, "Max" helper, confirmation dialogs and a receipt of the recorded movement |
 | **Movement history** | Full ledger filterable by type, warehouse, date range and free text (product, SKU, reference, notes) |
@@ -205,14 +206,34 @@ The Firebase edition is also packaged as a Windows desktop app ([`desktop/`](des
 
 | File | Use |
 |---|---|
-| `StockSense-Setup-1.0.0.exe` | Installer: choose the install folder; creates Start-menu and desktop shortcuts; uninstall from *Settings → Apps* |
-| `StockSense-Portable-1.0.0.exe` | Portable: no installation, just double-click (also runs from a USB drive) |
+| `StockSense-Setup-1.1.0.exe` | Installer: choose the install folder; creates Start-menu and desktop shortcuts; uninstall from *Settings → Apps* |
+| `StockSense-Portable-1.1.0.exe` | Portable: no installation, just double-click (also runs from a USB drive) |
 
 **Requirements:** Windows 10 or 11 (64-bit) and an internet connection, because data lives in Firebase.
 
 **First launch:** the app is not code-signed (signing needs a paid certificate), so Windows SmartScreen may show *"Windows protected your PC"*. Click **More info → Run anyway**. Sign in with your StockSense account. You stay signed in between launches; use *Sign out* in the user menu to switch accounts.
 
 Desktop extras: the window size and position are remembered, only one copy runs at a time, Firebase console links open in your default browser, and CSV exports open a *Save as* dialog. If your network requires a proxy, set the environment variable `STOCKSENSE_PROXY=http://host:port`.
+
+### Automatic updates (no reinstall)
+
+Desktop version **1.1.0 and newer** update themselves. When the app starts, and every 4 hours while it runs, it reads [`updates/latest.json`](updates/latest.json) from this GitHub repository. If a newer app version is listed, it downloads it, checks its size and SHA-256 checksum, stores it in the user's profile and offers **Restart now / Later**; otherwise the new version is used the next time StockSense opens. Damaged or mismatching downloads are discarded and the working version keeps running. *Help → Check for updates…* checks on demand, and *Help → About* shows the app and desktop versions. To turn updates off on a PC, set `STOCKSENSE_DISABLE_UPDATES=1`.
+
+Version **1.0.0** has no updater. Its users install 1.1.0 once, after which updates arrive automatically. They do not need the update to *see* new data: everything is stored in Firebase, so products imported by anyone appear in every copy immediately.
+
+**Publishing an update** (for example 1.2.0):
+
+```bash
+# 1. set "version": "1.2.0" in frontend/package.json, then rebuild the Firebase edition
+cd frontend && npm run build:firebase && cp dist-firebase/index.html ../firebase/hosting/index.html
+# 2. publish it to the update channel
+cd ../desktop && npm run publish-update -- "What's new in 1.2.0"
+# 3. commit and push updates/ - installed apps pick it up automatically
+```
+
+The channel is read from the `main` branch first, then from the development branch, so it keeps working after the project is merged into `main`. Updates change the web app only. A new installer is needed only when the desktop shell itself changes; `minShellVersion` in `latest.json` enforces this, and older shells keep their current version.
+
+Anyone who can push to this repository can publish updates, so keep write access limited. The update runs in the same sandbox as the rest of the app, without access to the computer's files.
 
 **Build the .exe files**
 
@@ -223,6 +244,18 @@ npm run dist:win              # -> desktop/release/StockSense-Setup-*.exe and St
 ```
 
 On Windows this works as-is. On Linux the installer step needs Wine (32-bit support included). You can also run the **Desktop app (Windows)** workflow from the GitHub Actions tab, which builds both files on a Windows runner and attaches them to the run. To publish a new version, raise `version` in `desktop/package.json`.
+
+## Bulk import / export with Excel
+
+On the **Products** page (Manager or Admin):
+
+- **Import from Excel** accepts an `.xlsx` or `.csv` file with up to 2,000 products. Download the template from the import window for the exact columns: SKU, Product name, Category, Unit, Unit price (INR), Reorder level, Description, Active (Yes/No), plus one *Opening stock* column per warehouse.
+- Every row is checked before anything is saved. The preview shows which rows will be **New**, **Update** or **Skip**, and explains each error, such as a missing price or a duplicate SKU. Rows with errors are not imported; the valid rows can still go ahead.
+- Products are matched by **SKU**. Existing products are updated, or skipped if you untick *Update products whose SKU already exists*. Opening stock is added only for new, active products, and is recorded as *Stock In* with reference `OPENING-STOCK`.
+- After the import, a summary shows created, updated, skipped and not-imported rows, and **Download results** saves a report with the reason for every row. Each change is recorded in the audit log and checked by the same rules as manual edits (including the Firebase security rules).
+- **Export to Excel** downloads the whole catalogue with stock per warehouse. Edit prices or reorder levels in Excel and import the file again to update them in bulk.
+
+Old `.xls` files must first be saved as `.xlsx` in Excel. The file is read inside the app and only the validated rows are sent.
 
 ## Local development
 

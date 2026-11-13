@@ -504,7 +504,7 @@ async function createProduct(user: UserRec, body: unknown, opts: { respond?: boo
   return ok({ data: productDetail(snapshotDb(await history('movements', undefined, undefined, toMovement)), ref.id) }, 201);
 }
 
-async function updateProduct(user: UserRec, id: string, body: unknown) {
+async function updateProduct(user: UserRec, id: string, body: unknown, opts: { respond?: boolean } = {}) {
   requirePerm(user, 'products:update');
   const input = S.updateProduct.parse(body);
   const { db } = firebase();
@@ -535,10 +535,11 @@ async function updateProduct(user: UserRec, id: string, body: unknown) {
     addAudit(tx, user, 'PRODUCT_UPDATED', 'Product', id, { sku: next.sku, changes });
   });
   cache.products.set(id, { ...next, updatedAt: new Date().toISOString() });
+  if (opts.respond === false) return ok({ data: { id } });
   return ok({ data: productDetail(snapshotDb(await history('movements', undefined, undefined, toMovement)), id) });
 }
 
-async function setProductStatus(user: UserRec, id: string, body: unknown) {
+async function setProductStatus(user: UserRec, id: string, body: unknown, opts: { respond?: boolean } = {}) {
   requirePerm(user, 'products:deactivate');
   const { isActive } = S.status.parse(body);
   const current = cache.products.get(id);
@@ -548,6 +549,7 @@ async function setProductStatus(user: UserRec, id: string, body: unknown) {
   addAudit(b, user, isActive ? 'PRODUCT_ACTIVATED' : 'PRODUCT_DEACTIVATED', 'Product', id, { sku: current.sku, previous: current.isActive });
   await b.commit();
   cache.products.set(id, { ...current, isActive, updatedAt: new Date().toISOString() });
+  if (opts.respond === false) return ok({ data: { id } });
   return ok({ data: productDetail(snapshotDb(await history('movements', undefined, undefined, toMovement)), id) });
 }
 
@@ -1056,9 +1058,11 @@ async function route(method: string, path: string, query: Record<string, string>
   }
 
   // Products
-  if (method === 'POST' && path === '/products') return createProduct(user, body);
-  if (method === 'PATCH' && /^\/products\/[^/]+\/status$/.test(path)) return setProductStatus(user, idParam(path, '/products/', '/status'), body);
-  if (method === 'PUT' && /^\/products\/[^/]+$/.test(path)) return updateProduct(user, idParam(path, '/products/'), body);
+  // ?minimal=1 (used by bulk import) skips building the full product detail response.
+  const respond = query.minimal !== '1';
+  if (method === 'POST' && path === '/products') return createProduct(user, body, { respond });
+  if (method === 'PATCH' && /^\/products\/[^/]+\/status$/.test(path)) return setProductStatus(user, idParam(path, '/products/', '/status'), body, { respond });
+  if (method === 'PUT' && /^\/products\/[^/]+$/.test(path)) return updateProduct(user, idParam(path, '/products/'), body, { respond });
   if (method === 'DELETE' && /^\/products\/[^/]+$/.test(path)) return deleteProduct(user, idParam(path, '/products/'));
 
   // Warehouses

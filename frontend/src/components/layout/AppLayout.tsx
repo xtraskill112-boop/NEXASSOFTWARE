@@ -16,7 +16,7 @@ export function AppLayout() {
           <Outlet />
         </main>
         <footer className="border-t border-line px-4 py-4 text-center text-xs text-ink-3 sm:px-6">
-          StockSense Inventory Management · Kaveri Distributors Pvt. Ltd. · NX-2026-014
+          StockSense Inventory Management v{import.meta.env.VITE_APP_VERSION} · Kaveri Distributors Pvt. Ltd. · NX-2026-014
         </footer>
       </div>
     </div>

@@ -29,6 +29,7 @@ export default defineConfig(({ mode }) => {
   // Firebase web config for the Firebase edition: VITE_FIREBASE_CONFIG env var, else firebase/web-config.json.
   const webConfigPath = fileURLToPath(new URL('../firebase/web-config.json', import.meta.url));
   const firebaseConfig = firebase ? env.VITE_FIREBASE_CONFIG || (existsSync(webConfigPath) ? JSON.stringify(JSON.parse(readFileSync(webConfigPath, 'utf8'))) : '') : '';
+  const appVersion = JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8')).version as string;
   const localApiModule = mode === 'standalone' ? './src/standalone/localApi.ts' : firebase ? './src/firebase/localApi.ts' : './src/lib/localApi.ts';
 
   return {
@@ -42,6 +43,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.VITE_STANDALONE': JSON.stringify(singleFile ? 'true' : 'false'),
       'import.meta.env.VITE_FIREBASE_CONFIG': JSON.stringify(firebaseConfig),
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
     },
     server: {
       port: 5173,

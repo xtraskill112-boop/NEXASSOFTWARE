@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Eye, FilterX, Pencil, Plus, Power, PowerOff, Trash2 } from 'lucide-react';
+import { Download, Eye, FileSpreadsheet, FilterX, Pencil, Plus, Power, PowerOff, Trash2 } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
 import { qk, stockKeys, useCategories, useWarehouses } from '@/lib/queries';
 import type { Paginated, Product, ProductDetail } from '@/lib/types';
@@ -17,6 +17,9 @@ import { ActiveBadge, StockStatusBadge } from '@/components/ui/Badge';
 import { EmptyState, ErrorState, PageHeader, Pagination, SearchInput, Table, TableSkeleton, Td, Th } from '@/components/ui/Common';
 import { ProductFormModal } from './ProductFormModal';
 import { ProductDetailDrawer } from './ProductDetailDrawer';
+import { ImportProductsModal } from './ImportProductsModal';
+import { exportProducts } from '@/lib/excel';
+import { apiRequest } from '@/lib/api';
 
 const SORTS = [
   { value: 'name:asc', label: 'Name (A–Z)' },
@@ -48,6 +51,26 @@ export function ProductsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Product | ProductDetail | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const all: Product[] = [];
+      for (let p = 1; p < 200; p++) {
+        const res = await apiRequest<Paginated<Product>>('/products', { query: { page: p, pageSize: 100, status: 'all', sortBy: 'sku' } });
+        all.push(...res.data);
+        if (p >= res.pagination.totalPages) break;
+      }
+      await exportProducts(all, warehouses ?? []);
+      toast.success('Products exported', `${all.length} products saved to an Excel file.`);
+    } catch (err) {
+      toast.error('Export failed', errorMessage(err));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const update = (patch: Record<string, string | null>, resetPage = true) => {
     const next = new URLSearchParams(params);
@@ -148,17 +171,27 @@ export function ProductsPage() {
         title="Products"
         description="Manage the product catalogue, pricing and reorder levels."
         actions={
-          can('products:create') && (
-            <Button
-              icon={<Plus className="size-4" />}
-              onClick={() => {
-                setEditing(null);
-                setFormOpen(true);
-              }}
-            >
-              Add product
+          <>
+            <Button variant="secondary" icon={<Download className="size-4" />} onClick={exportAll} loading={exporting}>
+              Export to Excel
             </Button>
-          )
+            {can('products:create') && (
+              <Button variant="secondary" icon={<FileSpreadsheet className="size-4" />} onClick={() => setImportOpen(true)}>
+                Import from Excel
+              </Button>
+            )}
+            {can('products:create') && (
+              <Button
+                icon={<Plus className="size-4" />}
+                onClick={() => {
+                  setEditing(null);
+                  setFormOpen(true);
+                }}
+              >
+                Add product
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -326,6 +359,7 @@ export function ProductsPage() {
       </div>
 
       <ProductFormModal open={formOpen} onClose={() => setFormOpen(false)} product={editing} />
+      <ImportProductsModal open={importOpen} onClose={() => setImportOpen(false)} />
       <ProductDetailDrawer
         productId={detailId}
         onClose={() => setDetailId(null)}

@@ -1,0 +1,9 @@
+{
+  "version": "1.1.0",
+  "file": "index.html",
+  "size": 1894388,
+  "sha256": "fe97b9bed27bbe9fc4ac42c29852328fa43fe8259bb5ad85346cbd7174badf4c",
+  "minShellVersion": "1.1.0",
+  "notes": "Bulk product import and export with Excel (.xlsx / .csv); version number shown in the footer; automatic updates.",
+  "releasedAt": "2026-11-13T04:50:42.203Z"
+}
