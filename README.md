@@ -18,6 +18,7 @@ StockSense is a full-stack, multi-warehouse inventory management platform. It tr
    - [Firebase edition (real logins, cloud data)](#firebase-edition-real-logins-cloud-data)
    - [Windows desktop app (.exe)](#windows-desktop-app-exe)
    - [Bulk import / export with Excel](#bulk-import--export-with-excel)
+   - [Android app (APK)](#android-app-apk)
 5. [Local development](#local-development)
 6. [Configuration](#configuration)
 7. [Architecture](#architecture)
@@ -256,6 +257,35 @@ On the **Products** page (Manager or Admin):
 - **Export to Excel** downloads the whole catalogue with stock per warehouse. Edit prices or reorder levels in Excel and import the file again to update them in bulk.
 
 Old `.xls` files must first be saved as `.xlsx` in Excel. The file is read inside the app and only the validated rows are sent.
+
+## Android app (APK)
+
+[`mobile/`](mobile) packages the Firebase edition as an Android app with **Capacitor 8**. It has every screen and feature, the same Firebase project and the same accounts, plus:
+
+- **Install:** copy `StockSense-<version>.apk` to the phone, open it and allow *Install unknown apps* for your browser or file manager when Android asks. Android 7.0 or newer is required.
+- **In-app updates, no reinstall:** like the desktop app, the Android app checks the update channel ([`updates/latest.json`](updates/latest.json)) on start-up and every 6 hours. It downloads newer versions, verifies their size and SHA-256, keeps them on the phone and shows **Restart now**. A damaged or mismatching download is ignored, and the working version keeps running. The same in-app updater also runs when `index.html` is opened in a phone or PC browser.
+- **Files:** Excel and CSV exports, templates and reports open Android's share sheet, so they can be saved to Files or Drive or sent by WhatsApp or email. *Import from Excel* uses the normal Android file picker.
+
+**Build:** the APK is built by the **Android app (APK)** GitHub Actions workflow ([`.github/workflows/android.yml`](.github/workflows/android.yml)) on GitHub's runners, which have the Android SDK. It runs automatically when `mobile/` or the Firebase web build changes, and attaches the APK to the run. To have GitHub sign the APK, add these repository secrets (*Settings → Secrets and variables → Actions*):
+
+| Secret | Value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | the release keystore, base64-encoded (`base64 -w0 stocksense-release.jks`) |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_ALIAS` | `stocksense` |
+| `ANDROID_KEY_PASSWORD` | key password (same as the keystore password) |
+
+Without the secrets, the workflow produces an unsigned APK that must be signed with the release keystore. **Keep the release keystore and its password safe and private, and never commit them.** Android only installs an app update over an existing installation when both are signed with the same key. If the key is lost, users have to uninstall and reinstall; their data is safe in Firebase.
+
+To build locally (requires the Android SDK and JDK 21):
+
+```bash
+cd frontend && npm run build:firebase && cp dist-firebase/index.html ../firebase/hosting/index.html
+cd ../mobile && npm install
+npm run build:apk             # -> mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+Version numbers: `versionName` and `versionCode` live in `mobile/android/app/build.gradle`. Raise them for each new APK. Features delivered through in-app updates do not need a new APK.
 
 ## Local development
 

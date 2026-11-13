@@ -142,14 +142,8 @@ export async function apiDownload(path: string, query?: Query, fallbackName = 'e
   const disposition = res.headers.get('Content-Disposition') ?? '';
   const match = /filename="?([^";]+)"?/i.exec(disposition);
   const filename = match?.[1] ?? fallbackName;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const { saveFile } = await import('./download');
+  await saveFile(blob, filename);
 }
 
 export const api = {

@@ -1,6 +1,6 @@
 {
   "name": "stocksense-frontend",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "StockSense Inventory Management System - web client (Kaveri Distributors Pvt. Ltd.)",
   "type": "module",

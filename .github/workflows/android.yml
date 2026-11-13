@@ -1,0 +1,72 @@
+name: Android app (APK)
+
+# Builds the StockSense Android app with Capacitor on a GitHub-hosted runner (the Android SDK
+# is preinstalled there). Runs when the mobile project or the Firebase web build changes, or
+# manually from the Actions tab once this workflow is on the default branch.
+#
+# Signing: if the repository secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD are set, the APK is signed and ready to install.
+# Without them an unsigned APK is produced, to be signed with the release keystore elsewhere.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    paths:
+      - 'mobile/**'
+      - 'firebase/hosting/index.html'
+      - '.github/workflows/android.yml'
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Android SDK platform
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      - name: Prepare web app and sync Capacitor
+        working-directory: mobile
+        run: |
+          npm ci
+          npm run sync
+      - name: Build release APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+      - name: Sign APK (when signing secrets are configured)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          mkdir -p out
+          UNSIGNED=mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          VERSION=$(node -p "require('./frontend/package.json').version")
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+            echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+            "$BT/zipalign" -p -f 4 "$UNSIGNED" aligned.apk
+            "$BT/apksigner" sign --ks release.jks --ks-pass env:KEYSTORE_PASSWORD --ks-key-alias "$KEY_ALIAS" --key-pass env:KEY_PASSWORD --out "out/StockSense-$VERSION.apk" aligned.apk
+            "$BT/apksigner" verify --verbose "out/StockSense-$VERSION.apk"
+            rm -f release.jks
+          else
+            cp "$UNSIGNED" "out/StockSense-$VERSION-unsigned.apk"
+          fi
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StockSense-Android
+          path: out/*.apk
+          if-no-files-found: error

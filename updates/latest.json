@@ -1,9 +1,9 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "file": "index.html",
-  "size": 1894388,
-  "sha256": "fe97b9bed27bbe9fc4ac42c29852328fa43fe8259bb5ad85346cbd7174badf4c",
+  "size": 1901271,
+  "sha256": "1bd667045e9accb90eb3c2a15680da78af1697b5cb29f7143dae973fd530880a",
   "minShellVersion": "1.1.0",
-  "notes": "Bulk product import and export with Excel (.xlsx / .csv); version number shown in the footer; automatic updates.",
-  "releasedAt": "2026-11-13T04:50:42.203Z"
+  "notes": "Android app support, in-app updates for phone and browser users, Excel files can be shared on Android.",
+  "releasedAt": "2026-11-13T09:47:27.311Z"
 }

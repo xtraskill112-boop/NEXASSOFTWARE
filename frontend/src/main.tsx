@@ -8,6 +8,8 @@ import { ToastProvider } from '@/context/ToastContext';
 import { ConfirmProvider } from '@/context/ConfirmContext';
 import { AuthProvider } from '@/context/AuthContext';
 import App from './App';
+import { bootFromStoredUpdate, startLiveUpdates } from '@/lib/liveUpdate';
+import { UpdateBanner } from '@/components/layout/UpdateBanner';
 
 import { localApi } from '@local-api';
 
@@ -16,20 +18,26 @@ import { localApi } from '@local-api';
 const Router = localApi ? HashRouter : BrowserRouter;
 import './index.css';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <Router>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <ToastProvider>
-            <ConfirmProvider>
-              <AuthProvider>
-                <App />
-              </AuthProvider>
-            </ConfirmProvider>
-          </ToastProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </Router>
-  </StrictMode>,
-);
+void (async () => {
+  // A newer verified release stored on this device replaces this page before anything starts.
+  if (await bootFromStoredUpdate()) return;
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <Router>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <ToastProvider>
+              <ConfirmProvider>
+                <AuthProvider>
+                  <App />
+                  <UpdateBanner />
+                </AuthProvider>
+              </ConfirmProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </QueryClientProvider>
+      </Router>
+    </StrictMode>,
+  );
+  startLiveUpdates();
+})();

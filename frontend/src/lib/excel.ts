@@ -5,6 +5,7 @@
 import { readSheet } from 'read-excel-file/browser';
 import writeExcelFile from 'write-excel-file/browser';
 import type { Product, Warehouse } from './types';
+import { saveFile } from './download';
 
 export const MAX_IMPORT_ROWS = 2000;
 
@@ -233,16 +234,7 @@ export function planImport(rows: ImportRow[], existing: Product[], updateExistin
 
 /* ----------------------------------------------------------------- writing */
 
-async function download(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
+const download = (blob: Blob, fileName: string) => saveFile(blob, fileName);
 
 const headerCell = (value: string) => ({ value, fontWeight: 'bold' as const, backgroundColor: '#E0E7FF' });
 
