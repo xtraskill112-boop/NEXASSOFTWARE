@@ -17,6 +17,11 @@ on:
       - 'firebase/hosting/index.html'
       - '.github/workflows/android.yml'
 
+# One build per branch at a time (the job may push the unsigned APK back to the branch).
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   apk:
     runs-on: ubuntu-latest
