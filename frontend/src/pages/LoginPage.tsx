@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { AlertTriangle, BarChart3, Boxes, Eye, EyeOff, Lock, Mail, ShieldCheck, Warehouse } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { ApiError } from '@/lib/api';
+import { ApiError, IS_STANDALONE } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 
@@ -185,7 +185,11 @@ export function LoginPage() {
                   </button>
                 ))}
               </div>
-              <p className="mt-3 text-[11px] leading-relaxed text-ink-3">Click a role to fill its credentials, then sign in. Change these passwords before going live.</p>
+              <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
+                {IS_STANDALONE
+                  ? 'Standalone demo edition: runs entirely in this browser with no server. Data is saved locally and can be reset from inside the app.'
+                  : 'Click a role to fill its credentials, then sign in. Change these passwords before going live.'}
+              </p>
             </div>
           )}
         </div>

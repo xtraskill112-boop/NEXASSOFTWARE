@@ -14,6 +14,7 @@ StockSense is a full-stack, multi-warehouse inventory management platform. It tr
 2. [Technology stack](#technology-stack)
 3. [Quick start (Docker)](#quick-start-docker)
 4. [Demo accounts & seed data](#demo-accounts--seed-data)
+   - [Standalone single-file demo](#standalone-single-file-demo-indexhtml)
 5. [Local development](#local-development)
 6. [Configuration](#configuration)
 7. [Architecture](#architecture)
@@ -105,6 +106,25 @@ The deterministic seed creates:
 - **32 FMCG products** across Beverages, Packaged Foods, Staples, Dairy, Snacks, Personal Care and Household Care. Several are deliberately low or out of stock, and one is inactive.
 - **~500 stock movements** over the last 30 days (opening receipts, customer dispatches, replenishments, hub-to-regional transfers). Stock levels are derived from these movements, so the ledger and balances always agree.
 - **~550 audit log entries** matching the history
+
+## Standalone single-file demo (`index.html`)
+
+[`standalone/index.html`](standalone/index.html) is the complete web application in **one HTML file**. Double-click it to open it in Chrome, Edge, Firefox or Safari. It needs no Docker, Node.js, database or internet connection.
+
+In this edition the REST API runs **inside the browser** ([`frontend/src/standalone/`](frontend/src/standalone)). It has the same endpoints, validation, roles and permissions, stock rules (stock-outs and transfers beyond available stock are refused with 409) and audit logging as the Express backend, on top of the same demo data. Data is saved in the browser's local storage, so it survives reloads and is private to that browser. Use **Reset demo data** in the yellow banner to start over.
+
+Use it for demos and client review only, not as the production system:
+- Each browser keeps its own copy of the data; nothing is shared between users or computers.
+- Security is simulated. Passwords are hashed and roles are enforced, but anyone with access to the browser can inspect or edit the stored data with developer tools.
+- The real PostgreSQL concurrency protections apply only to the server edition (`docker compose up --build`).
+
+Rebuild it after changing the frontend:
+
+```bash
+cd frontend
+npm run build:standalone          # writes dist-standalone/index.html
+cp dist-standalone/index.html ../standalone/index.html
+```
 
 ## Local development
 

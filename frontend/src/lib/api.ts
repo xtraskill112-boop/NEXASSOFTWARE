@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from './types';
+import { localApi } from '@local-api';
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
 const TOKEN_KEY = 'stocksense.token';
@@ -69,6 +70,12 @@ export function buildQuery(params?: Query): string {
   return s ? `?${s}` : '';
 }
 
+function stringQuery(params?: Query): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined && v !== null && v !== '') out[k] = String(v);
+  return out;
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -78,6 +85,9 @@ interface RequestOptions {
   skipAuthRedirect?: boolean;
 }
 
+/** True for the single-file standalone demo build, where the API runs inside the browser. */
+export const IS_STANDALONE = localApi !== null;
+
 async function rawRequest(path: string, opts: RequestOptions = {}): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   const token = tokenStore.get();
@@ -86,12 +96,14 @@ async function rawRequest(path: string, opts: RequestOptions = {}): Promise<Resp
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}${buildQuery(opts.query)}`, {
-      method: opts.method ?? 'GET',
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      signal: opts.signal,
-    });
+    res = localApi
+      ? await localApi.fetch(opts.method ?? 'GET', path, stringQuery(opts.query), opts.body, token)
+      : await fetch(`${API_BASE}${path}${buildQuery(opts.query)}`, {
+          method: opts.method ?? 'GET',
+          headers,
+          body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+          signal: opts.signal,
+        });
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw err;
     throw new ApiError(0, 'NETWORK_ERROR', 'Unable to reach the StockSense server. Check your connection and try again.');

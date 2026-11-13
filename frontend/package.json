@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "build:standalone": "tsc -b && vite build --mode standalone"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.2",
@@ -30,6 +31,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "tailwindcss": "^4.3.5",
     "typescript": "^5.9.3",
-    "vite": "^7.3.8"
+    "vite": "^7.3.8",
+    "vite-plugin-singlefile": "^2.3.4"
   }
 }
