@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { CheckCircle2, Plus, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge, Button, Card, Field, Input, Modal, Pagination, Segmented, Skeleton, Switch } from "@naamdev/ui";
 import { DataTable, Guard, PageHeader, confirmAction } from "@/components/kit";
@@ -118,17 +118,20 @@ function Zones() {
 function Integrations({ status }: { status: Record<string, boolean | string | null> }) {
   const [page, setPage] = useState(1);
   const logs = useResource<{ items: { id: string; channel: string; template: string; recipient: string; status: string; provider: string; error: string | null; createdAt: string }[]; meta: { totalPages: number } }>("/admin/notification-logs", { page });
-  const rows: [string, boolean, string][] = [
-    ["Razorpay payments", !!status.razorpay, status.razorpayMode ? `${status.razorpayMode} mode` : "Set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET"],
-    ["Razorpay webhooks", !!status.razorpayWebhook, "Set RAZORPAY_WEBHOOK_SECRET and add the webhook URL in the Razorpay dashboard"],
-    ["Cloudinary images", !!status.cloudinary, status.cloudinary ? "Uploads stored on Cloudinary" : "Using local disk storage"],
-    ["Email", !!status.email, `Provider: ${status.emailProvider}`],
-    ["SMS / OTP", !!status.sms, `Provider: ${status.smsProvider}`],
-    ["Push (Firebase)", !!status.push, "Set FIREBASE_SERVICE_ACCOUNT_BASE64"],
+  type State = "ok" | "dev" | "off";
+  const state = (ok: boolean, provider?: unknown): State => (!ok ? "off" : provider === "console" ? "dev" : "ok");
+  const devNote = "Development mode: messages are written to the API log, not delivered";
+  const rows: [string, State, string][] = [
+    ["Razorpay payments", state(!!status.razorpay), status.razorpayMode ? `${status.razorpayMode} mode` : "Set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET"],
+    ["Razorpay webhooks", state(!!status.razorpayWebhook), "Set RAZORPAY_WEBHOOK_SECRET and add the webhook URL in the Razorpay dashboard"],
+    ["Cloudinary images", state(!!status.cloudinary), status.cloudinary ? "Uploads stored on Cloudinary" : "Using local disk storage"],
+    ["Email", state(!!status.email, status.emailProvider), status.emailProvider === "console" ? devNote : `Provider: ${status.emailProvider}`],
+    ["SMS / OTP", state(!!status.sms, status.smsProvider), status.smsProvider === "console" ? devNote : `Provider: ${status.smsProvider}`],
+    ["Push (Firebase)", state(!!status.push), "Set FIREBASE_SERVICE_ACCOUNT_BASE64"],
   ];
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{rows.map(([l, ok, h]) => <Card key={l} className="flex items-start gap-3 p-4">{ok ? <CheckCircle2 className="h-5 w-5 text-pista-600" /> : <XCircle className="h-5 w-5 text-maroon-500" />}<div><p className="font-semibold text-ink">{l}</p><p className="text-xs text-muted">{h}</p></div></Card>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{rows.map(([l, st, h]) => <Card key={l} className="flex items-start gap-3 p-4">{st === "ok" ? <CheckCircle2 className="h-5 w-5 shrink-0 text-pista-600" /> : st === "dev" ? <AlertTriangle className="h-5 w-5 shrink-0 text-saffron-600" /> : <XCircle className="h-5 w-5 shrink-0 text-maroon-500" />}<div><p className="font-semibold text-ink">{l}{st === "dev" && <span className="ml-2 text-xs font-medium text-saffron-700">dev only</span>}</p><p className="text-xs text-muted">{h}</p></div></Card>)}</div>
       <p className="text-xs text-muted">Credentials are configured as server environment variables (never in this console). See docs/INTEGRATIONS.md.</p>
       <h2 className="font-display text-xl font-semibold text-ink">Notification delivery log</h2>
       <DataTable loading={logs.loading} rows={logs.data?.items} columns={[

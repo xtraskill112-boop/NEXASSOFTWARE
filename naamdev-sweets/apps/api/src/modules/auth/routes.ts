@@ -5,8 +5,9 @@ import {
   changePasswordSchema, emailSchema, normalizeIndianPhone, otpLoginSchema, otpRequestSchema, otpSchema,
   passwordLoginSchema, passwordSchema, phoneSchema, resetPasswordSchema,
 } from "@naamdev/shared";
-import { badRequest, conflict, notFound, unauthorized } from "../../lib/errors";
+import { AppError, badRequest, conflict, notFound, unauthorized, unavailable } from "../../lib/errors";
 import { body, param } from "../../lib/http";
+import { env, integrations } from "../../config/env";
 import { issueCsrf } from "../../middleware/csrf";
 import { requireAuth } from "../../middleware/auth";
 import { authLimiter, otpLimiter } from "../../middleware/rate-limit";
@@ -98,12 +99,20 @@ authRouter.get("/socket-token", requireAuth, (req, res) => {
 
 authRouter.post("/password/forgot", otpLimiter, async (req, res) => {
   const { identifier } = body(req, z.object({ identifier: z.string().trim().min(3).max(160) }));
+  const viaEmail = identifier.includes("@");
+  // A missing provider is a configuration fact (same answer for every identifier), so saying so leaks nothing.
+  if (!env.OTP_DEV_ECHO && !(viaEmail ? integrations.email : integrations.sms))
+    throw unavailable(viaEmail ? "Password reset by email is not available right now. Please use your mobile number." : "Password reset by SMS is not available right now. Please use your email address.");
   const user = await findUserByIdentifier(identifier);
   let devCode: string | undefined;
   if (user) {
-    const viaEmail = identifier.includes("@");
     const target = viaEmail ? user.email! : user.phone!;
-    if (target) devCode = (await issueOtp(target, "RESET_PASSWORD", viaEmail ? "email" : "sms")).devCode;
+    try {
+      if (target) devCode = (await issueOtp(target, "RESET_PASSWORD", viaEmail ? "email" : "sms")).devCode;
+    } catch (err) {
+      // Transient delivery failure for a real account: answer like any other identifier to avoid account enumeration.
+      if (!(err instanceof AppError) || err.status !== 503) throw err;
+    }
   }
   res.json({ sent: true, message: "If an account exists, we've sent a verification code.", devCode });
 });

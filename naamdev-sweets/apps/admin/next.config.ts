@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const API = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
@@ -21,6 +22,9 @@ const csp = [
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // Docker images use the standalone server; local `next start` keeps the default output.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   poweredByHeader: false,
   transpilePackages: ["@naamdev/ui", "@naamdev/shared", "@naamdev/api-client"],
   experimental: { optimizePackageImports: ["lucide-react", "framer-motion"] },

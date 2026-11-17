@@ -23,8 +23,9 @@
     "test": "pnpm --filter @naamdev/shared test && pnpm --filter @naamdev/api test",
     "test:unit": "pnpm --filter @naamdev/shared test",
     "test:api": "pnpm --filter @naamdev/api test",
-    "test:e2e": "playwright test --config tests/e2e/playwright.config.ts",
-    "assets": "node scripts/generate-assets.mjs"
+    "test:e2e": "bash scripts/e2e.sh",
+    "test:e2e:only": "playwright test --config tests/e2e/playwright.config.ts --trace off",
+    "assets": "pnpm --filter @naamdev/api exec tsx scripts/generate-assets.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

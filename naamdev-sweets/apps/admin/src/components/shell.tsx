@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import {
-  BadgeIndianRupee, BarChart3, Bell, Boxes, ClipboardList, FileText, FolderTree, Gauge, Image as ImageIcon, LayoutGrid, LifeBuoy, LogOut, Menu, Megaphone,
+  BadgeIndianRupee, BarChart3, Bell, Boxes, ClipboardList, FileText, FolderTree, Gauge, Image as ImageIcon, KeyRound, LayoutGrid, LifeBuoy, LogOut, Menu, Megaphone,
   Moon, Package, Percent, ScrollText, Settings, ShieldCheck, Star, Store, Sun, Truck, UserCog, Users, X, Undo2, Layers, MapPinned, Factory, CalendarClock,
 } from "lucide-react";
 import type { PermissionKey } from "@naamdev/shared";
@@ -12,6 +12,7 @@ import { Avatar, BrandLoader, Logo, cn } from "@naamdev/ui";
 import { useAdmin } from "@/lib/auth";
 import { useAdminRealtime } from "@/lib/realtime";
 import { STOREFRONT_URL } from "@/lib/api";
+import { ChangePasswordDialog } from "./change-password";
 
 type Item = { href: string; label: string; icon: typeof Gauge; any: PermissionKey[] };
 const NAV: { group: string; items: Item[] }[] = [
@@ -92,6 +93,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -117,10 +119,12 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
           <button type="button" aria-label="Toggle theme" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="grid h-10 w-10 place-items-center rounded-xl text-ink-soft hover:bg-surface-2">{mounted && resolvedTheme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}</button>
           <Link href="/notifications" aria-label="Notifications" className="relative grid h-10 w-10 place-items-center rounded-xl text-ink-soft hover:bg-surface-2"><Bell className="h-5 w-5" />{unread > 0 && <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-maroon-700 px-1 text-[9px] font-bold text-white">{unread}</span>}</Link>
           <Avatar name={me.name} src={me.avatarUrl} size={36} className="ml-1" />
+          <button type="button" aria-label="Change password" title="Change password" onClick={() => setPwOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl text-ink-soft hover:bg-surface-2"><KeyRound className="h-5 w-5" /></button>
           <button type="button" aria-label="Log out" onClick={() => void logout()} className="grid h-10 w-10 place-items-center rounded-xl text-ink-soft hover:bg-surface-2"><LogOut className="h-5 w-5" /></button>
         </div>
       </header>
       <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+      <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
     </div>
   );
 }

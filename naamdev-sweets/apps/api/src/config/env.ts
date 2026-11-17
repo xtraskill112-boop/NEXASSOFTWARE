@@ -68,6 +68,20 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+// Refuse to run production with development shortcuts or the example secrets.
+if (env.NODE_ENV === "production") {
+  const problems = [
+    env.OTP_DEV_ECHO && "OTP_DEV_ECHO must be false in production (it returns OTP codes in API responses)",
+    /dev-only|change-me/i.test(env.JWT_SECRET) && "JWT_SECRET is the example value — generate one with: openssl rand -base64 48",
+    /^0+1?$/.test(env.ENCRYPTION_KEY) && "ENCRYPTION_KEY is the example value — generate one with: openssl rand -hex 32",
+  ].filter(Boolean);
+  if (problems.length) {
+    // eslint-disable-next-line no-console
+    console.error(`Refusing to start in production:\n - ${problems.join("\n - ")}`);
+    process.exit(1);
+  }
+}
 export const isProduction = env.NODE_ENV === "production";
 export const isTest = env.NODE_ENV === "test";
 

@@ -1,0 +1,33 @@
+# Automatic HTTPS (Let's Encrypt) for all four public hostnames.
+{
+	email {$ACME_EMAIL}
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		-Server
+	}
+}
+
+{$WEB_DOMAIN} {
+	import common
+	reverse_proxy web:3000
+}
+
+{$ADMIN_DOMAIN} {
+	import common
+	reverse_proxy admin:3000
+}
+
+{$PARTNER_DOMAIN} {
+	import common
+	reverse_proxy delivery:3000
+}
+
+# API: Socket.IO, Razorpay webhooks and uploaded media.
+{$API_DOMAIN} {
+	import common
+	reverse_proxy api:4000
+}

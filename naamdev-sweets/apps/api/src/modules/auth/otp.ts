@@ -1,7 +1,8 @@
 import { prisma, type OtpPurpose } from "@naamdev/db";
 import { env } from "../../config/env";
 import { numericCode, safeEqual, sha256 } from "../../lib/crypto";
-import { badRequest, tooMany } from "../../lib/errors";
+import { badRequest, tooMany, unavailable } from "../../lib/errors";
+import { logger } from "../../lib/logger";
 import { renderEmail } from "../notifications/email-template";
 import { sendEmail, sendSms } from "../notifications/providers";
 
@@ -27,14 +28,22 @@ export async function issueOtp(target: string, purpose: OtpPurpose, channel: "sm
     throw tooMany("Please wait 30 seconds before requesting another OTP.");
 
   const code = numericCode(6);
-  await prisma.otpCode.create({ data: { target, purpose, codeHash: sha256(`${target}:${purpose}:${code}`), expiresAt: new Date(Date.now() + OTP_TTL_MS) } });
+  const otp = await prisma.otpCode.create({ data: { target, purpose, codeHash: sha256(`${target}:${purpose}:${code}`), expiresAt: new Date(Date.now() + OTP_TTL_MS) } });
 
   const text = `${code} is your NAAMDEV SWEETS OTP to ${PURPOSE_COPY[purpose]} NAAMDEV. Valid for 10 minutes. Never share it with anyone.`;
-  if (channel === "sms") {
-    await sendSms(target, text, { otp: code });
-  } else {
-    const { html } = renderEmail({ title: `Your OTP is ${code}`, body: text });
-    await sendEmail(target, "Your NAAMDEV SWEETS verification code", html, text);
+  const sent =
+    channel === "sms"
+      ? await sendSms(target, text, { otp: code })
+      : await sendEmail(target, "Your NAAMDEV SWEETS verification code", renderEmail({ title: `Your OTP is ${code}`, body: text }).html, text);
+  // Never tell the user an OTP was sent when it wasn't (except in dev echo mode, where the code is returned).
+  if (sent.status !== "SENT" && !env.OTP_DEV_ECHO) {
+    logger.warn({ channel, provider: sent.provider, error: sent.error }, "OTP delivery failed");
+    await prisma.otpCode.delete({ where: { id: otp.id } }).catch(() => undefined);
+    throw unavailable(
+      channel === "sms"
+        ? "We couldn't send an OTP to this number right now. Please try again shortly or sign in with your password."
+        : "We couldn't send the verification email right now. Please try again shortly.",
+    );
   }
   return { expiresInSeconds: OTP_TTL_MS / 1000, devCode: env.OTP_DEV_ECHO ? code : undefined };
 }

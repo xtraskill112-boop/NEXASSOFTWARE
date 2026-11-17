@@ -8,7 +8,7 @@ import { api, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/use-resource";
 
 export default function BroadcastPage() {
-  const integ = useResource<{ integrations: { email: boolean; sms: boolean; push: boolean } }>("/admin/settings");
+  const integ = useResource<{ integrations: { email: boolean; sms: boolean; push: boolean; emailProvider?: string; smsProvider?: string } }>("/admin/settings");
   const [f, setF] = useState({ title: "", body: "", link: "", audience: "MARKETING_OPT_IN", channels: ["IN_APP"] as string[] });
   const [busy, setBusy] = useState(false);
   const toggle = (c: string) => setF({ ...f, channels: f.channels.includes(c) ? f.channels.filter((x) => x !== c) : [...f.channels, c] });
@@ -24,8 +24,8 @@ export default function BroadcastPage() {
         <div className="grid grid-cols-2 gap-3">
           <Checkbox checked={f.channels.includes("IN_APP")} onChange={() => toggle("IN_APP")} label="In-app" />
           <Checkbox checked={f.channels.includes("PUSH")} onChange={() => toggle("PUSH")} label="Push" description={i && !i.push ? "Firebase not configured" : undefined} />
-          <Checkbox checked={f.channels.includes("EMAIL")} onChange={() => toggle("EMAIL")} label="Email" description={i && !i.email ? "Email provider not configured" : undefined} />
-          <Checkbox checked={f.channels.includes("SMS")} onChange={() => toggle("SMS")} label="SMS" description={i && !i.sms ? "SMS provider not configured" : "Requires a DLT-approved promotional template"} />
+          <Checkbox checked={f.channels.includes("EMAIL")} onChange={() => toggle("EMAIL")} label="Email" description={i && !i.email ? "Email provider not configured" : i?.emailProvider === "console" ? "Dev mode: written to API log only" : undefined} />
+          <Checkbox checked={f.channels.includes("SMS")} onChange={() => toggle("SMS")} label="SMS" description={i && !i.sms ? "SMS provider not configured" : i?.smsProvider === "console" ? "Dev mode: written to API log only" : "Requires a DLT-approved promotional template"} />
         </div>
         <InlineAlert>Delivery results for every channel are recorded in Settings → Notification log.</InlineAlert>
         <Button size="lg" loading={busy} disabled={f.title.length < 3 || f.body.length < 5 || !f.channels.length} onClick={async () => {

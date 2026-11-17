@@ -84,6 +84,9 @@ importers:
       '@node-rs/argon2':
         specifier: 2.0.2
         version: 2.0.2
+      '@prisma/client':
+        specifier: 6.19.3
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       cloudinary:
         specifier: 2.11.0
         version: 2.11.0
@@ -126,6 +129,9 @@ importers:
       pino-http:
         specifier: 10.5.0
         version: 10.5.0
+      prisma:
+        specifier: 6.19.3
+        version: 6.19.3(typescript@5.9.3)
       sharp:
         specifier: 0.34.5
         version: 0.34.5
@@ -181,6 +187,58 @@ importers:
       vitest:
         specifier: 3.2.7
         version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.30.2)(tsx@4.21.1)
+
+  apps/delivery:
+    dependencies:
+      '@naamdev/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@naamdev/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@naamdev/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      framer-motion:
+        specifier: 12.43.0
+        version: 12.43.0(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      lucide-react:
+        specifier: 0.545.0
+        version: 0.545.0(react@19.1.10)
+      next:
+        specifier: 15.5.29
+        version: 15.5.29(@opentelemetry/api@1.10.0)(@playwright/test@1.63.0)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      next-themes:
+        specifier: 0.4.6
+        version: 0.4.6(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      react:
+        specifier: 19.1.10
+        version: 19.1.10
+      react-dom:
+        specifier: 19.1.10
+        version: 19.1.10(react@19.1.10)
+      sonner:
+        specifier: 2.0.8
+        version: 2.0.8(@types/react@19.1.17)(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+    devDependencies:
+      '@tailwindcss/postcss':
+        specifier: 4.1.18
+        version: 4.1.18
+      '@types/node':
+        specifier: 22.20.5
+        version: 22.20.5
+      '@types/react':
+        specifier: 19.1.17
+        version: 19.1.17
+      '@types/react-dom':
+        specifier: 19.1.11
+        version: 19.1.11(@types/react@19.1.17)
+      tailwindcss:
+        specifier: 4.1.18
+        version: 4.1.18
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   apps/web:
     dependencies:

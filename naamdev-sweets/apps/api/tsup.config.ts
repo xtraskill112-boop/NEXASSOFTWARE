@@ -1,7 +1,8 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  // `seed` lets a production image initialise a fresh database: node dist/seed.js
+  entry: { index: "src/index.ts", seed: "../../packages/db/prisma/seed.ts" },
   format: ["esm"],
   platform: "node",
   target: "node20",

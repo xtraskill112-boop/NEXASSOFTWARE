@@ -92,10 +92,12 @@ adminMarketingRouter.put("/home-sections/:id", requirePermission("content.manage
 adminMarketingRouter.post("/home-sections/reorder", requirePermission("content.manage"), async (req, res) => {
   const { ids } = body(req, z.object({ ids: z.array(z.string()).max(50) }));
   await prisma.$transaction(ids.map((id, i) => prisma.homeSection.update({ where: { id }, data: { sortOrder: i } })));
+  await audit(req, "home_section.reorder", "HomeSection", null, { ids });
   res.json({ ok: true });
 });
 adminMarketingRouter.delete("/home-sections/:id", requirePermission("content.manage"), async (req, res) => {
-  await prisma.homeSection.delete({ where: { id: param(req, "id") } });
+  const s = await prisma.homeSection.delete({ where: { id: param(req, "id") } });
+  await audit(req, "home_section.delete", "HomeSection", s.id, { title: s.title });
   res.json({ ok: true });
 });
 
@@ -114,15 +116,20 @@ adminMarketingRouter.get("/faqs", requirePermission("content.manage"), async (_r
   res.json({ faqs: await prisma.faq.findMany({ orderBy: [{ category: "asc" }, { sortOrder: "asc" }] }) });
 });
 adminMarketingRouter.post("/faqs", requirePermission("content.manage"), async (req, res) => {
-  res.status(201).json({ faq: await prisma.faq.create({ data: body(req, faqSchema) }) });
+  const faq = await prisma.faq.create({ data: body(req, faqSchema) });
+  await audit(req, "faq.create", "Faq", faq.id);
+  res.status(201).json({ faq });
 });
 adminMarketingRouter.put("/faqs/:id", requirePermission("content.manage"), async (req, res) => {
-  res.json({ faq: await prisma.faq.update({ where: { id: param(req, "id") }, data: body(req, faqSchema) }) });
+  const faq = await prisma.faq.update({ where: { id: param(req, "id") }, data: body(req, faqSchema) });
+  await audit(req, "faq.update", "Faq", faq.id);
+  res.json({ faq });
 });
 adminMarketingRouter.delete("/faqs/:id", requirePermission("content.manage"), async (req, res) => {
   const f = await prisma.faq.findUnique({ where: { id: param(req, "id") } });
   if (!f) throw notFound("FAQ");
   await prisma.faq.delete({ where: { id: f.id } });
+  await audit(req, "faq.delete", "Faq", f.id, { question: f.question });
   res.json({ ok: true });
 });
 
