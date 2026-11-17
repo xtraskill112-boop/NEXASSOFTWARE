@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome NAAMDEV arch for the status bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M256,28 C300,70 372,86 400,150 C424,206 424,250 424,300 L424,470 Q424,484 410,484 L102,484 Q88,484 88,470 L88,300 C88,250 88,206 112,150 C140,86 212,70 256,28 Z M256,170 C214,170 180,204 180,246 C180,288 214,322 256,322 C298,322 332,288 332,246 C332,204 298,170 256,170 Z" />
+</vector>

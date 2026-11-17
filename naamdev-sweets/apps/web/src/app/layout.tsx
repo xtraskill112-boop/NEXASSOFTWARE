@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Plus_Jakarta_Sans, Noto_Sans_Devanagari } from "next/font/google";
+import localFont from "next/font/local";
 import { cookies } from "next/headers";
 import type { PublicSettings } from "@naamdev/api-client";
 import { SplashScreen } from "@naamdev/ui";
@@ -8,9 +8,10 @@ import { SITE_URL } from "@/lib/api";
 import { fetchPublic } from "@/lib/server-api";
 import "./globals.css";
 
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap", axes: ["opsz", "SOFT"] });
-const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", display: "swap" });
-const deva = Noto_Sans_Devanagari({ subsets: ["devanagari"], variable: "--font-devanagari", display: "swap", weight: ["400", "500", "600", "700"] });
+// Fonts are self-hosted from npm (Fontsource) so builds never depend on reaching Google Fonts.
+const fraunces = localFont({ src: "../../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-standard-normal.woff2", variable: "--font-fraunces", display: "swap", weight: "100 900" });
+const jakarta = localFont({ src: "../../node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2", variable: "--font-jakarta", display: "swap", weight: "200 800" });
+const deva = localFont({ src: "../../node_modules/@fontsource-variable/noto-sans-devanagari/files/noto-sans-devanagari-devanagari-wght-normal.woff2", variable: "--font-devanagari", display: "swap", weight: "100 900" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

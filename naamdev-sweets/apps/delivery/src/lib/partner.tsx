@@ -84,8 +84,23 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   }, [me?.id, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stream GPS while online. Positions are throttled (≥10s or ≥30m) to save battery and data.
+  // Inside the NAAMDEV Partner Android app a native foreground service does this instead, so the
+  // location keeps updating while the rider navigates in Google Maps.
   useEffect(() => {
     const online = partner?.isOnline;
+    const shell = nativeShell();
+    if (shell) {
+      if (!online) {
+        shell.stopTracking();
+        setGps("off");
+        return;
+      }
+      shell.startTracking();
+      const read = () => setGps(NATIVE_GPS[shell.trackingState()] ?? "waiting");
+      read();
+      const t = setInterval(read, 3000);
+      return () => clearInterval(t);
+    }
     if (!online || !("geolocation" in navigator)) {
       if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
       watchId.current = null;
@@ -120,6 +135,7 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
+    nativeShell()?.stopTracking();
     if (partner?.isOnline) await api.post("/delivery/status", { online: false }).catch(() => undefined);
     await api.post("/auth/logout").catch(() => undefined);
     setMe(null);
@@ -128,6 +144,22 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
 
   return <C.Provider value={{ me, setMe, partner, earnings, offers, active, refresh, setOnline, gps, logout }}>{children}</C.Provider>;
 }
+
+/** Bridge exposed by the NAAMDEV Partner Android app (mobile/android). Absent in normal browsers. */
+interface NativeShell {
+  canTrack(): boolean;
+  startTracking(): void;
+  stopTracking(): void;
+  trackingState(): string;
+}
+
+function nativeShell(): NativeShell | null {
+  if (typeof window === "undefined") return null;
+  const shell = (window as unknown as { NaamdevAndroid?: Partial<NativeShell> }).NaamdevAndroid;
+  return shell && typeof shell.canTrack === "function" && shell.canTrack() ? (shell as NativeShell) : null;
+}
+
+const NATIVE_GPS: Record<string, Ctx["gps"]> = { ok: "ok", waiting: "waiting", denied: "denied", off: "waiting", error: "waiting", signed_out: "waiting" };
 
 export function usePartner() {
   const c = useContext(C);

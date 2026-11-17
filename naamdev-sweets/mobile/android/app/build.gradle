@@ -1,0 +1,95 @@
+plugins {
+    id "com.android.application"
+}
+
+/** Reads a build setting from -P<gradleProp>, then the environment variable <envName>. */
+def setting = { String gradleProp, String envName, String fallback = "" ->
+    def v = project.findProperty(gradleProp) ?: System.getenv(envName)
+    return (v == null || v.toString().trim().isEmpty()) ? fallback : v.toString().trim()
+}
+
+def customerUrl = setting("naamdev.customerUrl", "NAAMDEV_CUSTOMER_URL")
+def partnerUrl = setting("naamdev.partnerUrl", "NAAMDEV_PARTNER_URL")
+[customerUrl, partnerUrl].each { url ->
+    if (!url.isEmpty() && !(url ==~ /^https?:\/\/[A-Za-z0-9.\-]+(:[0-9]{1,5})?\/?$/)) {
+        throw new GradleException("Site address must look like https://shop.example.com (got: ${url})")
+    }
+}
+def versionCodeValue = setting("naamdev.versionCode", "NAAMDEV_VERSION_CODE", "1").toInteger()
+def versionNameValue = setting("naamdev.versionName", "NAAMDEV_VERSION_NAME", "1.0.${versionCodeValue}".toString())
+
+// Release signing comes only from the environment (CI secrets); keys are never committed.
+def releaseStore = setting("naamdev.keystore", "NAAMDEV_KEYSTORE_FILE")
+def hasReleaseKey = !releaseStore.isEmpty() && file(releaseStore).exists()
+
+// Plain HTTP is allowed only for builds that ask for the server address on first launch
+// (testing on a local network). Builds with a baked-in https:// address are HTTPS-only.
+def cleartextFor = { String url -> url.isEmpty() || url.startsWith("http://") ? "true" : "false" }
+
+android {
+    namespace "com.naamdevsweets.shell"
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 24
+        targetSdk 35
+        versionCode versionCodeValue
+        versionName versionNameValue
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    flavorDimensions = ["app"]
+    productFlavors {
+        customer {
+            dimension "app"
+            applicationId "com.naamdevsweets.app"
+            resValue "string", "app_name", "NAAMDEV SWEETS"
+            buildConfigField "String", "APP_KIND", "\"customer\""
+            buildConfigField "String", "START_URL", "\"${customerUrl}\""
+            manifestPlaceholders = [cleartext: cleartextFor(customerUrl)]
+        }
+        partner {
+            dimension "app"
+            applicationId "com.naamdevsweets.partner"
+            resValue "string", "app_name", "NAAMDEV Partner"
+            buildConfigField "String", "APP_KIND", "\"partner\""
+            buildConfigField "String", "START_URL", "\"${partnerUrl}\""
+            manifestPlaceholders = [cleartext: cleartextFor(partnerUrl)]
+        }
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            release {
+                storeFile file(releaseStore)
+                storePassword setting("naamdev.keystorePassword", "NAAMDEV_KEYSTORE_PASSWORD")
+                keyAlias setting("naamdev.keyAlias", "NAAMDEV_KEY_ALIAS")
+                keyPassword setting("naamdev.keyPassword", "NAAMDEV_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (hasReleaseKey) signingConfig signingConfigs.release
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds true
+    }
+}

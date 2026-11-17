@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand">#8F1D34</color>
+    <color name="shell_bar">#52101F</color>
+    <color name="saffron">#F57F0E</color>
+    <color name="page_background">#FFFBF3</color>
+    <color name="page_background_light">#FFFBF3</color>
+    <color name="splash_background">#52101F</color>
+</resources>

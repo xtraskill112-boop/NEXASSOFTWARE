@@ -70,7 +70,7 @@ export default function Home() {
         </div>
         <Switch size="lg" checked={partner.isOnline} disabled={!approved} onChange={(v) => void setOnline(v)} label="Online" />
       </Card>
-      {gps === "denied" && <InlineAlert tone="danger"><AlertTriangle className="mr-1 inline h-4 w-4" />Location permission is blocked. Enable it in your browser settings — customers need it to track their order.</InlineAlert>}
+      {gps === "denied" && <InlineAlert tone="danger"><AlertTriangle className="mr-1 inline h-4 w-4" />Location permission is blocked. Allow location for this app (or this site) in your phone settings — customers need it to track their order.</InlineAlert>}
 
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-3 text-center"><IndianRupee className="mx-auto h-4 w-4 text-saffron-600" /><p className="mt-1 font-bold text-ink">{formatINR(earnings.todayPaise)}</p><p className="text-[11px] text-muted">Today</p></Card>

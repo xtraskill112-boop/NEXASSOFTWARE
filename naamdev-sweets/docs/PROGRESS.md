@@ -41,6 +41,13 @@ Status of every area in the original brief. ✅ built and covered by automated t
 - ✅ Pickup flow, navigation link, customer call, OTP delivery, COD cash confirmation
 - ✅ Active deliveries, history, earnings with daily incentive
 
+## Android apps (`mobile/android`)
+
+- ☑️ Customer and partner APKs (native WebView shells): camera/gallery uploads, location prompts, UPI/phone/maps hand-off, Razorpay pop-ups, invoice printing, offline screen, first-launch site setup or fixed site address
+- ☑️ Partner app: foreground location service that keeps sharing the rider's position while they navigate in other apps
+- ✅ Built and signed by GitHub Actions (`.github/workflows/naamdev-android.yml`)
+- ➖ Native push notifications (needs a Firebase project)
+
 ## Backend & platform
 
 - ✅ Express 5 API, Socket.IO realtime, PostgreSQL + Prisma (59 models), scheduler with advisory locks
@@ -57,8 +64,8 @@ Status of every area in the original brief. ✅ built and covered by automated t
 - **No third-party service has been tested against the real provider yet** — follow the checklists
   in [INTEGRATIONS.md](INTEGRATIONS.md) in test mode before launch.
 - **Imagery is generated SVG artwork**, not photography. Upload real product photos from the console.
-- **Mobile apps are responsive web apps** (installable via the web app manifest), not native
-  iOS/Android builds. There is no offline mode.
+- **Android apps are native shells around the websites** (see mobile/android/README.md); there is no
+  iOS build and no offline browsing of the catalogue.
 - **Push notifications are wired for the storefront only**; the console and partner app alert via
   Socket.IO while open (the partner app vibrates and beeps on new offers).
 - **Single store**: the schema has a `Store` model and orders reference a store, but checkout,

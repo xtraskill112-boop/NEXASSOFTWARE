@@ -10,6 +10,11 @@ a store/staff console, a delivery-partner app and one backend API with live orde
 | Partner app (Next.js PWA) | `apps/delivery` | http://localhost:3002 | Delivery partners: go online, accept offers, pickup, OTP delivery, earnings |
 | API (Express + Socket.IO) | `apps/api` | http://localhost:4000 | Everything above |
 
+Android apps (`mobile/android`): **NAAMDEV SWEETS** for customers and **NAAMDEV Partner** for
+riders. They are native shells around the storefront and partner site, with camera uploads, UPI
+hand-off and background rider location. APKs are built by GitHub Actions; see
+[mobile/android/README.md](mobile/android/README.md).
+
 Shared packages: `packages/db` (Prisma schema, migrations, seed), `packages/shared` (money, pricing,
 coupons, order state machine, permissions, validation, i18n), `packages/ui` (design system),
 `packages/api-client` (typed fetch client + realtime).
