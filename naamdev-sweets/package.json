@@ -1,0 +1,35 @@
+{
+  "name": "naamdev-sweets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NAAMDEV SWEETS — premium Indian sweets & food delivery ecosystem",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=20.11" },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
+    "dev:api": "pnpm --filter @naamdev/api dev",
+    "dev:web": "pnpm --filter @naamdev/web dev",
+    "dev:admin": "pnpm --filter @naamdev/admin dev",
+    "dev:delivery": "pnpm --filter @naamdev/delivery dev",
+    "build": "pnpm --filter @naamdev/db generate && pnpm -r --filter \"./packages/*\" build && pnpm -r --filter \"./apps/*\" build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @naamdev/db generate",
+    "db:migrate": "pnpm --filter @naamdev/db migrate:dev",
+    "db:deploy": "pnpm --filter @naamdev/db migrate:deploy",
+    "db:seed": "pnpm --filter @naamdev/db seed",
+    "db:reset": "pnpm --filter @naamdev/db reset",
+    "test": "pnpm --filter @naamdev/shared test && pnpm --filter @naamdev/api test",
+    "test:unit": "pnpm --filter @naamdev/shared test",
+    "test:api": "pnpm --filter @naamdev/api test",
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.ts",
+    "assets": "node scripts/generate-assets.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "typescript": "5.9.3",
+    "@types/node": "22.20.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "sharp", "esbuild", "@node-rs/argon2", "protobufjs"]
+  }
+}
