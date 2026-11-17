@@ -1,0 +1,1029 @@
+<title>Nexas AI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;600&display=swap">
+<style>
+/* Layout: one-screen chat app. Slim header, a centred conversation column (max 780px) that scrolls,
+   and a dock pinned to the bottom holding the tool chips and the composer. Marigold accent on ink-indigo neutrals. */
+:root {
+  --bg: #F5F5F9;
+  --surface: #FFFFFF;
+  --sunk: #EBECF3;
+  --line: #DADBE6;
+  --fg: #1C1D2E;
+  --muted: #5C5F77;
+  --accent: #EE8A12;
+  --accent-2: #C9620A;
+  --accent-ink: #1C1D2E;
+  --accent-soft: #FCEBD6;
+  --accent-text: #A9530A;
+  --user: #2A2C52;
+  --user-fg: #F3F3FA;
+  --danger: #B42318;
+  --danger-soft: #FDECEA;
+
+  --f-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
+  --f-body: "Inter", "Noto Sans Devanagari", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12131D;
+    --surface: #1B1C2A;
+    --sunk: #24263A;
+    --line: #313350;
+    --fg: #ECECF5;
+    --muted: #A3A6C0;
+    --accent: #F59C2A;
+    --accent-2: #D46E12;
+    --accent-ink: #17141A;
+    --accent-soft: #3A2A17;
+    --accent-text: #FFB660;
+    --user: #363A72;
+    --user-fg: #F3F3FA;
+    --danger: #FF8B7E;
+    --danger-soft: #3A1C1C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12131D;
+  --surface: #1B1C2A;
+  --sunk: #24263A;
+  --line: #313350;
+  --fg: #ECECF5;
+  --muted: #A3A6C0;
+  --accent: #F59C2A;
+  --accent-2: #D46E12;
+  --accent-ink: #17141A;
+  --accent-soft: #3A2A17;
+  --accent-text: #FFB660;
+  --user: #363A72;
+  --user-fg: #F3F3FA;
+  --danger: #FF8B7E;
+  --danger-soft: #3A1C1C;
+  color-scheme: dark;
+}
+
+html { height: 100%; box-sizing: border-box; }
+*, *::before, *::after { box-sizing: inherit; }
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+button, select, textarea, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Header */
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+  max-width: 1080px;
+  width: 100%;
+  margin-inline: auto;
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mark {
+  flex: none;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--accent-ink) 0 15%, transparent 16%),
+    radial-gradient(circle, var(--accent) 0 38%, transparent 39%),
+    repeating-conic-gradient(var(--accent) 0 12deg, var(--accent-2) 12deg 24deg);
+}
+.brand h1 {
+  margin: 0;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.select {
+  appearance: none;
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 28px 7px 12px;
+  font-size: 0.85rem;
+}
+.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ghost:hover { background: var(--sunk); }
+.ghost.armed { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+
+.notice {
+  max-width: 780px;
+  width: 100%;
+  margin: 12px auto 0;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--fg);
+  font-size: 0.88rem;
+}
+
+/* Conversation */
+.scroller { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.thread {
+  max-width: 780px;
+  margin: 0 auto;
+  padding-block: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.welcome { display: grid; gap: 18px; padding-top: 4vh; }
+.welcome h2 {
+  margin: 0;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: clamp(1.7rem, 4.5vw, 2.4rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.welcome .lede { margin: 0; color: var(--muted); max-width: 60ch; }
+.eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.starters { display: grid; gap: 8px; }
+.starter {
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 11px 14px;
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+  transition: border-color .15s, transform .15s;
+}
+.starter:hover { border-color: var(--accent); transform: translateY(-1px); }
+.starter b { font-size: 0.78rem; font-weight: 600; color: var(--accent-text); letter-spacing: 0.02em; }
+.starter span { font-size: 0.9rem; }
+
+.msg { display: flex; gap: 12px; min-width: 0; }
+.msg.me { justify-content: flex-end; }
+.bubble {
+  max-width: min(85%, 600px);
+  background: var(--user);
+  color: var(--user-fg);
+  border-radius: var(--r-lg) var(--r-lg) 6px var(--r-lg);
+  padding: 10px 14px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.bubble p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble img { border-radius: 12px; max-height: 220px; width: auto; object-fit: cover; }
+.photo-chip { font-size: 0.78rem; opacity: 0.8; }
+
+.msg.ai .mark { width: 28px; height: 28px; margin-top: 2px; }
+.ai-body { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.prose { min-width: 0; overflow-wrap: anywhere; }
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+.prose p, .prose ul, .prose ol, .prose blockquote, .prose pre, .prose table { margin: 0 0 0.8em; }
+.prose ul, .prose ol { padding-left: 1.3em; }
+.prose li + li { margin-top: 0.25em; }
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: var(--f-display);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 1.1em 0 0.45em;
+  text-wrap: balance;
+}
+.prose h1 { font-size: 1.3rem; }
+.prose h2 { font-size: 1.15rem; }
+.prose h3, .prose h4 { font-size: 1rem; }
+.prose a { color: var(--accent-text); }
+.prose strong { font-weight: 600; }
+.prose code { font-family: var(--f-mono); font-size: 0.86em; background: var(--sunk); padding: 0.1em 0.35em; border-radius: 5px; }
+.prose pre { background: var(--sunk); border-radius: var(--r-sm); padding: 12px 14px; overflow-x: auto; }
+.prose pre code { background: none; padding: 0; }
+.prose blockquote { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--muted); }
+.prose hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+.table-wrap { overflow-x: auto; margin: 0 0 0.8em; }
+.prose table { border-collapse: collapse; font-size: 0.9rem; margin: 0; }
+.prose th, .prose td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+.prose th { background: var(--sunk); font-weight: 600; }
+
+.thinking { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+.dots { display: inline-flex; gap: 4px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: .15s; }
+.dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes pulse { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+
+.note { margin: 0; font-size: 0.82rem; color: var(--muted); }
+.note.err { color: var(--danger); background: var(--danger-soft); padding: 8px 12px; border-radius: var(--r-sm); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.act {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.act:hover { background: var(--sunk); color: var(--fg); }
+.act svg { width: 14px; height: 14px; }
+.act.speak { display: none; }
+.can-speak .act.speak { display: inline-flex; }
+.act[aria-pressed="true"] { color: var(--accent-text); border-color: var(--accent); }
+
+/* Dock */
+.dock {
+  max-width: 780px;
+  width: 100%;
+  margin: 0 auto;
+  padding-block: 8px 10px;
+  display: grid;
+  gap: 8px;
+}
+.modes {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 2px;
+}
+.modes::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.chip:hover { color: var(--fg); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.composer {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+  transition: border-color .15s;
+}
+.composer:focus-within { border-color: var(--accent); }
+.composer.drop { border-style: dashed; border-color: var(--accent); }
+.attach-preview { display: flex; align-items: center; gap: 10px; padding: 4px 6px 0; min-width: 0; }
+.attach-preview img { width: 48px; height: 48px; object-fit: cover; border-radius: 10px; flex: none; }
+.attach-preview span { font-size: 0.84rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.row { display: flex; align-items: flex-end; gap: 6px; }
+.row textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: 0;
+  background: transparent;
+  padding: 8px 6px;
+  line-height: 1.45;
+  max-height: 200px;
+  outline: none;
+}
+.icon {
+  flex: none;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+.icon:hover { background: var(--sunk); color: var(--fg); }
+.icon svg { width: 20px; height: 20px; }
+.icon.on { background: var(--danger-soft); color: var(--danger); }
+.send {
+  flex: none;
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.send:disabled { opacity: .45; cursor: default; }
+.send svg { width: 16px; height: 16px; }
+.send.stop { background: var(--fg); color: var(--bg); }
+.fine { margin: 0; text-align: center; font-size: 0.74rem; color: var(--muted); }
+
+@media (max-width: 560px) {
+  .brand p { display: none; }
+  .send .label { display: none; }
+  .send { width: 38px; padding: 0; justify-content: center; }
+  .welcome { padding-top: 2vh; }
+  .starter { grid-template-columns: 1fr; }
+  .select { padding: 7px 26px 7px 10px; }
+  .ghost { padding: 7px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dots i { animation: none; opacity: .7; }
+  .starter { transition: none; }
+  .starter:hover { transform: none; }
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <div>
+        <h1>Nexas AI</h1>
+        <p>Chat, product listings, captions and customer replies</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <label class="sr" for="tier">Answer style</label>
+      <select id="tier" class="select" title="Answer style">
+        <option value="quick">Fast</option>
+        <option value="default" selected>Balanced</option>
+        <option value="complex">Deep thinking</option>
+      </select>
+      <button type="button" id="newChat" class="ghost">New chat</button>
+    </div>
+  </header>
+
+  <div id="notice" class="notice" role="status" hidden></div>
+
+  <main id="scroller" class="scroller">
+    <div id="thread" class="thread" aria-live="polite">
+      <section id="welcome" class="welcome">
+        <p class="eyebrow" id="modeEyebrow">Chat</p>
+        <h2>Namaste. What can I help you with today?</h2>
+        <p class="lede" id="modeBlurb">Ask anything in English, Hindi or Hinglish. Pick a tool below for listings, social posts, customer replies or translation.</p>
+        <div class="starters" id="starters"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="dock">
+    <div class="modes" id="modes" role="group" aria-label="Tools"></div>
+    <form id="composer" class="composer" autocomplete="off">
+      <div id="attachPreview" class="attach-preview" hidden>
+        <img id="previewImg" alt="Attached photo">
+        <span id="previewName"></span>
+        <button type="button" id="previewRemove" class="act">Remove</button>
+      </div>
+      <div class="row">
+        <button type="button" id="attachBtn" class="icon" title="Add a product photo" aria-label="Add a product photo" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="3"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8.5 5l1.2-2h4.6l1.2 2"/></svg>
+        </button>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+        <label class="sr" for="input">Message Nexas AI</label>
+        <textarea id="input" rows="1" placeholder="Ask anything…"></textarea>
+        <button type="button" id="micBtn" class="icon" title="Speak your message" aria-label="Speak your message" aria-pressed="false" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <button type="submit" id="sendBtn" class="send" aria-label="Send">
+          <span class="label">Send</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+        </button>
+        <button type="button" id="stopBtn" class="send stop" aria-label="Stop" hidden>
+          <span class="label">Stop</span>
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        </button>
+      </div>
+    </form>
+    <p class="fine">Nexas AI can make mistakes. Check sizes, prices and policies before you publish anything.</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    thread: $("thread"), welcome: $("welcome"), scroller: $("scroller"), modes: $("modes"),
+    starters: $("starters"), eyebrow: $("modeEyebrow"), blurb: $("modeBlurb"),
+    form: $("composer"), input: $("input"), send: $("sendBtn"), stop: $("stopBtn"),
+    attach: $("attachBtn"), file: $("fileInput"), preview: $("attachPreview"),
+    previewImg: $("previewImg"), previewName: $("previewName"), previewRemove: $("previewRemove"),
+    mic: $("micBtn"), tier: $("tier"), newChat: $("newChat"), notice: $("notice"),
+  };
+
+  // ---------- What Nexas AI knows and how each tool behaves ----------
+  const BASE = [
+    "Instructions from the Nexas AI app (not from the person):",
+    "You are Nexas AI, a helpful assistant inside a web app. The person using you runs a small Indian business that sells sacred art and handicrafts online (brass and marble idols, paintings, puja items, home temple decor). They also use you for everyday questions of any kind.",
+    "How to answer:",
+    "- Reply in the same language the person writes in: English, Hindi or Hinglish.",
+    "- Be clear and practical. Use Markdown: short paragraphs, **bold** labels, bullet or numbered lists, and tables only when they help.",
+    "- Keep answers as short as the task allows, but complete.",
+    "- Never invent facts about a product (size, weight, material, price, origin). If a detail is missing, use a placeholder in square brackets like [size], or ask for it.",
+    "- If the person attaches a photo, look at it carefully and describe only what you can actually see.",
+    "- If you are unsure (laws, taxes, marketplace rules), say so and suggest where to check.",
+  ].join("\n");
+
+  const MODES = [
+    {
+      id: "chat", label: "Chat", placeholder: "Ask anything…",
+      blurb: "Ask anything in English, Hindi or Hinglish. Pick a tool below for listings, social posts, customer replies or translation.",
+      rules: "Have a natural, helpful conversation and help with anything they ask: questions, ideas, planning, writing, maths, business advice.",
+      starters: [
+        ["Business", "Explain GST for a small online seller in simple words"],
+        ["Planning", "Make me a one-week plan to photograph and list 20 new products"],
+        ["Ideas", "Give me 10 name ideas for a new range of handmade brass diyas"],
+        ["Growth", "How can I get more repeat customers for puja items?"],
+      ],
+    },
+    {
+      id: "listing", label: "Product listing", placeholder: "Describe the product, or add a photo…",
+      blurb: "Give me the product details or a photo. I'll write the title, bullet points, description and search keywords, ready to paste.",
+      rules: [
+        "Write a ready-to-paste marketplace product listing from the person's details and/or photo. Use this structure:",
+        "**Title**: under 150 characters, keyword-rich, natural (no ALL CAPS, no emoji).",
+        "**Key features**: 5 bullet points, each starting with a short bold label.",
+        "**Description**: 120 to 200 words, warm and respectful of the deity or tradition, factual, ending with a care tip (for example how to clean brass).",
+        "**Search keywords**: 15 comma-separated terms, mixing English and common Hindi words buyers type (murti, idol, puja, mandir).",
+        "**Suggested category**: one line.",
+        "If they name a marketplace (Amazon, Flipkart, Meesho, Etsy, Shopify), follow its usual style. Mark anything you guessed from a photo with (verify).",
+      ].join("\n"),
+      starters: [
+        ["Amazon", "Amazon listing: brass Ganesha idol, 7 inch tall, 1.2 kg, antique finish, handmade in Moradabad"],
+        ["Flipkart", "Flipkart listing: Radha Krishna painting on canvas, 24 x 18 inch, with wooden frame"],
+        ["Etsy", "Etsy listing for international buyers: set of 2 brass peacock diyas, 5 inch each"],
+        ["From a photo", "PHOTO"],
+      ],
+    },
+    {
+      id: "social", label: "Social post", placeholder: "What should the post be about?",
+      blurb: "Tell me the product or occasion. I'll write three caption options and a set of hashtags for Instagram and Facebook.",
+      rules: "Write social media posts for Instagram and Facebook. Give 3 caption options in different styles (devotional, festive or offer-led, short and punchy), each 1 to 4 lines with a call to action. Then give one block of 15 to 20 relevant hashtags. If a festival is mentioned, build the posts around it. Emoji are fine here, used sparingly.",
+      starters: [
+        ["Festival", "Instagram post for our brass Lakshmi idols before Diwali"],
+        ["Reel", "Caption for a reel showing how we polish brass idols by hand"],
+        ["Offer", "Post announcing free shipping on all orders above ₹999 this week"],
+      ],
+    },
+    {
+      id: "reply", label: "Customer reply", placeholder: "Paste the customer's message…",
+      blurb: "Paste what the customer wrote. I'll draft a polite reply in English and Hindi that you can send on WhatsApp or email.",
+      rules: "The person will paste or describe a customer message. Draft a reply they can send on WhatsApp, Instagram DM or email: polite, warm, short, solving the problem and giving a clear next step. Give an English version and a Hindi version unless they ask for one language. Never promise refunds, discounts or delivery dates the person has not confirmed; use placeholders like [order ID] or [delivery date]. If the customer is upset, acknowledge it first.",
+      starters: [
+        ["Damage", "Customer wrote: \"My idol arrived with a small scratch on the base. What can you do?\""],
+        ["Shipping", "Customer asks: \"Do you ship to the USA and how long does it take?\""],
+        ["Bulk order", "Customer wants 50 small Ganesha idols as wedding return gifts and asks for a discount"],
+      ],
+    },
+    {
+      id: "translate", label: "Translate", placeholder: "Paste text to translate…",
+      blurb: "Paste any text. English becomes Hindi and Hindi becomes English, or name the language you want.",
+      rules: "Translate the person's text. If they name a target language, use it. Otherwise translate English into Hindi (Devanagari script) and Hindi or Hinglish into English. Keep the meaning, tone and formatting. Reply with the translation only; add one short note below it only if a phrase is ambiguous or has no direct equivalent.",
+      starters: [
+        ["To Hindi", "Handcrafted brass idol with an antique finish, perfect for your home temple."],
+        ["To English", "यह मूर्ति शुद्ध पीतल से बनी है और हाथ से तराशी गई है।"],
+        ["To Tamil", "Translate to Tamil: Thank you for your order. It will be shipped within 2 days."],
+      ],
+    },
+  ];
+  const modeById = (id) => MODES.find((m) => m.id === id) || MODES[0];
+
+  // ---------- State (kept in this browser only) ----------
+  const STORE_KEY = "nexas-ai:v1";
+  let state = { mode: "chat", tier: "default", turns: [] };
+  let pending = null;          // { file, url } photo waiting to be sent
+  let lastImage = null;        // photo of the last ask, for Retry
+  let busy = false;
+  let ctl = null;
+  let imagesOk = false;
+  let tts = null;
+  let speakingBtn = null;
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s && Array.isArray(s.turns)) {
+        state.turns = s.turns
+          .filter((t) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
+          .map((t) => ({ role: t.role, content: t.content, photo: !!t.photo, note: t.note || "" }));
+      }
+      if (s && MODES.some((m) => m.id === s.mode)) state.mode = s.mode;
+      if (s && ["quick", "default", "complex"].includes(s.tier)) state.tier = s.tier;
+    } catch (_) { /* storage unavailable: start fresh */ }
+  }
+  function save() {
+    try {
+      const turns = state.turns.slice(-60).map((t) => ({ role: t.role, content: t.content, photo: !!t.photo, note: t.note || "" }));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ mode: state.mode, tier: state.tier, turns }));
+    } catch (_) { /* ignore */ }
+  }
+
+  // ---------- Markdown ----------
+  const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  let purifyReady = false;
+  function md(text) {
+    try {
+      if (window.marked && window.DOMPurify) {
+        if (!purifyReady) {
+          window.DOMPurify.addHook("afterSanitizeAttributes", (n) => {
+            if (n.tagName === "A") { n.setAttribute("target", "_blank"); n.setAttribute("rel", "noopener noreferrer"); }
+          });
+          purifyReady = true;
+        }
+        const html = window.marked.parse(text, { gfm: true, breaks: true });
+        return window.DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+          .replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, "</table></div>");
+      }
+    } catch (_) { /* fall through */ }
+    return text.split(/\n{2,}/).map((p) => "<p>" + esc(p).replace(/\n/g, "<br>") + "</p>").join("");
+  }
+
+  // ---------- Icons ----------
+  const ICON = {
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg>',
+    speak: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+    retry: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/></svg>',
+  };
+
+  // ---------- Rendering ----------
+  function nearBottom() {
+    const s = el.scroller;
+    return s.scrollHeight - s.scrollTop - s.clientHeight < 140;
+  }
+  function toBottom() { el.scroller.scrollTop = el.scroller.scrollHeight; }
+
+  function renderModes() {
+    el.modes.textContent = "";
+    for (const m of MODES) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      b.textContent = m.label;
+      b.setAttribute("aria-pressed", String(m.id === state.mode));
+      b.addEventListener("click", () => setMode(m.id));
+      el.modes.append(b);
+    }
+  }
+  function renderWelcome() {
+    const m = modeById(state.mode);
+    el.eyebrow.textContent = m.label;
+    el.blurb.textContent = m.blurb;
+    el.input.placeholder = m.placeholder;
+    el.starters.textContent = "";
+    for (const [tag, prompt] of m.starters) {
+      if (prompt === "PHOTO" && !imagesOk) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "starter";
+      const t = document.createElement("b"); t.textContent = tag;
+      const s = document.createElement("span");
+      s.textContent = prompt === "PHOTO" ? "Add a product photo and I'll write the whole listing from it" : prompt;
+      b.append(t, s);
+      b.addEventListener("click", () => {
+        if (prompt === "PHOTO") { el.file.click(); return; }
+        send(prompt);
+      });
+      el.starters.append(b);
+    }
+    el.welcome.hidden = state.turns.length > 0;
+  }
+  function setMode(id) {
+    state.mode = id;
+    renderModes();
+    renderWelcome();
+    save();
+    el.input.focus();
+  }
+
+  function userNode(turn) {
+    const a = document.createElement("article");
+    a.className = "msg me";
+    const b = document.createElement("div");
+    b.className = "bubble";
+    if (turn.imgUrl) {
+      const img = document.createElement("img");
+      img.src = turn.imgUrl; img.alt = "Photo you attached";
+      b.append(img);
+    } else if (turn.photo) {
+      const c = document.createElement("span");
+      c.className = "photo-chip"; c.textContent = "Photo attached";
+      b.append(c);
+    }
+    const p = document.createElement("p");
+    p.textContent = turn.content;
+    b.append(p);
+    a.append(b);
+    return a;
+  }
+
+  function aiNode() {
+    const a = document.createElement("article");
+    a.className = "msg ai";
+    a.innerHTML = '<span class="mark" aria-hidden="true"></span><div class="ai-body"><div class="prose"></div><p class="note" hidden></p><div class="actions" hidden></div></div>';
+    const prose = a.querySelector(".prose");
+    const note = a.querySelector(".note");
+    const actions = a.querySelector(".actions");
+    const api = {
+      node: a,
+      thinking() {
+        prose.innerHTML = '<span class="thinking"><span class="dots"><i></i><i></i><i></i></span>Thinking…</span>';
+      },
+      setText(text) { prose.innerHTML = md(text); },
+      setNote(text, isErr) {
+        note.hidden = !text;
+        note.textContent = text || "";
+        note.classList.toggle("err", !!isErr);
+      },
+      addActions(turn, opts = {}) {
+        actions.textContent = "";
+        if (turn && turn.content) {
+          actions.append(actButton("Copy", ICON.copy, (btn) => copyText(turn.content, prose, btn)));
+          const sp = actButton("Listen", ICON.speak, (btn) => toggleSpeak(turn.content, btn));
+          sp.classList.add("speak");
+          sp.setAttribute("aria-pressed", "false");
+          actions.append(sp);
+        }
+        if (opts.retry) actions.append(actButton("Retry", ICON.retry, () => { a.remove(); ask(lastImage); }));
+        actions.hidden = actions.childElementCount === 0;
+      },
+    };
+    return api;
+  }
+  function actButton(label, icon, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "act";
+    b.innerHTML = icon + "<span></span>";
+    b.querySelector("span").textContent = label;
+    b.addEventListener("click", () => onClick(b));
+    return b;
+  }
+  function setActLabel(btn, text) { const s = btn.querySelector("span"); if (s) s.textContent = text; }
+
+  function renderAll() {
+    for (const n of [...el.thread.querySelectorAll(".msg")]) n.remove();
+    for (const t of state.turns) {
+      if (t.role === "user") el.thread.append(userNode(t));
+      else {
+        const ai = aiNode();
+        ai.setText(t.content);
+        ai.setNote(t.note, false);
+        ai.addActions(t);
+        el.thread.append(ai.node);
+      }
+    }
+    renderWelcome();
+    if (state.turns.length) requestAnimationFrame(toBottom);
+    else el.scroller.scrollTop = 0;
+  }
+
+  // ---------- Copy & listen ----------
+  function copyText(text, node, btn) {
+    const done = () => { setActLabel(btn, "Copied"); setTimeout(() => setActLabel(btn, "Copy"), 1500); };
+    const fallback = () => {
+      try {
+        const r = document.createRange(); r.selectNodeContents(node);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        setActLabel(btn, "Selected, press Ctrl+C");
+        setTimeout(() => setActLabel(btn, "Copy"), 2500);
+      } catch (_) { /* ignore */ }
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+      else fallback();
+    } catch (_) { fallback(); }
+  }
+
+  function speechLines(text) {
+    const plain = text.replace(/```[\s\S]*?```/g, " ").replace(/[#*_>`|]/g, " ").replace(/[ \t]+/g, " ");
+    const parts = plain.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    const lines = [];
+    let cur = "";
+    for (let p of parts) {
+      while (p.length > 1800) { lines.push({ text: p.slice(0, 1800) }); p = p.slice(1800); }
+      if ((cur + " " + p).length > 1800) { if (cur) lines.push({ text: cur }); cur = p; }
+      else cur = cur ? cur + " " + p : p;
+    }
+    if (cur) lines.push({ text: cur });
+    return lines.slice(0, 40);
+  }
+  function toggleSpeak(text, btn) {
+    if (!tts) return;
+    if (speakingBtn === btn && tts.active()) { tts.stop().catch(() => {}); return; }
+    const lines = speechLines(text);
+    if (!lines.length) return;
+    if (speakingBtn) resetSpeakBtn(speakingBtn);
+    speakingBtn = btn;
+    btn.setAttribute("aria-pressed", "true");
+    setActLabel(btn, "Stop");
+    tts.speak(lines).catch((e) => {
+      if (e && e.code === "not_granted") document.body.classList.remove("can-speak");
+    }).finally(() => { if (speakingBtn === btn && !tts.active()) { resetSpeakBtn(btn); speakingBtn = null; } });
+  }
+  function resetSpeakBtn(btn) { btn.setAttribute("aria-pressed", "false"); setActLabel(btn, "Listen"); }
+
+  // ---------- Talking to Claude ----------
+  const ERRORS = {
+    not_granted: "Nexas AI needs your permission to use Claude. Reload the page and choose Allow to start.",
+    sampling_disabled: "Claude isn't available on this account right now.",
+    not_declared: "This page can't reach Claude right now.",
+    capability_disabled: "Claude can't be used in this view. Open the page on claude.ai.",
+    capability_removed: "This app is out of date. Update the Claude app or open the page in a browser.",
+    rate_limited: "You've reached a usage limit. Wait a little, then press Retry.",
+    session_expired: "Your claude.ai sign-in expired. Sign in again, then press Retry.",
+    refused: "Claude can't help with that request. Try asking it another way.",
+    prompt_too_large: "This chat has grown too long. Press New chat to keep going.",
+    image_rejected: "That photo couldn't be used. Try a JPG or PNG under 20 MB.",
+    images_unavailable: "Photos can't be sent from this view. Describe the product in words instead.",
+    empty_completion: "No answer came back. Try rephrasing your message.",
+    tools_unavailable: "This view can't run that request.",
+  };
+  const errorCopy = (code) => ERRORS[code] || "The connection dropped before the answer finished. Press Retry.";
+  const FATAL = new Set(["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"]);
+
+  const capability = (name) => {
+    try {
+      if (window.claude && typeof window.claude.use === "function") return window.claude.use(name).catch(() => null);
+    } catch (_) { /* ignore */ }
+    return Promise.resolve(null);
+  };
+  const samplePromise = capability("sample");
+
+  function buildInput() {
+    const m = modeById(state.mode);
+    const rules = BASE + "\n\nCurrent tool: " + m.label + "\n" + m.rules + "\n\nThe person's messages follow.";
+    let hist = state.turns
+      .filter((t) => t.content && t.content.trim())
+      .map((t) => ({
+        role: t.role,
+        content: t.role === "user" && t.photo ? t.content + "\n\n(I attached a product photo with this message.)" : t.content,
+      }));
+    let total = hist.reduce((n, t) => n + t.content.length, 0);
+    while (total > 90000 && hist.length > 1) total -= hist.shift().content.length;
+    return [{ role: "user", content: rules }, ...hist];
+  }
+
+  function setBusy(on) {
+    busy = on;
+    el.send.hidden = on;
+    el.stop.hidden = !on;
+    el.input.setAttribute("aria-busy", String(on));
+  }
+
+  async function ask(imageFile) {
+    lastImage = imageFile || null;
+    el.welcome.hidden = true;
+    const ai = aiNode();
+    ai.thinking();
+    el.thread.append(ai.node);
+    toBottom();
+
+    const sample = await samplePromise;
+    if (!sample) {
+      ai.setText("");
+      ai.setNote("Nexas AI answers when this page is open on claude.ai and you're signed in.", true);
+      return;
+    }
+
+    setBusy(true);
+    ctl = new AbortController();
+    const opts = {
+      cache: false,
+      signal: ctl.signal,
+      modelTier: state.tier,
+      onText: ({ text }) => { const stick = nearBottom(); ai.setText(text); if (stick) toBottom(); },
+    };
+    if (imageFile) opts.images = imageFile;
+
+    try {
+      const res = await sample(buildInput(), opts);
+      const turn = { role: "assistant", content: res.text, note: res.truncated ? "This answer was cut short. Ask me to continue." : "" };
+      state.turns.push(turn);
+      ai.setText(res.text);
+      ai.setNote(turn.note, false);
+      ai.addActions(turn);
+    } catch (e) {
+      const code = e && e.code;
+      const partial = e && typeof e.text === "string" && e.text.trim() ? e.text : "";
+      if (code === "cancelled") {
+        if (partial) {
+          const turn = { role: "assistant", content: partial, note: "Stopped." };
+          state.turns.push(turn);
+          ai.setText(partial); ai.setNote("Stopped.", false); ai.addActions(turn);
+        } else {
+          ai.setText(""); ai.setNote("Stopped.", false); ai.addActions(null, { retry: true });
+        }
+      } else {
+        ai.setText(partial);
+        ai.setNote(errorCopy(code), true);
+        ai.addActions(null, { retry: !FATAL.has(code) && code !== "refused" && code !== "prompt_too_large" });
+        if (FATAL.has(code)) showNotice(errorCopy(code));
+      }
+    } finally {
+      ctl = null;
+      setBusy(false);
+      save();
+    }
+  }
+
+  function send(text) {
+    if (busy) return;
+    text = (text || "").trim();
+    if (!text && !pending) return;
+    const img = pending;
+    const turn = {
+      role: "user",
+      content: text || "Here is a product photo. Please help with it.",
+      photo: !!img,
+      imgUrl: img ? img.url : undefined,
+    };
+    state.turns.push(turn);
+    el.welcome.hidden = true;
+    el.thread.append(userNode(turn));
+    clearAttachment(false);
+    el.input.value = "";
+    autoGrow();
+    save();
+    ask(img ? img.file : null);
+  }
+
+  function showNotice(text) { el.notice.textContent = text; el.notice.hidden = !text; }
+
+  // ---------- Photos ----------
+  function setAttachment(file) {
+    if (!file || !imagesOk) return;
+    if (!/^image\//.test(file.type)) { showNotice("Please choose an image file (JPG, PNG or WebP)."); return; }
+    clearAttachment(true);
+    pending = { file, url: URL.createObjectURL(file) };
+    el.previewImg.src = pending.url;
+    el.previewName.textContent = file.name || "Pasted photo";
+    el.preview.hidden = false;
+    showNotice("");
+    el.input.focus();
+  }
+  function clearAttachment(revoke) {
+    if (pending && revoke) { try { URL.revokeObjectURL(pending.url); } catch (_) { /* ignore */ } }
+    pending = null;
+    el.preview.hidden = true;
+    el.previewImg.removeAttribute("src");
+    el.file.value = "";
+  }
+
+  // ---------- Composer ----------
+  function autoGrow() {
+    el.input.style.height = "auto";
+    el.input.style.height = Math.min(el.input.scrollHeight, 200) + "px";
+  }
+  el.input.addEventListener("input", autoGrow);
+  el.input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(el.input.value); }
+  });
+  el.input.addEventListener("paste", (e) => {
+    if (!imagesOk || !e.clipboardData) return;
+    const f = [...e.clipboardData.files].find((x) => /^image\//.test(x.type));
+    if (f) { e.preventDefault(); setAttachment(f); }
+  });
+  el.form.addEventListener("submit", (e) => { e.preventDefault(); send(el.input.value); });
+  el.stop.addEventListener("click", () => { if (ctl) ctl.abort(); });
+  el.attach.addEventListener("click", () => el.file.click());
+  el.file.addEventListener("change", () => { if (el.file.files && el.file.files[0]) setAttachment(el.file.files[0]); });
+  el.previewRemove.addEventListener("click", () => clearAttachment(true));
+  el.form.addEventListener("dragover", (e) => { if (imagesOk) { e.preventDefault(); el.form.classList.add("drop"); } });
+  el.form.addEventListener("dragleave", () => el.form.classList.remove("drop"));
+  el.form.addEventListener("drop", (e) => {
+    el.form.classList.remove("drop");
+    if (!imagesOk) return;
+    e.preventDefault();
+    const f = [...(e.dataTransfer ? e.dataTransfer.files : [])].find((x) => /^image\//.test(x.type));
+    if (f) setAttachment(f);
+  });
+
+  el.tier.addEventListener("change", () => { state.tier = el.tier.value; save(); });
+
+  let armTimer = null;
+  el.newChat.addEventListener("click", () => {
+    if (state.turns.length && !el.newChat.classList.contains("armed")) {
+      el.newChat.classList.add("armed");
+      el.newChat.textContent = "Tap again to clear";
+      clearTimeout(armTimer);
+      armTimer = setTimeout(disarm, 3000);
+      return;
+    }
+    disarm();
+    if (ctl) ctl.abort();
+    if (tts && tts.active()) tts.stop().catch(() => {});
+    for (const t of state.turns) if (t.imgUrl) { try { URL.revokeObjectURL(t.imgUrl); } catch (_) { /* ignore */ } }
+    state.turns = [];
+    clearAttachment(true);
+    renderAll();
+    save();
+    el.input.focus();
+  });
+  function disarm() { clearTimeout(armTimer); el.newChat.classList.remove("armed"); el.newChat.textContent = "New chat"; }
+
+  // ---------- Optional abilities ----------
+  samplePromise.then(async (sample) => {
+    if (!sample) {
+      showNotice("Open this page on claude.ai while signed in to chat with Nexas AI.");
+      return;
+    }
+    try {
+      const lim = await sample.limits();
+      if (lim && lim.images) {
+        imagesOk = true;
+        el.attach.hidden = false;
+        if (Array.isArray(lim.images.mediaTypes) && lim.images.mediaTypes.length) el.file.accept = lim.images.mediaTypes.join(",");
+        renderWelcome();
+      }
+    } catch (_) { /* no photos in this view */ }
+  });
+
+  capability("tts").then((t) => {
+    if (!t) return;
+    tts = t;
+    document.body.classList.add("can-speak");
+    t.onState(({ state: s }) => {
+      if (s === "idle" && speakingBtn) { resetSpeakBtn(speakingBtn); speakingBtn = null; }
+    });
+  });
+
+  capability("dictation").then((d) => {
+    if (!d) return;
+    let base = "";
+    let listening = false;
+    const join = (a, b) => (a && b ? a.replace(/\s+$/, "") + " " + b.replace(/^\s+/, "") : a || b || "");
+    el.mic.hidden = false;
+    d.onPartial(({ text }) => { el.input.value = join(base, text); autoGrow(); });
+    d.onFinal(({ text }) => { base = join(base, text); el.input.value = base; autoGrow(); });
+    d.onState(({ state: s, reason }) => {
+      listening = s !== "idle";
+      el.mic.classList.toggle("on", listening);
+      el.mic.setAttribute("aria-pressed", String(listening));
+      el.mic.title = listening ? "Stop listening" : "Speak your message";
+      if (s === "idle" && (reason === "not_granted" || reason === "unavailable")) el.mic.hidden = true;
+    });
+    el.mic.addEventListener("click", () => {
+      if (listening) { d.stop().catch(() => {}); return; }
+      base = el.input.value;
+      d.start().catch((e) => {
+        if (e && (e.code === "not_granted" || e.code === "unavailable")) el.mic.hidden = true;
+      });
+    });
+  });
+
+  // ---------- Start ----------
+  load();
+  el.tier.value = state.tier;
+  renderModes();
+  renderAll();
+})();
+</script>
