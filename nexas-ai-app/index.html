@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Nexas AI</title>
+  <meta name="description" content="Nexas AI: chat, product listings, social posts, customer replies and translation, powered by Claude.">
+  <meta name="theme-color" content="#F5F5F9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12131D" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;600&display=swap">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <h1>Nexas AI</h1>
+          <p>Chat, product listings, captions and customer replies</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <label class="sr" for="effort">Answer style</label>
+        <select id="effort" class="select" title="Answer style">
+          <option value="low">Fast</option>
+          <option value="medium" selected>Balanced</option>
+          <option value="high">Deep thinking</option>
+        </select>
+        <button type="button" id="newChat" class="ghost new-chat" title="New chat" aria-label="New chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="nc-label">New chat</span></button>
+        <button type="button" id="settingsBtn" class="icon" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="notice" class="notice" role="status" hidden></div>
+
+    <main id="scroller" class="scroller">
+      <div id="thread" class="thread" aria-live="polite">
+        <section id="welcome" class="welcome">
+          <div id="connectCard" class="connect" hidden>
+            <div>
+              <p class="connect-title">Connect your Claude API key to start</p>
+              <p class="connect-body">Nexas AI talks to Claude using your own key. It stays in this browser and is sent only to Anthropic.</p>
+            </div>
+            <button type="button" id="connectBtn" class="send">Add API key</button>
+          </div>
+          <p class="eyebrow" id="modeEyebrow">Chat</p>
+          <h2>Namaste. What can I help you with today?</h2>
+          <p class="lede" id="modeBlurb"></p>
+          <div class="starters" id="starters"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="dock">
+      <div class="modes" id="modes" role="group" aria-label="Tools"></div>
+      <form id="composer" class="composer" autocomplete="off">
+        <div id="attachPreview" class="attach-preview" hidden>
+          <img id="previewImg" alt="Attached photo">
+          <span id="previewName"></span>
+          <button type="button" id="previewRemove" class="act">Remove</button>
+        </div>
+        <div class="row">
+          <button type="button" id="attachBtn" class="icon" title="Add a product photo" aria-label="Add a product photo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="3"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8.5 5l1.2-2h4.6l1.2 2"/></svg>
+          </button>
+          <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+          <label class="sr" for="input">Message Nexas AI</label>
+          <textarea id="input" rows="1" placeholder="Ask anything…"></textarea>
+          <button type="button" id="micBtn" class="icon" title="Speak your message" aria-label="Speak your message" aria-pressed="false" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          </button>
+          <button type="submit" id="sendBtn" class="send" aria-label="Send">
+            <span class="label">Send</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </button>
+          <button type="button" id="stopBtn" class="send stop" aria-label="Stop" hidden>
+            <span class="label">Stop</span>
+            <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
+        </div>
+      </form>
+      <p class="fine">Nexas AI can make mistakes. Check sizes, prices and policies before you publish anything.</p>
+    </footer>
+  </div>
+
+  <dialog id="settings" class="sheet" aria-labelledby="settingsTitle">
+    <form id="settingsForm" method="dialog">
+      <h2 id="settingsTitle">Settings</h2>
+
+      <div class="field">
+        <label for="apiKey">Claude API key</label>
+        <div class="key-row">
+          <input id="apiKey" type="password" placeholder="sk-ant-…" spellcheck="false" autocomplete="off">
+          <button type="button" id="toggleKey" class="ghost">Show</button>
+        </div>
+        <p class="help">Create one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">console.anthropic.com</a> → API keys. The key is sent only to Anthropic, never to anyone else.</p>
+        <label class="check"><input type="checkbox" id="rememberKey" checked> Remember the key on this device</label>
+      </div>
+
+      <div class="field">
+        <label for="voiceLang">Voice typing language</label>
+        <select id="voiceLang" class="select wide">
+          <option value="en-IN">English (India)</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="en-US">English (US)</option>
+        </select>
+      </div>
+
+      <p id="settingsMsg" class="help" role="status"></p>
+
+      <div class="sheet-actions">
+        <button type="button" id="forgetKey" class="ghost danger">Remove key</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancelSettings" class="ghost">Cancel</button>
+        <button type="submit" id="saveSettings" class="send">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
