@@ -710,7 +710,7 @@ def worker(args):
     root, scale, a, b, path = args
     film = Film(Assets(root), scale)
     p = subprocess.Popen(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-                          "-s", f"{film.W}x{film.H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow",
+                          "-s", f"{film.W}x{film.H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium",
                           "-crf", "17", "-pix_fmt", "yuv420p", "-profile:v", "high", path], stdin=subprocess.PIPE)
     for n in range(a, b):
         p.stdin.write(to8(film.frame(n / FPS)).tobytes())
