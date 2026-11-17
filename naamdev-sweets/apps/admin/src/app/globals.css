@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@import "@naamdev/ui/theme.css";
+@source "../../../../packages/ui/src";
+
+.viz-root {
+  --viz-series: #d96506;
+  --viz-grid: #efe3cf;
+  --viz-axis: #8a7570;
+}
+.dark .viz-root {
+  --viz-series: #f57f0e;
+  --viz-grid: #3b2428;
+  --viz-axis: #ad968f;
+}
+@media print { .no-print { display: none !important; } }
