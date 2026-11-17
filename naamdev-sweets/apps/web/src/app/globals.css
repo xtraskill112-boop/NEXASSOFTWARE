@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@import "@naamdev/ui/theme.css";
+@source "../../../../packages/ui/src";
+
+@layer base {
+  html {
+    scroll-padding-top: 140px;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff !important; }
+}

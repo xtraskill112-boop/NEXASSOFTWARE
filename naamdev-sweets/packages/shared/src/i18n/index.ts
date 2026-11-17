@@ -19,10 +19,11 @@ export function translate(locale: Locale, key: TranslationKey, vars?: Record<str
 }
 
 /** Pick the localized variant of a content field, e.g. localized(product, "name", "hi"). */
-export function localized<T extends Record<string, unknown>>(obj: T, field: string, locale: Locale): string {
+export function localized(obj: object, field: string, locale: Locale): string {
+  const o = obj as Record<string, unknown>;
   if (locale === "hi") {
-    const hiVal = obj[`${field}Hi`];
+    const hiVal = o[`${field}Hi`];
     if (typeof hiVal === "string" && hiVal.trim()) return hiVal;
   }
-  return String(obj[field] ?? "");
+  return String(o[field] ?? "");
 }

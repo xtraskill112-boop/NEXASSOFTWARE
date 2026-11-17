@@ -2,9 +2,11 @@
   "name": "naamdev-sweets",
   "version": "1.0.0",
   "private": true,
-  "description": "NAAMDEV SWEETS — premium Indian sweets & food delivery ecosystem",
+  "description": "NAAMDEV SWEETS \u2014 premium Indian sweets & food delivery ecosystem",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=20.11" },
+  "engines": {
+    "node": ">=20.11"
+  },
   "scripts": {
     "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
     "dev:api": "pnpm --filter @naamdev/api dev",
@@ -30,6 +32,14 @@
     "@types/node": "22.20.5"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "sharp", "esbuild", "@node-rs/argon2", "protobufjs"]
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "sharp",
+      "esbuild",
+      "@node-rs/argon2",
+      "protobufjs"
+    ]
   }
 }

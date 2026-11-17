@@ -1,0 +1,207 @@
+/*
+ * NAAMDEV SWEETS design tokens (Tailwind CSS v4).
+ * Import after `@import "tailwindcss";` in each app's global stylesheet.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand palette */
+  --color-saffron-50: #fff7ec;
+  --color-saffron-100: #ffebcf;
+  --color-saffron-200: #ffd39c;
+  --color-saffron-300: #ffb65e;
+  --color-saffron-400: #ff9a2e;
+  --color-saffron-500: #f57f0e;
+  --color-saffron-600: #d96506;
+  --color-saffron-700: #b24c08;
+  --color-saffron-800: #8e3d0e;
+  --color-saffron-900: #74340f;
+
+  --color-maroon-50: #fdf2f3;
+  --color-maroon-100: #fbe4e6;
+  --color-maroon-200: #f6ccd1;
+  --color-maroon-300: #eea3ac;
+  --color-maroon-400: #e17080;
+  --color-maroon-500: #ce4458;
+  --color-maroon-600: #b22a42;
+  --color-maroon-700: #8f1d34;
+  --color-maroon-800: #6e1528;
+  --color-maroon-900: #52101f;
+  --color-maroon-950: #2e0711;
+
+  --color-cream-50: #fffdf8;
+  --color-cream-100: #fffbf3;
+  --color-cream-200: #fbf4e6;
+  --color-cream-300: #f5e9d3;
+  --color-cream-400: #ead7b5;
+
+  --color-gold-300: #f3d27a;
+  --color-gold-400: #e9b949;
+  --color-gold-500: #d4a72c;
+  --color-gold-600: #b48a1d;
+
+  --color-pista-400: #8db255;
+  --color-pista-500: #6f9a3a;
+  --color-pista-600: #4f7a24;
+
+  --color-veg: #1f8a3c;
+  --color-nonveg: #b3261e;
+
+  /* Typography */
+  --font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-deva: var(--font-devanagari), "Noto Sans Devanagari", sans-serif;
+
+  /* Radii & elevation */
+  --radius-4xl: 2rem;
+  --radius-5xl: 2.5rem;
+  --shadow-card: 0 1px 2px rgb(46 7 17 / 0.04), 0 10px 30px -16px rgb(110 21 40 / 0.28);
+  --shadow-lift: 0 2px 6px rgb(46 7 17 / 0.06), 0 22px 46px -22px rgb(110 21 40 / 0.45);
+  --shadow-glow: 0 10px 30px -10px rgb(245 127 14 / 0.65);
+  --shadow-inset: inset 0 1px 0 rgb(255 255 255 / 0.35);
+
+  /* Motion */
+  --ease-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 1.8s ease-out infinite;
+  --animate-marquee: marquee 28s linear infinite;
+
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(2deg); }
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 0.7; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+}
+
+/* Semantic surface tokens — switch between light and dark themes */
+:root {
+  --nd-bg: #fffbf3;
+  --nd-bg-elevated: #ffffff;
+  --nd-surface: #ffffff;
+  --nd-surface-2: #fbf4e6;
+  --nd-surface-3: #f5e9d3;
+  --nd-ink: #2a1215;
+  --nd-ink-soft: #5b4441;
+  --nd-muted: #8a7570;
+  --nd-line: #eddcc4;
+  --nd-line-soft: #f5ead8;
+  --nd-brand: #8f1d34;
+  --nd-accent: #f57f0e;
+  --nd-ring: #f57f0e;
+  color-scheme: light;
+}
+
+.dark {
+  --nd-bg: #120a0b;
+  --nd-bg-elevated: #1a0f11;
+  --nd-surface: #1d1113;
+  --nd-surface-2: #261619;
+  --nd-surface-3: #321d21;
+  --nd-ink: #fbefe4;
+  --nd-ink-soft: #e2cfc6;
+  --nd-muted: #ad968f;
+  --nd-line: #3b2428;
+  --nd-line-soft: #2c1a1d;
+  --nd-brand: #f6ccd1;
+  --nd-accent: #ff9a2e;
+  --nd-ring: #ff9a2e;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--nd-bg);
+  --color-bg-elevated: var(--nd-bg-elevated);
+  --color-surface: var(--nd-surface);
+  --color-surface-2: var(--nd-surface-2);
+  --color-surface-3: var(--nd-surface-3);
+  --color-ink: var(--nd-ink);
+  --color-ink-soft: var(--nd-ink-soft);
+  --color-muted: var(--nd-muted);
+  --color-line: var(--nd-line);
+  --color-line-soft: var(--nd-line-soft);
+  --color-brand: var(--nd-brand);
+  --color-accent: var(--nd-accent);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--nd-bg);
+    color: var(--nd-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  :lang(hi) body,
+  .font-hindi {
+    font-family: var(--font-deva), var(--font-sans);
+  }
+  ::selection {
+    background: rgb(245 127 14 / 0.25);
+  }
+  :focus-visible {
+    outline: 2px solid var(--nd-ring);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .nd-shimmer {
+    background: linear-gradient(90deg, var(--nd-surface-2) 0%, var(--nd-surface-3) 40%, var(--nd-surface-2) 80%);
+    background-size: 800px 100%;
+    animation: var(--animate-shimmer);
+  }
+  .nd-gradient-saffron {
+    background-image: linear-gradient(135deg, #ffb65e 0%, #f57f0e 45%, #d96506 100%);
+  }
+  .nd-gradient-maroon {
+    background-image: linear-gradient(135deg, #8f1d34 0%, #6e1528 55%, #2e0711 100%);
+  }
+  .nd-gradient-royal {
+    background-image: radial-gradient(120% 120% at 100% 0%, #b22a42 0%, #52101f 55%, #2e0711 100%);
+  }
+  .nd-pattern {
+    background-image: radial-gradient(circle at 1px 1px, rgb(212 167 44 / 0.25) 1px, transparent 0);
+    background-size: 18px 18px;
+  }
+  .nd-scrollbar-none {
+    scrollbar-width: none;
+  }
+  .nd-scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .nd-glass {
+    background: color-mix(in srgb, var(--nd-bg-elevated) 78%, transparent);
+    backdrop-filter: saturate(1.6) blur(18px);
+    -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  }
+  .nd-text-gradient {
+    background-image: linear-gradient(120deg, #f57f0e, #b22a42 60%, #6e1528);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
