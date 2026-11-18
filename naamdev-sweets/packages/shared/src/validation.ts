@@ -33,14 +33,16 @@ export const paiseSchema = z.coerce.number().int().min(0).max(100_000_000);
 
 export const identifierSchema = z.string().trim().min(3).max(160);
 
+/** Storefront sign-up form (the account itself is created with Firebase Authentication). */
 export const registerSchema = z.object({
   name: trimmed(2, 80),
-  phone: phoneSchema,
-  email: emailSchema.optional().or(z.literal("").transform(() => undefined)),
+  email: emailSchema,
   password: passwordSchema,
-  otp: otpSchema,
+  phone: phoneSchema.optional().or(z.literal("").transform(() => undefined)),
   referralCode: z.string().trim().toUpperCase().max(20).optional().or(z.literal("").transform(() => undefined)),
 });
+
+export const emailLoginSchema = z.object({ email: emailSchema, password: z.string().min(1).max(128) });
 
 export const passwordLoginSchema = z.object({ identifier: identifierSchema, password: z.string().min(1).max(72) });
 export const otpRequestSchema = z.object({
@@ -379,12 +381,10 @@ export const promoNotificationSchema = z.object({
 });
 
 // ── Delivery partner ──
+/** Rider profile sent after the Firebase account is created (email + password). */
 export const partnerRegisterSchema = z.object({
   name: trimmed(2, 80),
   phone: phoneSchema,
-  email: emailSchema.optional().or(z.literal("").transform(() => undefined)),
-  password: passwordSchema,
-  otp: otpSchema,
   city: trimmed(2, 60),
   vehicleType: z.enum(VEHICLE_TYPES),
   vehicleNumber: z.string().trim().toUpperCase().max(20).optional(),

@@ -1,12 +1,7 @@
-import type { Tx } from "@naamdev/db";
+import type { Transaction } from "firebase-admin/firestore";
+import { nextCounter } from "@naamdev/db";
 
-export async function nextCounter(tx: Tx, key: string): Promise<number> {
-  const rows = await tx.$queryRaw<{ value: number }[]>`
-    INSERT INTO "Counter" ("key", "value") VALUES (${key}, 1)
-    ON CONFLICT ("key") DO UPDATE SET "value" = "Counter"."value" + 1
-    RETURNING "value"`;
-  return Number(rows[0]!.value);
-}
+export { nextCounter };
 
 const istParts = (d = new Date()) => {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "2-digit", month: "2-digit", day: "2-digit" }).formatToParts(d);
@@ -14,27 +9,27 @@ const istParts = (d = new Date()) => {
   return { yy: get("year"), mm: get("month"), dd: get("day") };
 };
 
-export async function nextOrderNumber(tx: Tx): Promise<string> {
+export async function nextOrderNumber(tx: Transaction): Promise<string> {
   const { yy, mm, dd } = istParts();
-  const n = await nextCounter(tx, `order:${yy}${mm}${dd}`);
+  const n = await nextCounter(tx, `order-${yy}${mm}${dd}`);
   return `ND${yy}${mm}${dd}-${String(n).padStart(4, "0")}`;
 }
 
 /** GST invoice numbers run per Indian financial year (April–March). */
-export async function nextInvoiceNumber(tx: Tx): Promise<string> {
+export async function nextInvoiceNumber(tx: Transaction): Promise<string> {
   const now = new Date();
   const ist = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const startYear = ist.getMonth() >= 3 ? ist.getFullYear() : ist.getFullYear() - 1;
   const fy = `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
-  const n = await nextCounter(tx, `invoice:${fy}`);
+  const n = await nextCounter(tx, `invoice-${fy}`);
   return `NDS/${fy}/${String(n).padStart(6, "0")}`;
 }
 
-export async function nextTicketNumber(tx: Tx): Promise<string> {
+export async function nextTicketNumber(tx: Transaction): Promise<string> {
   return `TKT-${String(await nextCounter(tx, "ticket")).padStart(6, "0")}`;
 }
 
-export async function nextPurchaseNumber(tx: Tx): Promise<string> {
+export async function nextPurchaseNumber(tx: Transaction): Promise<string> {
   const { yy, mm } = istParts();
-  return `PO-${yy}${mm}-${String(await nextCounter(tx, `purchase:${yy}${mm}`)).padStart(4, "0")}`;
+  return `PO-${yy}${mm}-${String(await nextCounter(tx, `purchase-${yy}${mm}`)).padStart(4, "0")}`;
 }

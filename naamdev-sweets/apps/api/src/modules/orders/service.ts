@@ -1,11 +1,15 @@
-import { prisma, type ActorType, type Order, type OrderStatus, type Tx } from "@naamdev/db";
-import { canTransition, SOCKET_EVENTS } from "@naamdev/shared";
+import type { Transaction } from "firebase-admin/firestore";
+import {
+  C, db, FieldValue, getDoc, getDocs, newId, runTx,
+  type ActorType, type CouponUsage, type DeliveryAssignment, type Order, type OrderStatus, type Payment, type Refund, type User, type WithId,
+} from "@naamdev/db";
+import { canTransition } from "@naamdev/shared";
 import { badRequest, conflict, notFound } from "../../lib/errors";
+import { live } from "../../lib/live";
 import { logger } from "../../lib/logger";
 import { nextInvoiceNumber } from "../../lib/counters";
-import { emitTo, rooms } from "../../realtime/io";
-import { awardPoints, onOrderDelivered } from "../loyalty/service";
-import { commitStock, releaseStock } from "../inventory/service";
+import { awardPoints, onOrderDelivered, readDeliveryRewards } from "../loyalty/service";
+import { commitStock, releaseStock, StockSession } from "../inventory/service";
 import { notify, notifyOrderStatus, notifyPayment, notifyStaff } from "../notifications/service";
 import { razorpay } from "../payments/razorpay";
 import { autoOfferDelivery } from "../delivery/service";
@@ -13,114 +17,172 @@ import { autoOfferDelivery } from "../delivery/service";
 export interface Actor {
   type: ActorType;
   userId?: string | null;
+  name?: string | null;
 }
 
 export type Effect =
-  | { kind: "status"; order: Order; status: OrderStatus }
+  | { kind: "status"; order: WithId<Order>; status: OrderStatus }
   | { kind: "autoRefund"; orderId: string; reason: string }
   | { kind: "autoAssign"; orderId: string }
   | { kind: "partnerCancelled"; partnerId: string; assignmentId: string; orderNumber: string }
-  | { kind: "paid"; order: Order }
-  | { kind: "newOrder"; order: Order };
+  | { kind: "paid"; order: WithId<Order> }
+  | { kind: "newOrder"; order: WithId<Order> }
+  | { kind: "run"; fn: () => void };
 
-/** Locks the order row for the remainder of the transaction. */
-export async function lockOrder(tx: Tx, orderId: string): Promise<Order> {
-  await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${orderId} FOR UPDATE`;
-  const order = await tx.order.findUnique({ where: { id: orderId } });
-  if (!order) throw notFound("Order");
-  return order;
+export const orderRef = (id: string) => db.collection(C.orders).doc(id);
+const ACTIVE_ASSIGNMENT_STATUSES = ["OFFERED", "ACCEPTED", "AT_STORE", "PICKED_UP", "OUT_FOR_DELIVERY"];
+
+/**
+ * One order transaction: shared stock session, the latest state of each touched order (written once),
+ * and side effects to run after commit.
+ */
+export class OrderTx {
+  stock: StockSession;
+  private orders = new Map<string, WithId<Order>>();
+  private dirty = new Set<string>();
+  effects: Effect[] = [];
+  constructor(public tx: Transaction) {
+    this.stock = new StockSession(tx);
+  }
+  /** Reads and locks an order for the rest of the transaction. */
+  async lock(orderId: string): Promise<WithId<Order>> {
+    const cached = this.orders.get(orderId);
+    if (cached) return cached;
+    const order = await getDoc<Order>(orderRef(orderId), this.tx);
+    if (!order) throw notFound("Order");
+    this.orders.set(orderId, order);
+    return order;
+  }
+  save(order: WithId<Order>) {
+    order.updatedAt = new Date();
+    this.orders.set(order.id, order);
+    this.dirty.add(order.id);
+  }
+  flush() {
+    for (const id of this.dirty) {
+      const { id: _id, ...data } = this.orders.get(id)!;
+      this.tx.set(orderRef(id), data);
+    }
+    this.stock.flush();
+  }
+}
+
+export async function withOrderTx<T>(fn: (ctx: OrderTx) => Promise<T>): Promise<{ result: T; effects: Effect[] }> {
+  const out = await runTx(async (tx) => {
+    const ctx = new OrderTx(tx);
+    const result = await fn(ctx);
+    ctx.flush();
+    return { result, effects: ctx.effects };
+  });
+  return out;
 }
 
 /**
- * Applies a lifecycle transition with all of its side effects (stock, coupons, points,
- * invoices, assignments). Must run inside a transaction holding the order lock.
+ * Applies a lifecycle transition with all of its side effects (stock, coupons, points, invoices,
+ * assignments). Mutates the locked order in memory; the transaction writes it once on commit.
  */
-export async function applyTransition(tx: Tx, order: Order, to: OrderStatus, actor: Actor, note?: string): Promise<{ order: Order; effects: Effect[] }> {
-  if (order.status === to) return { order, effects: [] };
+export async function applyTransition(ctx: OrderTx, order: WithId<Order>, to: OrderStatus, actor: Actor, note?: string): Promise<WithId<Order>> {
+  if (order.status === to) return order;
   if (!canTransition(order.status, to)) throw conflict(`Cannot move an order from ${order.status} to ${to}.`, { from: order.status, to }, "INVALID_TRANSITION");
-  const effects: Effect[] = [];
+  const { tx } = ctx;
   const now = new Date();
-  const data: Parameters<Tx["order"]["update"]>[0]["data"] = { status: to };
+  const from = order.status;
 
   switch (to) {
     case "CONFIRMED":
-      data.confirmedAt = now;
-      data.reservationExpiresAt = null;
-      data.invoiceNumber = order.invoiceNumber ?? (await nextInvoiceNumber(tx));
-      effects.push({ kind: "newOrder", order });
+      order.confirmedAt = now;
+      order.reservationExpiresAt = null;
+      order.invoiceNumber = order.invoiceNumber ?? (await nextInvoiceNumber(tx));
+      ctx.effects.push({ kind: "newOrder", order });
       break;
     case "PACKED":
     case "READY_FOR_PICKUP": {
-      const active = await tx.deliveryAssignment.count({ where: { orderId: order.id, status: { in: ["OFFERED", "ACCEPTED", "AT_STORE", "PICKED_UP", "OUT_FOR_DELIVERY"] } } });
-      if (!active) effects.push({ kind: "autoAssign", orderId: order.id });
+      const active = await getDocs<DeliveryAssignment>(db.collection(C.assignments).where("orderId", "==", order.id), tx);
+      if (!active.some((a) => ACTIVE_ASSIGNMENT_STATUSES.includes(a.status))) ctx.effects.push({ kind: "autoAssign", orderId: order.id });
       break;
     }
     case "DISPATCHED":
-      data.dispatchedAt = now;
-      await commitStock(tx, order.id);
+      order.dispatchedAt = now;
+      await commitStock(ctx.stock, order);
       break;
-    case "DELIVERED":
-      data.deliveredAt = now;
-      if (order.status !== "DISPATCHED" && order.status !== "OUT_FOR_DELIVERY") break;
+    case "DELIVERED": {
+      order.deliveredAt = now;
+      if (from !== "DISPATCHED" && from !== "OUT_FOR_DELIVERY") break;
       if (order.paymentMethod === "COD") {
-        data.paymentStatus = "COD_COLLECTED";
-        await tx.payment.updateMany({ where: { orderId: order.id, method: "COD" }, data: { status: "CAPTURED", capturedAt: now } });
+        order.paymentStatus = "COD_COLLECTED";
+        const cod = await getDocs<Payment>(db.collection(C.payments).where("orderId", "==", order.id), tx);
+        for (const p of cod.filter((x) => x.method === "COD")) tx.update(db.collection(C.payments).doc(p.id), { status: "CAPTURED", capturedAt: now, updatedAt: now });
       }
-      await onOrderDelivered(tx, order);
+      const rewards = await readDeliveryRewards(tx, order.userId);
+      const after: (() => void)[] = [];
+      await onOrderDelivered(tx, order, rewards, after);
+      for (const fn of after) ctx.effects.push({ kind: "run", fn });
       break;
+    }
     case "CANCELLED": {
-      data.cancelledAt = now;
-      data.cancelReason = note ?? "Cancelled";
-      data.cancelledBy = actor.type;
-      data.reservationExpiresAt = null;
-      await releaseStock(tx, order.id, `Order ${order.orderNumber} cancelled`);
-      if (order.couponId) {
-        const usage = await tx.couponUsage.findUnique({ where: { orderId: order.id } });
+      order.cancelledAt = now;
+      order.cancelReason = note ?? "Cancelled";
+      order.cancelledBy = actor.type;
+      order.reservationExpiresAt = null;
+      order.items = await releaseStock(ctx.stock, order, `Order ${order.orderNumber} cancelled`);
+      if (order.couponCode) {
+        const usage = await getDoc<CouponUsage>(db.collection(C.couponUsages).doc(order.id), tx);
         if (usage) {
-          await tx.couponUsage.delete({ where: { id: usage.id } });
-          await tx.coupon.update({ where: { id: order.couponId }, data: { usedCount: { decrement: 1 } } });
+          tx.delete(db.collection(C.couponUsages).doc(order.id));
+          tx.update(db.collection(C.coupons).doc(order.couponCode), { usedCount: FieldValue.increment(-1) });
         }
       }
-      if (order.pointsRedeemed > 0)
-        await awardPoints(tx, order.userId, order.pointsRedeemed, "REVERSAL", `Points restored — order ${order.orderNumber} cancelled`, order.id);
-      if (order.paymentMethod === "COD") await tx.payment.updateMany({ where: { orderId: order.id, status: "CREATED" }, data: { status: "FAILED", failureReason: "Order cancelled" } });
-      const assignments = await tx.deliveryAssignment.findMany({ where: { orderId: order.id, status: { in: ["OFFERED", "ACCEPTED", "AT_STORE"] } } });
-      for (const a of assignments) {
-        await tx.deliveryAssignment.update({ where: { id: a.id }, data: { status: "CANCELLED", cancelledAt: now } });
-        effects.push({ kind: "partnerCancelled", partnerId: a.partnerId, assignmentId: a.id, orderNumber: order.orderNumber });
+      if (order.pointsRedeemed > 0) {
+        const user = await getDoc<User>(db.collection(C.users).doc(order.userId), tx);
+        if (user) awardPoints(tx, user, order.pointsRedeemed, "REVERSAL", `Points restored — order ${order.orderNumber} cancelled`, order.id);
       }
-      if (order.paymentStatus === "PAID") effects.push({ kind: "autoRefund", orderId: order.id, reason: note ?? "Order cancelled" });
+      if (order.paymentMethod === "COD") {
+        const pays = await getDocs<Payment>(db.collection(C.payments).where("orderId", "==", order.id), tx);
+        for (const p of pays.filter((x) => x.status === "CREATED"))
+          tx.update(db.collection(C.payments).doc(p.id), { status: "FAILED", failureReason: "Order cancelled", updatedAt: now });
+      }
+      const assignments = await getDocs<DeliveryAssignment>(db.collection(C.assignments).where("orderId", "==", order.id), tx);
+      for (const a of assignments.filter((x) => ["OFFERED", "ACCEPTED", "AT_STORE"].includes(x.status))) {
+        tx.update(db.collection(C.assignments).doc(a.id), { status: "CANCELLED", cancelledAt: now, updatedAt: now });
+        ctx.effects.push({ kind: "partnerCancelled", partnerId: a.partnerId, assignmentId: a.id, orderNumber: order.orderNumber });
+      }
+      order.partnerId = null;
+      if (order.paymentStatus === "PAID") ctx.effects.push({ kind: "autoRefund", orderId: order.id, reason: note ?? "Order cancelled" });
       break;
     }
     case "REFUNDED":
       break;
   }
 
-  const updated = await tx.order.update({ where: { id: order.id }, data });
-  await tx.orderStatusHistory.create({
-    data: { orderId: order.id, fromStatus: order.status, toStatus: to, note: note ?? null, actorType: actor.type, changedById: actor.userId ?? null },
-  });
-  effects.unshift({ kind: "status", order: updated, status: to });
-  return { order: updated, effects };
+  order.status = to;
+  order.history = [
+    ...order.history,
+    { id: newId(), fromStatus: from, toStatus: to, note: note ?? null, actorType: actor.type, changedById: actor.userId ?? null, changedByName: actor.name ?? null, createdAt: now },
+  ];
+  ctx.save(order);
+  ctx.effects.push({ kind: "status", order, status: to });
+  return order;
 }
 
-/** Executes post-commit side effects (notifications, sockets, refunds, partner offers). */
+/** Executes post-commit side effects (notifications, live updates, refunds, partner offers). */
 export async function runEffects(effects: Effect[]) {
-  for (const e of effects) {
+  // Status effects first (customer sees the change), then the rest in order.
+  const ordered = [...effects.filter((e) => e.kind === "status"), ...effects.filter((e) => e.kind !== "status")];
+  for (const e of ordered) {
     try {
       if (e.kind === "status") notifyOrderStatus(e.order, e.status);
       else if (e.kind === "paid") notifyPayment(e.order, true);
+      else if (e.kind === "run") e.fn();
       else if (e.kind === "newOrder") {
-        emitTo(rooms.staff, SOCKET_EVENTS.adminNewOrder, { orderId: e.order.id, orderNumber: e.order.orderNumber, totalPaise: e.order.totalPaise });
+        live.staff("new-order", { orderId: e.order.id, orderNumber: e.order.orderNumber, totalPaise: e.order.totalPaise });
         notifyStaff("orders.manage", { type: "ORDER", title: `New order ${e.order.orderNumber}`, body: `₹${(e.order.totalPaise / 100).toLocaleString("en-IN")} · ${e.order.paymentMethod === "COD" ? "Cash on delivery" : "Paid online"}`, link: `/orders/${e.order.id}`, template: "admin.new_order" });
       } else if (e.kind === "autoAssign") await autoOfferDelivery(e.orderId);
       else if (e.kind === "partnerCancelled") {
-        emitTo(rooms.partner(e.partnerId), SOCKET_EVENTS.deliveryOfferWithdrawn, { assignmentId: e.assignmentId });
-        const partner = await prisma.deliveryPartner.findUnique({ where: { id: e.partnerId } });
-        if (partner) notify({ userId: partner.userId, type: "DELIVERY", title: "Delivery cancelled", body: `Order ${e.orderNumber} was cancelled. No action needed.`, template: "partner.cancelled", channels: ["IN_APP", "PUSH"] });
+        live.partner(e.partnerId, "withdrawn", { assignmentId: e.assignmentId });
+        notify({ userId: e.partnerId, type: "DELIVERY", title: "Delivery cancelled", body: `Order ${e.orderNumber} was cancelled. No action needed.`, template: "partner.cancelled", channels: ["IN_APP", "PUSH"] });
       } else if (e.kind === "autoRefund") {
-        const order = await prisma.order.findUniqueOrThrow({ where: { id: e.orderId } });
-        const due = order.totalPaise - order.refundedPaise;
+        const order = await getDoc<Order>(orderRef(e.orderId));
+        const due = order ? order.totalPaise - order.refundedPaise : 0;
         if (due > 0) await createRefund({ orderId: e.orderId, amountPaise: due, reason: e.reason, method: "GATEWAY" }, { type: "SYSTEM" });
       }
     } catch (err) {
@@ -130,9 +192,9 @@ export async function runEffects(effects: Effect[]) {
 }
 
 export async function changeOrderStatus(orderId: string, to: OrderStatus, actor: Actor, note?: string) {
-  const { order, effects } = await prisma.$transaction(async (tx) => applyTransition(tx, await lockOrder(tx, orderId), to, actor, note));
+  const { result, effects } = await withOrderTx(async (ctx) => applyTransition(ctx, await ctx.lock(orderId), to, actor, note));
   await runEffects(effects);
-  return order;
+  return result;
 }
 
 export async function cancelOrder(orderId: string, actor: Actor, reason: string) {
@@ -140,139 +202,156 @@ export async function cancelOrder(orderId: string, actor: Actor, reason: string)
 }
 
 // ── Payments ──
+const paymentsCol = () => db.collection(C.payments);
+
+export async function paymentByGatewayOrder(gatewayOrderId: string, tx?: Transaction) {
+  return (await getDocs<Payment>(paymentsCol().where("gatewayOrderId", "==", gatewayOrderId).limit(1), tx))[0] ?? null;
+}
 
 export async function markOrderPaid(input: { gatewayOrderId: string; gatewayPaymentId: string; amountPaise: number; method?: string; raw?: unknown }) {
-  const result = await prisma.$transaction(async (tx) => {
-    const payment = await tx.payment.findUnique({ where: { gatewayOrderId: input.gatewayOrderId } });
-    if (!payment) throw notFound("Payment");
-    const order = await lockOrder(tx, payment.orderId);
-    const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
-    if (fresh.status === "CAPTURED") return { order, effects: [] as Effect[], duplicate: true };
+  const lookup = await paymentByGatewayOrder(input.gatewayOrderId);
+  if (!lookup) throw notFound("Payment");
+  let mismatch: { expected: number; got: number } | null = null;
+  const { result, effects } = await withOrderTx(async (ctx) => {
+    const order = await ctx.lock(lookup.orderId);
+    const fresh = await getDoc<Payment>(paymentsCol().doc(lookup.id), ctx.tx);
+    if (!fresh) throw notFound("Payment");
+    if (fresh.status === "CAPTURED") return { order, duplicate: true };
+    const now = new Date();
     if (input.amountPaise !== fresh.amountPaise) {
-      await tx.payment.update({ where: { id: fresh.id }, data: { status: "FAILED", failureReason: `Amount mismatch: expected ${fresh.amountPaise}, got ${input.amountPaise}`, raw: input.raw as object } });
-      logger.error({ orderId: order.id, expected: fresh.amountPaise, got: input.amountPaise }, "payment amount mismatch");
-      throw conflict("Payment amount does not match the order total.", undefined, "AMOUNT_MISMATCH");
+      ctx.tx.update(paymentsCol().doc(fresh.id), { status: "FAILED", failureReason: `Amount mismatch: expected ${fresh.amountPaise}, got ${input.amountPaise}`, raw: (input.raw ?? null) as object, updatedAt: now });
+      mismatch = { expected: fresh.amountPaise, got: input.amountPaise };
+      return { order, duplicate: false };
     }
-    await tx.payment.update({
-      where: { id: fresh.id },
-      data: { status: "CAPTURED", gatewayPaymentId: input.gatewayPaymentId, methodDetail: input.method, capturedAt: new Date(), raw: (input.raw ?? undefined) as object | undefined, failureReason: null },
+    ctx.tx.update(paymentsCol().doc(fresh.id), {
+      status: "CAPTURED", gatewayPaymentId: input.gatewayPaymentId, methodDetail: input.method ?? null, capturedAt: now,
+      raw: (input.raw ?? null) as object, failureReason: null, updatedAt: now,
     });
-    const effects: Effect[] = [];
-    let updated = await tx.order.update({ where: { id: order.id }, data: { paymentStatus: "PAID" } });
-    if (updated.status === "PENDING") {
-      const r = await applyTransition(tx, updated, "CONFIRMED", { type: "SYSTEM" }, "Payment received");
-      updated = r.order;
-      effects.push(...r.effects);
-    } else if (updated.status === "CANCELLED") {
+    order.paymentStatus = "PAID";
+    ctx.save(order);
+    if (order.status === "PENDING") await applyTransition(ctx, order, "CONFIRMED", { type: "SYSTEM" }, "Payment received");
+    else if (order.status === "CANCELLED")
       // Payment arrived after the reservation expired: refund automatically.
-      effects.push({ kind: "autoRefund", orderId: order.id, reason: "Payment received after order was cancelled" });
-    }
-    effects.push({ kind: "paid", order: updated });
-    return { order: updated, effects, duplicate: false };
+      ctx.effects.push({ kind: "autoRefund", orderId: order.id, reason: "Payment received after order was cancelled" });
+    ctx.effects.push({ kind: "paid", order });
+    return { order, duplicate: false };
   });
-  await runEffects(result.effects);
+  if (mismatch) {
+    logger.error({ orderId: lookup.orderId, ...(mismatch as object) }, "payment amount mismatch");
+    throw conflict("Payment amount does not match the order total.", undefined, "AMOUNT_MISMATCH");
+  }
+  await runEffects(effects);
   return result;
 }
 
-export async function markPaymentFailed(gatewayOrderId: string, gatewayPaymentId: string, reason: string, raw?: unknown) {
-  const payment = await prisma.payment.findUnique({ where: { gatewayOrderId }, include: { order: true } });
+export async function markPaymentFailed(gatewayOrderId: string, _gatewayPaymentId: string, reason: string, raw?: unknown) {
+  const payment = await paymentByGatewayOrder(gatewayOrderId);
   if (!payment || payment.status === "CAPTURED") return;
-  await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failureReason: reason.slice(0, 300), raw: raw as object } });
-  if (payment.order.paymentStatus === "PENDING") await prisma.order.update({ where: { id: payment.orderId }, data: { paymentStatus: "FAILED" } });
-  notifyPayment(payment.order, false);
-  void gatewayPaymentId;
+  await paymentsCol().doc(payment.id).update({ status: "FAILED", failureReason: reason.slice(0, 300), raw: (raw ?? null) as object, updatedAt: new Date() });
+  const order = await getDoc<Order>(orderRef(payment.orderId));
+  if (!order) return;
+  if (order.paymentStatus === "PENDING") await orderRef(order.id).update({ paymentStatus: "FAILED", updatedAt: new Date() });
+  notifyPayment(order, false);
 }
 
 // ── Refunds ──
+const refundsCol = () => db.collection(C.refunds);
 
 export async function createRefund(
   input: { orderId: string; amountPaise: number; reason: string; method?: "GATEWAY" | "MANUAL"; reference?: string; returnRequestId?: string },
   actor: Actor,
-) {
-  const prep = await prisma.$transaction(async (tx) => {
-    const order = await lockOrder(tx, input.orderId);
-    if (!["PAID", "PARTIALLY_REFUNDED", "COD_COLLECTED"].includes(order.paymentStatus))
-      throw badRequest("Only paid orders can be refunded.");
-    const pending = await tx.refund.aggregate({ where: { orderId: order.id, status: { in: ["PENDING", "PROCESSING"] } }, _sum: { amountPaise: true } });
-    const refundable = order.totalPaise - order.refundedPaise - (pending._sum.amountPaise ?? 0);
+): Promise<WithId<Refund>> {
+  const { result: prep, effects } = await withOrderTx(async (ctx) => {
+    const order = await ctx.lock(input.orderId);
+    if (!["PAID", "PARTIALLY_REFUNDED", "COD_COLLECTED"].includes(order.paymentStatus)) throw badRequest("Only paid orders can be refunded.");
+    const [existing, payments] = await Promise.all([
+      getDocs<Refund>(refundsCol().where("orderId", "==", order.id), ctx.tx),
+      getDocs<Payment>(paymentsCol().where("orderId", "==", order.id), ctx.tx),
+    ]);
+    const pending = existing.filter((r) => r.status === "PENDING" || r.status === "PROCESSING").reduce((s, r) => s + r.amountPaise, 0);
+    const refundable = order.totalPaise - order.refundedPaise - pending;
     if (input.amountPaise > refundable) throw badRequest(`Maximum refundable amount is ₹${(refundable / 100).toFixed(2)}.`);
-    const payment = await tx.payment.findFirst({ where: { orderId: order.id, method: "ONLINE", status: "CAPTURED" }, orderBy: { createdAt: "desc" } });
+    const payment = payments.filter((p) => p.method === "ONLINE" && p.status === "CAPTURED").sort((a, b) => +b.createdAt - +a.createdAt)[0] ?? null;
     const method = input.method ?? (payment ? "GATEWAY" : "MANUAL");
     if (method === "GATEWAY" && !payment?.gatewayPaymentId) throw badRequest("No captured online payment found — record a manual refund instead.");
     if (method === "MANUAL" && !input.reference && actor.type !== "SYSTEM") throw badRequest("Add the UPI/bank transfer reference for a manual refund.");
-    const refund = await tx.refund.create({
-      data: {
-        orderId: order.id, paymentId: payment?.id, amountPaise: input.amountPaise, reason: input.reason, method,
-        reference: input.reference, initiatedById: actor.userId ?? null, status: method === "MANUAL" ? "PROCESSED" : "PENDING",
-        processedAt: method === "MANUAL" ? new Date() : null,
-      },
-    });
-    if (input.returnRequestId) await tx.returnRequest.update({ where: { id: input.returnRequestId }, data: { refundId: refund.id, status: "APPROVED" } });
-    const effects: Effect[] = [];
-    if (order.status === "CANCELLED" || order.status === "DELIVERED") {
-      const r = await applyTransition(tx, order, "REFUND_INITIATED", actor, input.reason);
-      effects.push(...r.effects);
-    }
-    if (method === "MANUAL") effects.push(...(await applyRefundProcessed(tx, refund.id)));
-    return { refund, payment, effects };
+    const now = new Date();
+    const ref = refundsCol().doc();
+    const refund: Refund = {
+      orderId: order.id, paymentId: payment?.id ?? null, amountPaise: input.amountPaise, reason: input.reason, method, status: method === "MANUAL" ? "PROCESSED" : "PENDING",
+      gatewayRefundId: null, reference: input.reference ?? null, failureReason: null, initiatedById: actor.userId ?? null,
+      processedAt: method === "MANUAL" ? now : null, returnRequestId: input.returnRequestId ?? null, createdAt: now, updatedAt: now,
+    };
+    ctx.tx.set(ref, refund);
+    if (input.returnRequestId) ctx.tx.update(db.collection(C.returns).doc(input.returnRequestId), { refundId: ref.id, status: "APPROVED", updatedAt: now });
+    if (order.status === "CANCELLED" || order.status === "DELIVERED") await applyTransition(ctx, order, "REFUND_INITIATED", actor, input.reason);
+    if (method === "MANUAL") await applyRefundProcessed(ctx, order, { ...refund, id: ref.id }, payments);
+    return { refund: { ...refund, id: ref.id }, payment };
   });
-  await runEffects(prep.effects);
+  await runEffects(effects);
 
   if (prep.refund.method === "GATEWAY") {
     try {
       const r = await razorpay.refund(prep.payment!.gatewayPaymentId!, prep.refund.amountPaise, { refundId: prep.refund.id, orderId: input.orderId });
-      await prisma.refund.update({ where: { id: prep.refund.id }, data: { gatewayRefundId: r.id, status: "PROCESSING" } });
+      await refundsCol().doc(prep.refund.id).update({ gatewayRefundId: r.id, status: "PROCESSING", updatedAt: new Date() });
       if (r.status === "processed") await settleGatewayRefund(r.id, "processed");
     } catch (err) {
-      await prisma.refund.update({ where: { id: prep.refund.id }, data: { status: "FAILED", failureReason: (err as Error).message.slice(0, 300) } });
+      await refundsCol().doc(prep.refund.id).update({ status: "FAILED", failureReason: (err as Error).message.slice(0, 300), updatedAt: new Date() });
       logger.error({ err, refundId: prep.refund.id }, "gateway refund failed");
       throw err;
     }
   }
-  return prisma.refund.findUniqueOrThrow({ where: { id: prep.refund.id } });
+  return (await getDoc<Refund>(refundsCol().doc(prep.refund.id)))!;
 }
 
-async function applyRefundProcessed(tx: Tx, refundId: string): Promise<Effect[]> {
-  const refund = await tx.refund.findUniqueOrThrow({ where: { id: refundId } });
-  const order = await lockOrder(tx, refund.orderId);
+async function applyRefundProcessed(ctx: OrderTx, order: WithId<Order>, refund: WithId<Refund>, payments?: WithId<Payment>[]) {
   const refundedPaise = order.refundedPaise + refund.amountPaise;
   const full = refundedPaise >= order.totalPaise;
-  let updated = await tx.order.update({ where: { id: order.id }, data: { refundedPaise, paymentStatus: full ? "REFUNDED" : "PARTIALLY_REFUNDED" } });
-  if (full) await tx.payment.updateMany({ where: { orderId: order.id, status: "CAPTURED" }, data: { status: "REFUNDED" } });
-  const effects: Effect[] = [];
-  if (full && updated.status === "REFUND_INITIATED") {
-    const r = await applyTransition(tx, updated, "REFUNDED", { type: "SYSTEM" }, "Refund processed");
-    updated = r.order;
-    effects.push(...r.effects);
-  } else {
-    notify({ userId: order.userId, type: "PAYMENT", title: "Refund processed", body: `₹${(refund.amountPaise / 100).toFixed(2)} has been refunded for order ${order.orderNumber}.`, link: `/account/orders/${order.id}`, template: "refund.processed", channels: ["IN_APP", "EMAIL"] });
+  order.refundedPaise = refundedPaise;
+  order.paymentStatus = full ? "REFUNDED" : "PARTIALLY_REFUNDED";
+  ctx.save(order);
+  if (full) {
+    const pays = payments ?? (await getDocs<Payment>(paymentsCol().where("orderId", "==", order.id), ctx.tx));
+    for (const p of pays.filter((x) => x.status === "CAPTURED")) ctx.tx.update(paymentsCol().doc(p.id), { status: "REFUNDED", updatedAt: new Date() });
   }
-  return effects;
+  if (full && order.status === "REFUND_INITIATED") {
+    await applyTransition(ctx, order, "REFUNDED", { type: "SYSTEM" }, "Refund processed");
+  } else {
+    const o = order;
+    ctx.effects.push({
+      kind: "run",
+      fn: () => notify({ userId: o.userId, type: "PAYMENT", title: "Refund processed", body: `₹${(refund.amountPaise / 100).toFixed(2)} has been refunded for order ${o.orderNumber}.`, link: `/account/orders/${o.id}`, template: "refund.processed", channels: ["IN_APP", "EMAIL"] }),
+    });
+  }
 }
 
 export async function settleGatewayRefund(gatewayRefundId: string, status: "processed" | "failed", reason?: string) {
-  const refund = await prisma.refund.findUnique({ where: { gatewayRefundId } });
-  if (!refund || refund.status === "PROCESSED" || refund.status === "FAILED") return refund;
-  if (status === "failed") return prisma.refund.update({ where: { id: refund.id }, data: { status: "FAILED", failureReason: reason ?? "Refund failed at gateway" } });
-  const effects = await prisma.$transaction(async (tx) => {
-    const r = await tx.refund.updateMany({ where: { id: refund.id, status: { in: ["PENDING", "PROCESSING"] } }, data: { status: "PROCESSED", processedAt: new Date() } });
-    if (r.count !== 1) return [] as Effect[];
-    return applyRefundProcessed(tx, refund.id);
+  const refund = (await getDocs<Refund>(refundsCol().where("gatewayRefundId", "==", gatewayRefundId).limit(1)))[0];
+  if (!refund || refund.status === "PROCESSED" || refund.status === "FAILED") return refund ?? null;
+  if (status === "failed") {
+    await refundsCol().doc(refund.id).update({ status: "FAILED", failureReason: reason ?? "Refund failed at gateway", updatedAt: new Date() });
+    return getDoc<Refund>(refundsCol().doc(refund.id));
+  }
+  const { effects } = await withOrderTx(async (ctx) => {
+    const fresh = await getDoc<Refund>(refundsCol().doc(refund.id), ctx.tx);
+    const order = await ctx.lock(refund.orderId);
+    if (!fresh || (fresh.status !== "PENDING" && fresh.status !== "PROCESSING")) return;
+    ctx.tx.update(refundsCol().doc(refund.id), { status: "PROCESSED", processedAt: new Date(), updatedAt: new Date() });
+    await applyRefundProcessed(ctx, order, fresh);
   });
   await runEffects(effects);
-  return prisma.refund.findUnique({ where: { id: refund.id } });
+  return getDoc<Refund>(refundsCol().doc(refund.id));
 }
 
 /** Job: cancel online orders whose payment window lapsed (after checking the gateway one last time). */
 export async function expireUnpaidOrders() {
-  const due = await prisma.order.findMany({
-    where: { status: "PENDING", paymentMethod: "ONLINE", reservationExpiresAt: { lt: new Date() } },
-    include: { payments: true },
-    take: 50,
-  });
+  const now = new Date();
+  const due = (await getDocs<Order>(db.collection(C.orders).where("status", "==", "PENDING").limit(200)))
+    .filter((o) => o.paymentMethod === "ONLINE" && o.reservationExpiresAt && o.reservationExpiresAt < now)
+    .slice(0, 50);
   let cancelled = 0;
   for (const o of due) {
-    const p = o.payments.find((x) => x.gatewayOrderId);
+    const p = (await getDocs<Payment>(paymentsCol().where("orderId", "==", o.id))).find((x) => x.gatewayOrderId);
     try {
       if (p?.gatewayOrderId) {
         const list = await razorpay.fetchOrderPayments(p.gatewayOrderId).catch(() => null);

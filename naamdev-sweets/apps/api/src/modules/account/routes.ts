@@ -1,11 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma } from "@naamdev/db";
+import {
+  C, db, getDoc, getDocs, getMany, SUB,
+  type Address, type Coupon, type DeliveryZone, type LoyaltyTransaction, type Notification, type Order, type Referral, type User,
+} from "@naamdev/db";
+import { createHash } from "node:crypto";
 import { addressSchema, LOYALTY_TIERS, nextTier, paginationSchema, profileUpdateSchema, tierFor } from "@naamdev/shared";
-import { badRequest, conflict, notFound } from "../../lib/errors";
-import { body, pageMeta, paginate, param, query } from "../../lib/http";
+import { badRequest, notFound } from "../../lib/errors";
+import { audit } from "../../lib/audit";
+import { body, pageOf, pageQuery, param, query } from "../../lib/http";
 import { getSetting } from "../../lib/settings";
 import { requireAuth } from "../../middleware/auth";
+import { catalog } from "../catalog/cache";
 import { cardsByIds } from "../catalog/service";
 import { currentUserPayload } from "../auth/service";
 import { couponContextFor } from "../cart/service";
@@ -14,37 +20,53 @@ import { evaluateCoupon, describeCoupon } from "@naamdev/shared";
 export const accountRouter = Router();
 accountRouter.use(requireAuth);
 
+const userRef = (uid: string) => db.collection(C.users).doc(uid);
+const addressesOf = (uid: string) => userRef(uid).collection(SUB.addresses);
+
 accountRouter.patch("/profile", async (req, res) => {
   const input = body(req, profileUpdateSchema);
   const uid = req.auth!.user.id;
-  const { name, email, preferredLanguage, ...profile } = input;
-  if (email && email !== req.auth!.user.email) {
-    const taken = await prisma.user.findFirst({ where: { email, id: { not: uid } } });
-    if (taken) throw conflict("This email is already in use.");
+  // Email is managed by Firebase Authentication (change it from Account → Security); it is synced on sign-in.
+  const { name, email: _email, preferredLanguage, ...profile } = input;
+  const current = req.auth!.user;
+  const patch: Record<string, unknown> = { updatedAt: new Date(), profile: { ...current.profile, ...profile } };
+  if (name) {
+    patch.name = name;
+    patch.searchText = [name, current.email ?? "", current.phone ?? ""].join(" ").toLowerCase();
   }
-  await prisma.user.update({
-    where: { id: uid },
-    data: {
-      name, preferredLanguage,
-      ...(email && email !== req.auth!.user.email ? { email, emailVerifiedAt: null } : {}),
-      profile: { upsert: { create: profile, update: profile } },
-    },
-  });
+  if (preferredLanguage) patch.preferredLanguage = preferredLanguage;
+  await userRef(uid).update(patch);
   res.json({ user: await currentUserPayload(uid) });
 });
 
+accountRouter.patch("/phone", async (req, res) => {
+  const { phone } = body(req, z.object({ phone: z.string().trim().max(20) }));
+  const { normalizeIndianPhone } = await import("@naamdev/shared");
+  const p = normalizeIndianPhone(phone);
+  if (!p) throw badRequest("Enter a valid 10-digit mobile number", { fields: { phone: "Enter a valid 10-digit mobile number" } }, "VALIDATION_ERROR");
+  const u = req.auth!.user;
+  await userRef(u.id).update({ phone: p, searchText: [u.name, u.email ?? "", p].join(" ").toLowerCase(), updatedAt: new Date() });
+  res.json({ user: await currentUserPayload(u.id) });
+});
+
+const isOurUpload = (url: string) =>
+  url.startsWith("https://firebasestorage.googleapis.com/") || (!!process.env.FIREBASE_STORAGE_EMULATOR_HOST && url.startsWith(`http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}/`));
+
 accountRouter.patch("/avatar", async (req, res) => {
-  const { url } = body(req, z.object({ url: z.string().max(600).nullable() }));
-  if (url && !url.startsWith("/uploads/") && !url.startsWith("https://res.cloudinary.com/")) throw badRequest("Upload the avatar first.");
-  await prisma.user.update({ where: { id: req.auth!.user.id }, data: { avatarUrl: url } });
+  const { url } = body(req, z.object({ url: z.string().max(800).nullable() }));
+  if (url && !isOurUpload(url)) throw badRequest("Upload the avatar first.");
+  await userRef(req.auth!.user.id).update({ avatarUrl: url, updatedAt: new Date() });
   res.json({ user: await currentUserPayload(req.auth!.user.id) });
 });
 
 // ── Addresses ──
+const liveAddresses = async (uid: string) =>
+  (await getDocs<Address>(addressesOf(uid))).filter((a) => !a.deletedAt).sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || +b.updatedAt - +a.updatedAt);
+
 accountRouter.get("/addresses", async (req, res) => {
-  const addresses = await prisma.address.findMany({ where: { userId: req.auth!.user.id, deletedAt: null }, orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }] });
-  const zones = await prisma.deliveryZone.findMany({ where: { pincode: { in: addresses.map((a) => a.pincode) }, isActive: true } });
-  const ok = new Set(zones.map((z) => z.pincode));
+  const addresses = await liveAddresses(req.auth!.user.id);
+  const zones = await getMany<DeliveryZone>(C.zones, addresses.map((a) => a.pincode));
+  const ok = new Set(zones.filter((z) => z.isActive).map((z) => z.pincode));
   const delivery = await getSetting("delivery");
   res.json({ addresses: addresses.map((a) => ({ ...a, serviceable: ok.has(a.pincode) || !delivery.restrictToZones })) });
 });
@@ -52,104 +74,116 @@ accountRouter.get("/addresses", async (req, res) => {
 accountRouter.post("/addresses", async (req, res) => {
   const input = body(req, addressSchema);
   const uid = req.auth!.user.id;
-  const count = await prisma.address.count({ where: { userId: uid, deletedAt: null } });
-  if (count >= 20) throw badRequest("You can save up to 20 addresses.");
-  const makeDefault = input.isDefault || count === 0;
-  const address = await prisma.$transaction(async (tx) => {
-    if (makeDefault) await tx.address.updateMany({ where: { userId: uid }, data: { isDefault: false } });
-    return tx.address.create({ data: { ...input, userId: uid, isDefault: makeDefault } });
-  });
-  res.status(201).json({ address });
+  const existing = await liveAddresses(uid);
+  if (existing.length >= 20) throw badRequest("You can save up to 20 addresses.");
+  const makeDefault = input.isDefault || existing.length === 0;
+  const now = new Date();
+  const ref = addressesOf(uid).doc();
+  const address: Address = {
+    userId: uid, type: input.type, label: input.label ?? null, fullName: input.fullName, phone: input.phone, line1: input.line1,
+    line2: input.line2 ?? null, landmark: input.landmark ?? null, city: input.city, state: input.state, pincode: input.pincode,
+    lat: input.lat ?? null, lng: input.lng ?? null, instructions: input.instructions ?? null, isDefault: makeDefault, deletedAt: null, createdAt: now, updatedAt: now,
+  };
+  const batch = db.batch();
+  if (makeDefault) for (const a of existing.filter((x) => x.isDefault)) batch.update(addressesOf(uid).doc(a.id), { isDefault: false });
+  batch.set(ref, address);
+  await batch.commit();
+  res.status(201).json({ address: { ...address, id: ref.id } });
 });
 
 accountRouter.patch("/addresses/:id", async (req, res) => {
   const input = body(req, addressSchema.partial());
   const uid = req.auth!.user.id;
-  const existing = await prisma.address.findFirst({ where: { id: param(req, "id"), userId: uid, deletedAt: null } });
-  if (!existing) throw notFound("Address");
-  const address = await prisma.$transaction(async (tx) => {
-    if (input.isDefault) await tx.address.updateMany({ where: { userId: uid }, data: { isDefault: false } });
-    return tx.address.update({ where: { id: existing.id }, data: input });
-  });
-  res.json({ address });
+  const existing = await getDoc<Address>(addressesOf(uid).doc(param(req, "id")));
+  if (!existing || existing.deletedAt) throw notFound("Address");
+  const batch = db.batch();
+  if (input.isDefault) for (const a of (await liveAddresses(uid)).filter((x) => x.isDefault && x.id !== existing.id)) batch.update(addressesOf(uid).doc(a.id), { isDefault: false });
+  const patch = { ...input, updatedAt: new Date() };
+  batch.update(addressesOf(uid).doc(existing.id), patch);
+  await batch.commit();
+  res.json({ address: { ...existing, ...patch } });
 });
 
 accountRouter.delete("/addresses/:id", async (req, res) => {
   const uid = req.auth!.user.id;
-  const existing = await prisma.address.findFirst({ where: { id: param(req, "id"), userId: uid, deletedAt: null } });
-  if (!existing) throw notFound("Address");
+  const existing = await getDoc<Address>(addressesOf(uid).doc(param(req, "id")));
+  if (!existing || existing.deletedAt) throw notFound("Address");
   // Soft delete: past orders keep their own address snapshot.
-  await prisma.address.update({ where: { id: existing.id }, data: { deletedAt: new Date(), isDefault: false } });
+  await addressesOf(uid).doc(existing.id).update({ deletedAt: new Date(), isDefault: false, updatedAt: new Date() });
   if (existing.isDefault) {
-    const next = await prisma.address.findFirst({ where: { userId: uid, deletedAt: null }, orderBy: { updatedAt: "desc" } });
-    if (next) await prisma.address.update({ where: { id: next.id }, data: { isDefault: true } });
+    const next = (await liveAddresses(uid))[0];
+    if (next) await addressesOf(uid).doc(next.id).update({ isDefault: true });
   }
   res.json({ ok: true });
 });
 
 // ── Wishlist ──
 accountRouter.get("/wishlist", async (req, res) => {
-  const rows = await prisma.wishlistItem.findMany({ where: { userId: req.auth!.user.id }, orderBy: { createdAt: "desc" } });
-  res.json({ items: await cardsByIds(rows.map((r) => r.productId)), productIds: rows.map((r) => r.productId) });
+  const rows = (await userRef(req.auth!.user.id).collection(SUB.wishlist).orderBy("createdAt", "desc").get()).docs.map((d) => d.id);
+  res.json({ items: await cardsByIds(rows), productIds: rows });
 });
 
 accountRouter.post("/wishlist/:productId", async (req, res) => {
   const productId = param(req, "productId");
-  if (!(await prisma.product.findFirst({ where: { id: productId, deletedAt: null } }))) throw notFound("Product");
-  await prisma.wishlistItem.upsert({ where: { userId_productId: { userId: req.auth!.user.id, productId } }, update: {}, create: { userId: req.auth!.user.id, productId } });
+  const p = (await catalog()).byId.get(productId);
+  if (!p || p.deletedAt) throw notFound("Product");
+  await userRef(req.auth!.user.id).collection(SUB.wishlist).doc(productId).set({ productId, createdAt: new Date() }, { merge: true });
   res.status(201).json({ ok: true });
 });
 
 accountRouter.delete("/wishlist/:productId", async (req, res) => {
-  await prisma.wishlistItem.deleteMany({ where: { userId: req.auth!.user.id, productId: param(req, "productId") } });
+  await userRef(req.auth!.user.id).collection(SUB.wishlist).doc(param(req, "productId")).delete();
   res.json({ ok: true });
 });
 
 accountRouter.get("/recently-viewed", async (req, res) => {
-  const rows = await prisma.productView.findMany({ where: { userId: req.auth!.user.id }, orderBy: { viewedAt: "desc" }, take: 20 });
-  res.json({ items: await cardsByIds(rows.map((r) => r.productId)) });
+  const rows = (await userRef(req.auth!.user.id).collection(SUB.views).orderBy("viewedAt", "desc").limit(20).get()).docs.map((d) => d.id);
+  res.json({ items: await cardsByIds(rows) });
 });
 
 // ── Notifications & devices ──
 accountRouter.get("/notifications", async (req, res) => {
   const { page, pageSize } = query(req, paginationSchema);
-  const where = { userId: req.auth!.user.id };
-  const [total, unread, items] = await Promise.all([
-    prisma.notification.count({ where }),
-    prisma.notification.count({ where: { ...where, readAt: null } }),
-    prisma.notification.findMany({ where, orderBy: { createdAt: "desc" }, ...paginate(page, pageSize) }),
+  const col = userRef(req.auth!.user.id).collection(SUB.notifications);
+  const [pg, unread] = await Promise.all([
+    pageQuery<Notification>(col.orderBy("createdAt", "desc"), page, pageSize),
+    col.where("readAt", "==", null).count().get(),
   ]);
-  res.json({ items, unread, meta: pageMeta(total, page, pageSize) });
+  res.json({ items: pg.items, unread: unread.data().count, meta: pg.meta });
 });
 
 accountRouter.post("/notifications/read", async (req, res) => {
   const { ids } = body(req, z.object({ ids: z.array(z.string()).max(200).optional() }));
-  await prisma.notification.updateMany({ where: { userId: req.auth!.user.id, readAt: null, ...(ids ? { id: { in: ids } } : {}) }, data: { readAt: new Date() } });
+  const col = userRef(req.auth!.user.id).collection(SUB.notifications);
+  const unread = await col.where("readAt", "==", null).limit(500).get();
+  const batch = db.batch();
+  const now = new Date();
+  for (const d of unread.docs) if (!ids || ids.includes(d.id)) batch.update(d.ref, { readAt: now });
+  await batch.commit();
   res.json({ ok: true });
 });
 
+const tokenId = (token: string) => createHash("sha256").update(token).digest("hex");
+
 accountRouter.post("/devices", async (req, res) => {
   const { token, platform } = body(req, z.object({ token: z.string().min(20).max(4096), platform: z.enum(["web", "android", "ios"]).default("web") }));
-  await prisma.deviceToken.upsert({ where: { token }, update: { userId: req.auth!.user.id, lastUsedAt: new Date(), platform }, create: { token, platform, userId: req.auth!.user.id } });
+  const now = new Date();
+  await userRef(req.auth!.user.id).collection(SUB.devices).doc(tokenId(token)).set({ userId: req.auth!.user.id, token, platform, createdAt: now, lastUsedAt: now }, { merge: true });
   res.status(201).json({ ok: true });
 });
 
 accountRouter.delete("/devices", async (req, res) => {
   const { token } = body(req, z.object({ token: z.string().min(20).max(4096) }));
-  await prisma.deviceToken.deleteMany({ where: { token, userId: req.auth!.user.id } });
+  await userRef(req.auth!.user.id).collection(SUB.devices).doc(tokenId(token)).delete();
   res.json({ ok: true });
 });
 
 // ── Loyalty & referrals ──
 accountRouter.get("/loyalty", async (req, res) => {
   const { page, pageSize } = query(req, paginationSchema);
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.auth!.user.id } });
+  const user = (await getDoc<User>(userRef(req.auth!.user.id)))!;
   const settings = await getSetting("loyalty");
-  const where = { userId: user.id };
-  const [total, items] = await Promise.all([
-    prisma.loyaltyTransaction.count({ where }),
-    prisma.loyaltyTransaction.findMany({ where, orderBy: { createdAt: "desc" }, ...paginate(page, pageSize) }),
-  ]);
+  const { items, meta } = await pageQuery<LoyaltyTransaction>(userRef(user.id).collection(SUB.loyalty).orderBy("createdAt", "desc"), page, pageSize);
   res.json({
     balance: user.loyaltyPoints,
     lifetimePoints: user.lifetimePoints,
@@ -159,20 +193,20 @@ accountRouter.get("/loyalty", async (req, res) => {
     tiers: LOYALTY_TIERS,
     settings: { pointsPer100: settings.pointsPer100, pointValuePaise: settings.pointValuePaise, maxRedeemPercent: settings.maxRedeemPercent, minRedeemPoints: settings.minRedeemPoints, enabled: settings.enabled },
     items,
-    meta: pageMeta(total, page, pageSize),
+    meta,
   });
 });
 
 accountRouter.get("/referrals", async (req, res) => {
   const [settings, referrals] = await Promise.all([
     getSetting("loyalty"),
-    prisma.referral.findMany({ where: { referrerId: req.auth!.user.id }, include: { referee: { select: { name: true, createdAt: true } } }, orderBy: { createdAt: "desc" } }),
+    getDocs<Referral>(db.collection(C.referrals).where("referrerId", "==", req.auth!.user.id)).then((r) => r.sort((a, b) => +b.createdAt - +a.createdAt)),
   ]);
   res.json({
     code: req.auth!.user.referralCode,
     referrerBonus: settings.referrerBonus,
     refereeBonus: settings.refereeBonus,
-    referrals: referrals.map((r) => ({ id: r.id, name: r.referee.name.split(" ")[0], status: r.status, rewardPoints: r.rewardPoints, joinedAt: r.referee.createdAt, completedAt: r.completedAt })),
+    referrals: referrals.map((r) => ({ id: r.id, name: r.refereeName.split(" ")[0], status: r.status, rewardPoints: r.rewardPoints, joinedAt: r.createdAt, completedAt: r.completedAt })),
     totalEarned: referrals.filter((r) => r.status === "COMPLETED").reduce((s, r) => s + r.rewardPoints, 0),
   });
 });
@@ -180,16 +214,19 @@ accountRouter.get("/referrals", async (req, res) => {
 // ── Coupons available to this customer ──
 accountRouter.get("/coupons", async (req, res) => {
   const now = new Date();
-  const coupons = await prisma.coupon.findMany({ where: { isActive: true, isPublic: true, startsAt: { lte: now }, endsAt: { gte: now } }, include: { categories: true, products: { select: { id: true } } } });
+  const snap = await catalog();
+  const coupons = (await getDocs<Coupon>(db.collection(C.coupons).where("isActive", "==", true))).filter((c) => c.isPublic && c.startsAt <= now && c.endsAt >= now);
   const out = [];
   for (const c of coupons) {
-    const ctx = await couponContextFor(req.auth!.user.id, c.id);
-    const ev = evaluateCoupon(
-      { ...c, productIds: c.products.map((p) => p.id), categoryIds: c.categories.map((x) => x.id) },
-      { ...ctx, lines: [{ productId: "_", categoryId: c.categories[0]?.id ?? "_", lineTotalPaise: Math.max(c.minOrderPaise, 1) }], subtotalPaise: Math.max(c.minOrderPaise, 1) },
-    );
+    const ctx = await couponContextFor(req.auth!.user.id, c.code);
+    const ev = evaluateCoupon(c, {
+      ...ctx,
+      lines: [{ productId: "_", categoryId: c.categoryIds[0] ?? "_", lineTotalPaise: Math.max(c.minOrderPaise, 1) }],
+      subtotalPaise: Math.max(c.minOrderPaise, 1),
+    });
     const status = !ev.valid && ["PER_USER_LIMIT_REACHED", "FIRST_ORDER_ONLY", "USAGE_LIMIT_REACHED"].includes(ev.reason) ? ev.reason : "AVAILABLE";
-    out.push({ code: c.code, title: c.title, description: c.description, summary: describeCoupon(c), endsAt: c.endsAt, isFestival: c.isFestival, categories: c.categories.map((x) => x.name), status, used: ctx.customerUsageCount });
+    const categories = c.categoryIds.map((id) => snap.categoryById.get(id)?.name).filter(Boolean);
+    out.push({ code: c.code, title: c.title, description: c.description, summary: describeCoupon(c), endsAt: c.endsAt, isFestival: c.isFestival, categories, status, used: ctx.customerUsageCount });
   }
   res.json({ coupons: out });
 });
@@ -197,14 +234,15 @@ accountRouter.get("/coupons", async (req, res) => {
 // ── Account deletion ──
 accountRouter.post("/deletion-request", async (req, res) => {
   const { reason } = body(req, z.object({ reason: z.string().trim().max(500).optional() }));
-  const active = await prisma.order.count({ where: { userId: req.auth!.user.id, status: { in: ["PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "PACKED", "READY_FOR_PICKUP", "DISPATCHED", "OUT_FOR_DELIVERY"] } } });
-  if (active) throw badRequest("You have orders in progress. Please request deletion after they are delivered.");
-  await prisma.user.update({ where: { id: req.auth!.user.id }, data: { status: "DELETION_REQUESTED", deletionRequestedAt: new Date() } });
-  await prisma.auditLog.create({ data: { actorId: req.auth!.user.id, action: "account.deletion_requested", entity: "User", entityId: req.auth!.user.id, metadata: { reason } } });
+  const ACTIVE = ["PENDING", "CONFIRMED", "PROCESSING", "PREPARING", "PACKED", "READY_FOR_PICKUP", "DISPATCHED", "OUT_FOR_DELIVERY"];
+  const orders = await getDocs<Order>(db.collection(C.orders).where("userId", "==", req.auth!.user.id).select("status").limit(200));
+  if (orders.some((o) => ACTIVE.includes(o.status))) throw badRequest("You have orders in progress. Please request deletion after they are delivered.");
+  await userRef(req.auth!.user.id).update({ status: "DELETION_REQUESTED", deletionRequestedAt: new Date(), updatedAt: new Date() });
+  await audit(req, "account.deletion_requested", "User", req.auth!.user.id, { reason });
   res.json({ user: await currentUserPayload(req.auth!.user.id) });
 });
 
 accountRouter.delete("/deletion-request", async (req, res) => {
-  await prisma.user.updateMany({ where: { id: req.auth!.user.id, status: "DELETION_REQUESTED" }, data: { status: "ACTIVE", deletionRequestedAt: null } });
+  if (req.auth!.user.status === "DELETION_REQUESTED") await userRef(req.auth!.user.id).update({ status: "ACTIVE", deletionRequestedAt: null, updatedAt: new Date() });
   res.json({ user: await currentUserPayload(req.auth!.user.id) });
 });

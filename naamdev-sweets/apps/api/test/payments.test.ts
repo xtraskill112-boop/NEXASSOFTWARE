@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { prisma } from "@naamdev/db";
-import { addAddress, inventoryOf, loginAs, newCustomer, rzp, settle, variantBySlug } from "./helpers";
+import { C, db, getDocs, type Payment, type Refund } from "@naamdev/db";
+import { addAddress, inventoryOf, loginAs, newCustomer, orderDoc, rzp, settle, variantBySlug } from "./helpers";
+
+const refundsOf = (orderId: string) => getDocs<Refund>(db.collection(C.refunds).where("orderId", "==", orderId));
 
 async function onlineOrder() {
   const { c } = await newCustomer("Online Payer");
@@ -29,7 +31,7 @@ describe("Razorpay payments", () => {
     const r = await c.post("/api/v1/payments/razorpay/verify", { orderId: order.id, razorpay_order_id: payment.razorpayOrderId, razorpay_payment_id: p.id, razorpay_signature: "f".repeat(64) });
     expect(r.status).toBe(400);
     expect(r.body.error.code).toBe("SIGNATURE_INVALID");
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).paymentStatus).toBe("PENDING");
+    expect((await orderDoc(order.id)).paymentStatus).toBe("PENDING");
   });
 
   it("verifies a genuine payment, confirms the order and is idempotent on replay", async () => {
@@ -45,8 +47,9 @@ describe("Razorpay payments", () => {
     // Webhook for the same payment is also a no-op.
     const wh = await rzp.webhook({ event: "payment.captured", payload: { payment: { entity: { ...p, status: "captured" } } } });
     expect(wh.status).toBe(200);
-    expect(await prisma.payment.count({ where: { orderId: order.id, status: "CAPTURED" } })).toBe(1);
-    expect(await prisma.orderStatusHistory.count({ where: { orderId: order.id, toStatus: "CONFIRMED" } })).toBe(1);
+    const payments = await getDocs<Payment>(db.collection(C.payments).where("orderId", "==", order.id));
+    expect(payments.filter((x) => x.status === "CAPTURED")).toHaveLength(1);
+    expect((await orderDoc(order.id)).history.filter((h) => h.toStatus === "CONFIRMED")).toHaveLength(1);
     await settle();
   });
 
@@ -55,7 +58,7 @@ describe("Razorpay payments", () => {
     const p = await rzp.pay(payment.razorpayOrderId, 100);
     const r = await c.post("/api/v1/payments/razorpay/verify", { orderId: order.id, razorpay_order_id: payment.razorpayOrderId, razorpay_payment_id: p.id, razorpay_signature: rzp.signature(payment.razorpayOrderId, p.id) });
     expect(r.status).toBe(409);
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("PENDING");
+    expect((await orderDoc(order.id)).status).toBe("PENDING");
   });
 
   it("confirms via webhook when the browser never returns, and ignores duplicate events", async () => {
@@ -66,7 +69,7 @@ describe("Razorpay payments", () => {
     expect((await rzp.webhook(evt, eventId)).status).toBe(200);
     const dup = await rzp.webhook(evt, eventId);
     expect(dup.body.duplicate).toBe(true);
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("CONFIRMED");
+    expect((await orderDoc(order.id)).status).toBe("CONFIRMED");
     await settle();
   });
 
@@ -84,16 +87,17 @@ describe("Razorpay payments", () => {
     const stockBefore = await inventoryOf(variant.id);
     const cancel = await c.post(`/api/v1/orders/${order.id}/cancel`, { reason: "Changed my mind" });
     expect(cancel.status).toBe(200);
-    const refund = await prisma.refund.findFirstOrThrow({ where: { orderId: order.id } });
+    const [refund] = await refundsOf(order.id);
+    if (!refund) throw new Error("no refund");
     expect(refund.status).toBe("PROCESSING");
     expect(refund.gatewayRefundId).toMatch(/^rfnd_/);
     expect(refund.amountPaise).toBe(order.totals.totalPaise);
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("REFUND_INITIATED");
+    expect((await orderDoc(order.id)).status).toBe("REFUND_INITIATED");
     expect((await inventoryOf(variant.id)).available).toBe(stockBefore.available + 1);
 
     const wh = await rzp.webhook({ event: "refund.processed", payload: { refund: { entity: { id: refund.gatewayRefundId, payment_id: p.id, amount: refund.amountPaise, status: "processed" } } } });
     expect(wh.status).toBe(200);
-    const final = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    const final = await orderDoc(order.id);
     expect(final.status).toBe("REFUNDED");
     expect(final.paymentStatus).toBe("REFUNDED");
     expect(final.refundedPaise).toBe(final.totalPaise);
@@ -112,7 +116,7 @@ describe("Razorpay payments", () => {
     await rzp.setRefundStatus(r1.body.refund.gatewayRefundId, "processed");
     const sync = await admin.post(`/api/v1/admin/orders/refunds/${r1.body.refund.id}/sync`);
     expect(sync.body.refund.status).toBe("PROCESSED");
-    const o = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    const o = await orderDoc(order.id);
     expect(o.paymentStatus).toBe("PARTIALLY_REFUNDED");
     expect(o.refundedPaise).toBe(5000);
     await settle();

@@ -1,29 +1,37 @@
-import { prisma, type Order } from "@naamdev/db";
+import {
+  C, db, getDoc, getDocs, newId, orderSearchText, SUB,
+  type Address, type Cart, type Coupon, type CouponUsage, type DeliveryZone, type Order, type OrderItem, type Payment, type User, type WithId,
+} from "@naamdev/db";
 import { numericCode } from "../../lib/crypto";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { nextOrderNumber } from "../../lib/counters";
+import { live } from "../../lib/live";
 import { logger } from "../../lib/logger";
 import { getSetting } from "../../lib/settings";
 import { integrations, env } from "../../config/env";
-import { buildCartView, couponForCode } from "../cart/service";
+import { buildCartView } from "../cart/service";
+import { catalog } from "../catalog/cache";
+import { defaultStore } from "../catalog/service";
 import { awardPoints } from "../loyalty/service";
 import { OutOfStockError, reserveStock } from "../inventory/service";
 import { razorpay } from "../payments/razorpay";
-import { applyTransition, cancelOrder, runEffects, type Effect } from "./service";
+import { applyTransition, cancelOrder, orderRef, runEffects, withOrderTx } from "./service";
 
 async function addressAndZone(userId: string, addressId?: string) {
   if (!addressId) return { address: null, zone: null };
-  const address = await prisma.address.findFirst({ where: { id: addressId, userId, deletedAt: null } });
-  if (!address) throw notFound("Address");
-  const zone = await prisma.deliveryZone.findUnique({ where: { pincode: address.pincode } });
+  const address = await getDoc<Address>(db.collection(C.users).doc(userId).collection(SUB.addresses).doc(addressId));
+  if (!address || address.deletedAt) throw notFound("Address");
+  const zone = await getDoc<DeliveryZone>(db.collection(C.zones).doc(address.pincode));
   return { address, zone };
 }
 
+const userCartRef = (userId: string) => db.collection(C.carts).doc(`u_${userId}`);
+
 export async function quote(userId: string, input: { addressId?: string; couponCode?: string | null; redeemPoints?: number }) {
-  const cart = await prisma.cart.findUnique({ where: { userId } });
+  const cart = await getDoc<Cart>(userCartRef(userId));
   const { address, zone } = await addressAndZone(userId, input.addressId);
   const [delivery, checkout] = await Promise.all([getSetting("delivery"), getSetting("checkout")]);
-  const view = await buildCartView(cart?.id ?? null, userId, {
+  const view = await buildCartView(cart, userId, {
     couponCode: input.couponCode === undefined ? undefined : input.couponCode,
     redeemPoints: input.redeemPoints,
     zoneDeliveryFeePaise: zone?.isActive ? zone.deliveryFeePaise : null,
@@ -40,12 +48,23 @@ export async function quote(userId: string, input: { addressId?: string; couponC
   return { ...view, blockers, canCheckout: blockers.length === 0, address, zone, serviceable, paymentOptions, etaMinutes };
 }
 
+const orderKeyRef = (userId: string, key: string) => db.collection(C.orderKeys).doc(`${userId}__${key}`);
+
+async function onlinePayment(orderId: string) {
+  const pays = await getDocs<Payment>(db.collection(C.payments).where("orderId", "==", orderId));
+  return pays.filter((p) => p.method === "ONLINE").sort((a, b) => +b.createdAt - +a.createdAt)[0] ?? null;
+}
+
 export async function placeOrder(
   userId: string,
   input: { addressId: string; paymentMethod: "ONLINE" | "COD"; idempotencyKey: string; couponCode?: string | null; redeemPoints?: number; customerNote?: string | null },
 ) {
-  const existing = await prisma.order.findUnique({ where: { userId_idempotencyKey: { userId, idempotencyKey: input.idempotencyKey } }, include: { payments: true } });
-  if (existing) return { order: existing, duplicate: true, payment: existing.payments.find((p) => p.method === "ONLINE") ?? null };
+  // Retries with the same key return the original order (no second order, no second charge).
+  const known = (await orderKeyRef(userId, input.idempotencyKey).get()).data();
+  if (known) {
+    const existing = await getDoc<Order>(orderRef(known.orderId as string));
+    if (existing) return { order: existing, duplicate: true, payment: await onlinePayment(existing.id) };
+  }
 
   const q = await quote(userId, input);
   if (!q.canCheckout) throw conflict(q.blockers[0] ?? "Your cart can't be checked out yet.", { blockers: q.blockers }, "CHECKOUT_BLOCKED");
@@ -54,137 +73,175 @@ export async function placeOrder(
   const pay = input.paymentMethod === "ONLINE" ? q.paymentOptions.online : q.paymentOptions.cod;
   if (!pay.available) throw badRequest(pay.reason ?? "This payment method is unavailable.", undefined, "PAYMENT_METHOD_UNAVAILABLE");
 
-  const [user, checkout] = await Promise.all([prisma.user.findUniqueOrThrow({ where: { id: userId } }), getSetting("checkout")]);
+  const [checkout, store] = await Promise.all([getSetting("checkout"), defaultStore()]);
   const address = q.address!;
-  const couponRow = q.couponCode && ev?.valid ? (await couponForCode(q.couponCode))?.coupon ?? null : null;
+  const couponCode = q.couponCode && ev?.valid ? q.couponCode.toUpperCase() : null;
   const pricing = q.pricing;
 
-  let created: { order: Order; effects: Effect[] };
+  let created: { result: { order: WithId<Order>; duplicate: boolean }; effects: Parameters<typeof runEffects>[0] };
   try {
-    created = await prisma.$transaction(
-      async (tx) => {
-        // Serialise checkouts per customer to make double-submits and coupon races impossible.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"checkout:" + userId}))`;
-        const dupe = await tx.order.findUnique({ where: { userId_idempotencyKey: { userId, idempotencyKey: input.idempotencyKey } } });
-        if (dupe) return { order: dupe, effects: [] };
+    created = await withOrderTx(async (ctx) => {
+      const { tx } = ctx;
+      // The idempotency document is read inside the transaction: a double-submit racing this one
+      // will either see it or conflict and retry, so only one order is ever created.
+      const key = (await tx.get(orderKeyRef(userId, input.idempotencyKey))).data();
+      if (key) return { order: await ctx.lock(key.orderId as string), duplicate: true };
 
-        if (couponRow) {
-          const used = await tx.couponUsage.count({ where: { couponId: couponRow.id, userId } });
-          if (used >= couponRow.perUserLimit) throw badRequest("You have already used this coupon.", undefined, "COUPON_INVALID");
-          const inc = await tx.$executeRaw`UPDATE "Coupon" SET "usedCount" = "usedCount" + 1 WHERE "id" = ${couponRow.id} AND "isActive" = true AND ("usageLimit" IS NULL OR "usedCount" < "usageLimit")`;
-          if (inc !== 1) throw badRequest("This coupon has just reached its usage limit.", undefined, "COUPON_INVALID");
-        }
+      const [user, cart] = await Promise.all([getDoc<User>(db.collection(C.users).doc(userId), tx), getDoc<Cart>(userCartRef(userId), tx)]);
+      if (!user) throw notFound("Account");
+      let coupon: WithId<Coupon> | null = null;
+      if (couponCode) {
+        coupon = await getDoc<Coupon>(db.collection(C.coupons).doc(couponCode), tx);
+        if (!coupon || !coupon.isActive) throw badRequest("This coupon is no longer available.", undefined, "COUPON_INVALID");
+        const used = await getDocs<CouponUsage>(db.collection(C.couponUsages).where("userId", "==", userId).where("couponCode", "==", couponCode), tx);
+        if (used.length >= coupon.perUserLimit) throw badRequest("You have already used this coupon.", undefined, "COUPON_INVALID");
+        if (coupon.usageLimit != null && coupon.usedCount >= coupon.usageLimit) throw badRequest("This coupon has just reached its usage limit.", undefined, "COUPON_INVALID");
+        tx.update(db.collection(C.coupons).doc(couponCode), { usedCount: coupon.usedCount + 1, updatedAt: new Date() });
+      }
 
-        const orderNumber = await nextOrderNumber(tx);
-        const now = new Date();
-        const order = await tx.order.create({
-          data: {
-            orderNumber,
-            userId,
-            storeId: (await tx.store.findFirst({ where: { isDefault: true }, select: { id: true } }))?.id,
-            status: "PENDING",
-            paymentMethod: input.paymentMethod,
-            paymentStatus: input.paymentMethod === "COD" ? "COD_PENDING" : "PENDING",
-            mrpTotalPaise: pricing.mrpTotalPaise,
-            subtotalPaise: pricing.subtotalPaise,
-            itemDiscountPaise: pricing.itemDiscountPaise,
-            couponDiscountPaise: pricing.couponDiscountPaise,
-            loyaltyDiscountPaise: pricing.loyaltyDiscountPaise,
-            deliveryFeePaise: pricing.deliveryFeePaise,
-            taxPaise: pricing.taxPaise,
-            totalPaise: pricing.totalPaise,
-            couponId: couponRow?.id,
-            couponCode: couponRow?.code,
-            pointsRedeemed: pricing.pointsRedeemed,
-            addressSnapshot: {
-              type: address.type, label: address.label, fullName: address.fullName, phone: address.phone, line1: address.line1,
-              line2: address.line2, landmark: address.landmark, city: address.city, state: address.state, pincode: address.pincode,
-            },
-            customerName: address.fullName || user.name,
-            customerPhone: address.phone,
-            customerEmail: user.email,
-            deliveryPincode: address.pincode,
-            deliveryLat: address.lat,
-            deliveryLng: address.lng,
-            deliveryInstructions: address.instructions,
-            customerNote: input.customerNote ?? null,
-            deliveryOtp: numericCode(4),
-            estimatedDeliveryAt: new Date(now.getTime() + q.etaMinutes * 60_000),
-            reservationExpiresAt: input.paymentMethod === "ONLINE" ? new Date(now.getTime() + checkout.reservationMinutes * 60_000) : null,
-            idempotencyKey: input.idempotencyKey,
-            items: {
-              create: pricing.lines.map((l) => {
-                const item = q.items.find((i) => i.variant.id === l.variantId)!;
-                return {
-                  productId: l.productId, variantId: l.variantId, productName: item.product.name, variantLabel: item.variant.label,
-                  sku: item.variant.sku, imageUrl: item.product.image, unitMrpPaise: l.unitMrpPaise, unitPricePaise: l.unitPricePaise,
-                  quantity: l.quantity, lineTotalPaise: l.lineTotalPaise, discountPaise: l.discountPaise, gstRate: l.gstRate, taxPaise: l.taxPaise,
-                };
-              }),
-            },
-            statusHistory: { create: { toStatus: "PENDING", actorType: "CUSTOMER", changedById: userId, note: "Order placed" } },
-          },
-          include: { items: true },
-        });
+      const orderNumber = await nextOrderNumber(tx);
+      const id = newId();
+      const now = new Date();
+      const snap = await catalog();
+      const items: OrderItem[] = pricing.lines.map((l) => {
+        const item = q.items.find((i) => i.variant.id === l.variantId)!;
+        return {
+          id: newId(), productId: l.productId, variantId: l.variantId, productName: item.product.name, variantLabel: item.variant.label,
+          sku: item.variant.sku, imageUrl: item.product.image, unitMrpPaise: l.unitMrpPaise, unitPricePaise: l.unitPricePaise,
+          quantity: l.quantity, lineTotalPaise: l.lineTotalPaise, discountPaise: l.discountPaise, gstRate: l.gstRate, taxPaise: l.taxPaise,
+          categoryId: snap.byId.get(l.productId)?.categoryId ?? "", allocations: [],
+        };
+      });
+      const allocations = await reserveStock(ctx.stock, id, items.map((i) => ({ orderItemId: i.id, variantId: i.variantId, quantity: i.quantity })));
+      for (const i of items) i.allocations = allocations.get(i.id) ?? [];
 
-        await reserveStock(tx, order.id, order.items.map((i) => ({ orderItemId: i.id, variantId: i.variantId, quantity: i.quantity })));
-        if (couponRow) await tx.couponUsage.create({ data: { couponId: couponRow.id, userId, orderId: order.id, discountPaise: pricing.couponDiscountPaise } });
-        if (pricing.pointsRedeemed > 0) {
-          try {
-            await awardPoints(tx, userId, -pricing.pointsRedeemed, "REDEEM", `Redeemed on order ${orderNumber}`, order.id);
-          } catch {
-            throw badRequest("Your Mithaas points balance changed. Please review your order.", undefined, "POINTS_CHANGED");
-          }
-        }
-        const cart = await tx.cart.findUnique({ where: { userId } });
-        if (cart) {
-          await tx.cartItem.deleteMany({ where: { cartId: cart.id, savedForLater: false, variantId: { in: order.items.map((i) => i.variantId) } } });
-          await tx.cart.update({ where: { id: cart.id }, data: { couponCode: null } });
-        }
+      const order: WithId<Order> = {
+        id,
+        orderNumber,
+        userId,
+        storeId: store?.id ?? null,
+        status: "PENDING",
+        paymentMethod: input.paymentMethod,
+        paymentStatus: input.paymentMethod === "COD" ? "COD_PENDING" : "PENDING",
+        mrpTotalPaise: pricing.mrpTotalPaise,
+        subtotalPaise: pricing.subtotalPaise,
+        itemDiscountPaise: pricing.itemDiscountPaise,
+        couponDiscountPaise: pricing.couponDiscountPaise,
+        loyaltyDiscountPaise: pricing.loyaltyDiscountPaise,
+        deliveryFeePaise: pricing.deliveryFeePaise,
+        taxPaise: pricing.taxPaise,
+        totalPaise: pricing.totalPaise,
+        refundedPaise: 0,
+        couponId: coupon?.id ?? null,
+        couponCode: coupon?.code ?? null,
+        pointsRedeemed: pricing.pointsRedeemed,
+        pointsEarned: 0,
+        addressSnapshot: {
+          type: address.type, label: address.label, fullName: address.fullName, phone: address.phone, line1: address.line1,
+          line2: address.line2, landmark: address.landmark, city: address.city, state: address.state, pincode: address.pincode,
+        },
+        customerName: address.fullName || user.name,
+        customerPhone: address.phone,
+        customerEmail: user.email,
+        deliveryPincode: address.pincode,
+        deliveryLat: address.lat,
+        deliveryLng: address.lng,
+        deliveryInstructions: address.instructions,
+        customerNote: input.customerNote ?? null,
+        deliveryOtp: numericCode(4),
+        estimatedDeliveryAt: new Date(now.getTime() + q.etaMinutes * 60_000),
+        reservationExpiresAt: input.paymentMethod === "ONLINE" ? new Date(now.getTime() + checkout.reservationMinutes * 60_000) : null,
+        idempotencyKey: input.idempotencyKey,
+        invoiceNumber: null,
+        cancelReason: null,
+        cancelledBy: null,
+        items,
+        history: [{ id: newId(), fromStatus: null, toStatus: "PENDING", note: "Order placed", actorType: "CUSTOMER", changedById: userId, changedByName: user.name, createdAt: now }],
+        notes: [],
+        productIds: [...new Set(items.map((i) => i.productId))],
+        partnerId: null,
+        searchText: "",
+        placedAt: now,
+        confirmedAt: null,
+        dispatchedAt: null,
+        deliveredAt: null,
+        cancelledAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      order.searchText = orderSearchText(order);
+      ctx.save(order);
+      tx.set(orderKeyRef(userId, input.idempotencyKey), { orderId: id, createdAt: now });
 
-        if (input.paymentMethod === "COD") {
-          await tx.payment.create({ data: { orderId: order.id, method: "COD", provider: "cod", amountPaise: order.totalPaise } });
-          return applyTransition(tx, order, "CONFIRMED", { type: "SYSTEM" }, "Cash on delivery order confirmed");
+      if (coupon)
+        tx.set(db.collection(C.couponUsages).doc(id), { couponId: coupon.id, couponCode: coupon.code, userId, orderId: id, discountPaise: pricing.couponDiscountPaise, createdAt: now });
+      if (pricing.pointsRedeemed > 0) {
+        try {
+          awardPoints(tx, user, -pricing.pointsRedeemed, "REDEEM", `Redeemed on order ${orderNumber}`, id);
+        } catch {
+          throw badRequest("Your Mithaas points balance changed. Please review your order.", undefined, "POINTS_CHANGED");
         }
-        return { order, effects: [] as Effect[] };
-      },
-      { timeout: 20_000 },
-    );
+      }
+      if (cart) {
+        const bought = new Set(items.map((i) => i.variantId));
+        tx.set(userCartRef(userId), { ...cart, id: undefined, items: cart.items.filter((i) => i.savedForLater || !bought.has(i.variantId)), couponCode: null, updatedAt: now });
+      }
+      ctx.effects.push({ kind: "run", fn: () => live.order(id, { userId, partnerId: null, status: order.status, event: "created" }) });
+
+      if (input.paymentMethod === "COD") {
+        tx.set(db.collection(C.payments).doc(), {
+          orderId: id, userId, method: "COD", provider: "cod", status: "CREATED", amountPaise: order.totalPaise, currency: "INR", gatewayOrderId: null,
+          gatewayPaymentId: null, methodDetail: null, failureReason: null, raw: null, capturedAt: null, createdAt: now, updatedAt: now,
+        } satisfies Payment);
+        await applyTransition(ctx, order, "CONFIRMED", { type: "SYSTEM" }, "Cash on delivery order confirmed");
+      }
+      return { order, duplicate: false };
+    });
   } catch (err) {
     if (err instanceof OutOfStockError) {
-      const v = await prisma.productVariant.findUnique({ where: { id: err.variantId }, include: { product: true } });
-      throw conflict(`${v?.product.name ?? "An item"} (${v?.label ?? ""}) ${err.available > 0 ? `has only ${err.available} left` : "just went out of stock"}. Please update your cart.`, { variantId: err.variantId, available: err.available }, "OUT_OF_STOCK");
+      const hit = (await catalog()).variants.get(err.variantId);
+      throw conflict(
+        `${hit?.product.name ?? "An item"} (${hit?.variant.label ?? ""}) ${err.available > 0 ? `has only ${err.available} left` : "just went out of stock"}. Please update your cart.`,
+        { variantId: err.variantId, available: err.available },
+        "OUT_OF_STOCK",
+      );
     }
     throw err;
   }
 
+  const { order, duplicate } = created.result;
+  if (duplicate) return { order, duplicate: true, payment: await onlinePayment(order.id) };
   await runEffects(created.effects);
-  let payment = null;
-  if (input.paymentMethod === "ONLINE" && created.order.status === "PENDING") {
+  let payment: WithId<Payment> | null = null;
+  if (input.paymentMethod === "ONLINE" && order.status === "PENDING") {
     try {
-      const rzp = await razorpay.createOrder(created.order.totalPaise, created.order.orderNumber, { orderId: created.order.id, orderNumber: created.order.orderNumber });
-      payment = await prisma.payment.create({
-        data: { orderId: created.order.id, method: "ONLINE", provider: "razorpay", amountPaise: created.order.totalPaise, gatewayOrderId: rzp.id, raw: rzp as object },
-      });
+      const rzp = await razorpay.createOrder(order.totalPaise, order.orderNumber, { orderId: order.id, orderNumber: order.orderNumber });
+      const now = new Date();
+      const data: Payment = {
+        orderId: order.id, userId, method: "ONLINE", provider: "razorpay", status: "CREATED", amountPaise: order.totalPaise, currency: "INR",
+        gatewayOrderId: rzp.id, gatewayPaymentId: null, methodDetail: null, failureReason: null, raw: rzp as object, capturedAt: null, createdAt: now, updatedAt: now,
+      };
+      const ref = await db.collection(C.payments).add(data);
+      payment = { ...data, id: ref.id };
     } catch (err) {
-      logger.error({ err, orderId: created.order.id }, "razorpay order creation failed — rolling back reservation");
-      await cancelOrder(created.order.id, { type: "SYSTEM" }, "Payment could not be initiated");
+      logger.error({ err, orderId: order.id }, "razorpay order creation failed — rolling back reservation");
+      await cancelOrder(order.id, { type: "SYSTEM" }, "Payment could not be initiated");
       throw err;
     }
   }
-  return { order: created.order, duplicate: false, payment };
+  return { order, duplicate: false, payment };
 }
 
 /** Razorpay Checkout options for an order that is awaiting payment. */
 export async function paymentSession(userId: string, orderId: string) {
-  const order = await prisma.order.findFirst({ where: { id: orderId, userId }, include: { payments: { where: { method: "ONLINE" }, orderBy: { createdAt: "desc" } } } });
-  if (!order) throw notFound("Order");
+  const order = await getDoc<Order>(orderRef(orderId));
+  if (!order || order.userId !== userId) throw notFound("Order");
   if (order.status !== "PENDING" || order.paymentMethod !== "ONLINE" || order.paymentStatus === "PAID")
     throw badRequest("This order is not awaiting payment.");
   if (order.reservationExpiresAt && order.reservationExpiresAt < new Date()) throw badRequest("The payment window for this order has expired.");
-  const payment = order.payments[0];
+  const payment = await onlinePayment(order.id);
   if (!payment?.gatewayOrderId) throw badRequest("Payment was not initiated for this order.");
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const user = await getDoc<User>(db.collection(C.users).doc(userId));
   return {
     keyId: env.RAZORPAY_KEY_ID,
     razorpayOrderId: payment.gatewayOrderId,
@@ -193,6 +250,6 @@ export async function paymentSession(userId: string, orderId: string) {
     orderId: order.id,
     orderNumber: order.orderNumber,
     expiresAt: order.reservationExpiresAt,
-    prefill: { name: user.name, email: user.email ?? undefined, contact: user.phone ?? undefined },
+    prefill: { name: user?.name, email: user?.email ?? undefined, contact: user?.phone ?? undefined },
   };
 }

@@ -1,5 +1,4 @@
 import type { NextFunction, Request, Response } from "express";
-import { Prisma } from "@naamdev/db";
 import multer from "multer";
 import { AppError } from "../lib/errors";
 import { logger } from "../lib/logger";
@@ -17,12 +16,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     const message = err.code === "LIMIT_FILE_SIZE" ? "File is too large" : err.message;
     return res.status(400).json({ error: { code: "UPLOAD_ERROR", message } });
   }
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    if (err.code === "P2002")
-      return res.status(409).json({ error: { code: "DUPLICATE", message: `A record with this ${(err.meta?.target as string[] | undefined)?.join(", ") ?? "value"} already exists` } });
-    if (err.code === "P2025") return res.status(404).json({ error: { code: "NOT_FOUND", message: "Record not found" } });
-    if (err.code === "P2003") return res.status(409).json({ error: { code: "IN_USE", message: "This record is referenced by other data and cannot be removed" } });
-  }
+  // Firestore (gRPC) status codes: 5 NOT_FOUND (update of a missing document), 6 ALREADY_EXISTS (create of an existing one).
+  const grpc = (err as { code?: unknown } | null)?.code;
+  if (grpc === 5) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Record not found" } });
+  if (grpc === 6) return res.status(409).json({ error: { code: "DUPLICATE", message: "This record already exists" } });
+  if (grpc === 10) return res.status(409).json({ error: { code: "CONFLICT", message: "Someone else changed this at the same time. Please try again." } });
   if (err && typeof err === "object" && "type" in err && (err as { type: string }).type === "entity.parse.failed") {
     return res.status(400).json({ error: { code: "INVALID_JSON", message: "Malformed JSON body" } });
   }

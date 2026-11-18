@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { prisma } from "@naamdev/db";
-import { addAddress, inventoryOf, loginAs, newCustomer, placeCodOrder, settle, variantBySlug } from "./helpers";
+import { C, db, getDocs, type PartnerEarning } from "@naamdev/db";
+import { addAddress, Client, CUSTOMER_PASSWORD, firebaseSignUp, inventoryOf, loginAs, newCustomer, orderDoc, placeCodOrder, productBySlug, settle, uniqueEmail, uniquePhone, userDoc, variantBySlug } from "./helpers";
 
 describe("order lifecycle & delivery partner flow", () => {
   it("moves an order from kitchen to doorstep with OTP verification, earnings and loyalty", async () => {
@@ -10,7 +10,7 @@ describe("order lifecycle & delivery partner flow", () => {
     await c.post("/api/v1/cart/items", { variantId: v.id, quantity: 1 });
     const placed = await placeCodOrder(c, addressId);
     const orderId = placed.body.order.id as string;
-    const pointsBefore = (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).loyaltyPoints;
+    const pointsBefore = (await userDoc(user.id)).loyaltyPoints;
 
     const rider = await loginAs("rider@naamdevsweets.local", "delivery");
     expect((await rider.post("/api/v1/delivery/status", { online: true })).body.isOnline).toBe(true);
@@ -37,7 +37,7 @@ describe("order lifecycle & delivery partner flow", () => {
 
     const reservedBefore = (await inventoryOf(v.id)).reserved;
     expect((await rider.post(`/api/v1/delivery/assignments/${offer.assignmentId}/pickup`)).status).toBe(200);
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("DISPATCHED");
+    expect((await orderDoc(orderId)).status).toBe("DISPATCHED");
     expect((await inventoryOf(v.id)).reserved).toBe(reservedBefore - 1);
 
     // Customer now sees the delivery OTP and live tracking.
@@ -57,22 +57,21 @@ describe("order lifecycle & delivery partner flow", () => {
     const done = await rider.post(`/api/v1/delivery/assignments/${offer.assignmentId}/deliver`, { otp, codCollected: true });
     expect(done.status).toBe(200);
 
-    const final = await prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+    const final = await orderDoc(orderId);
     expect(final.status).toBe("DELIVERED");
     expect(final.paymentStatus).toBe("COD_COLLECTED");
     expect(final.pointsEarned).toBeGreaterThan(0);
-    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).loyaltyPoints).toBe(pointsBefore + final.pointsEarned);
-    const earning = await prisma.partnerEarning.findFirst({ where: { assignment: { id: offer.assignmentId } } });
-    expect(earning?.amountPaise).toBeGreaterThan(0);
-    const history = await prisma.orderStatusHistory.findMany({ where: { orderId }, orderBy: { createdAt: "asc" } });
-    expect(history.map((h) => h.toStatus)).toEqual(["PENDING", "CONFIRMED", "PREPARING", "PACKED", "READY_FOR_PICKUP", "DISPATCHED", "OUT_FOR_DELIVERY", "DELIVERED"]);
+    expect((await userDoc(user.id)).loyaltyPoints).toBe(pointsBefore + final.pointsEarned);
+    const earnings = await getDocs<PartnerEarning>(db.collection(C.earnings).where("assignmentId", "==", offer.assignmentId));
+    expect(earnings[0]?.amountPaise).toBeGreaterThan(0);
+    expect(final.history.map((h) => h.toStatus)).toEqual(["PENDING", "CONFIRMED", "PREPARING", "PACKED", "READY_FOR_PICKUP", "DISPATCHED", "OUT_FOR_DELIVERY", "DELIVERED"]);
 
     // Verified buyer can now review; review appears after moderation.
-    const rev = await c.post("/api/v1/reviews", { productId: final.id && (await prisma.product.findUniqueOrThrow({ where: { slug: "kaju-katli" } })).id, rating: 5, title: "Superb", body: "Fresh and not too sweet." });
+    const rev = await c.post("/api/v1/reviews", { productId: (await productBySlug("kaju-katli")).id, rating: 5, title: "Superb", body: "Fresh and not too sweet." });
     expect(rev.status).toBe(201);
     const support = await loginAs("support@naamdevsweets.local");
     expect((await support.post(`/api/v1/admin/people/reviews/${rev.body.review.id}/moderate`, { status: "APPROVED" })).status).toBe(200);
-    const kk = await prisma.product.findUniqueOrThrow({ where: { slug: "kaju-katli" } });
+    const kk = await productBySlug("kaju-katli");
     expect(kk.reviewCount).toBeGreaterThan(0);
 
     await rider.post("/api/v1/delivery/status", { online: false });
@@ -81,7 +80,7 @@ describe("order lifecycle & delivery partner flow", () => {
 
   it("only allows verified buyers to review", async () => {
     const { c } = await newCustomer();
-    const p = await prisma.product.findUniqueOrThrow({ where: { slug: "jalebi" } });
+    const p = await productBySlug("jalebi");
     const r = await c.post("/api/v1/reviews", { productId: p.id, rating: 4 });
     expect(r.status).toBe(400);
   });
@@ -93,12 +92,15 @@ describe("order lifecycle & delivery partner flow", () => {
   });
 
   it("registers a new partner who starts as pending verification", async () => {
-    const { client, uniquePhone } = await import("./helpers");
-    const c = await client("delivery");
-    const phone = uniquePhone();
-    const otp = await c.post("/api/v1/auth/otp/request", { phone, purpose: "REGISTER" });
-    const r = await c.post("/api/v1/delivery/register", { name: "New Rider", phone, otp: otp.body.devCode, password: "Rider@2026", city: "Jaipur", vehicleType: "SCOOTER", vehicleNumber: "RJ14 XY 1234" });
+    const c = new Client("delivery");
+    c.token = (await firebaseSignUp(uniqueEmail("rider"), CUSTOMER_PASSWORD)).idToken;
+    const r = await c.post("/api/v1/delivery/register", { name: "New Rider", phone: uniquePhone(), city: "Jaipur", vehicleType: "SCOOTER", vehicleNumber: "RJ14 XY 1234" });
     expect(r.status).toBe(201);
+    expect(r.body.user.role.key).toBe("DELIVERY_PARTNER");
+    // A storefront account can't be turned into a partner account.
+    const { c: shopper } = await newCustomer("Shopper");
+    shopper.appName = "delivery";
+    expect((await shopper.post("/api/v1/delivery/register", { name: "Nope", phone: uniquePhone(), city: "Jaipur", vehicleType: "MOTORCYCLE" })).status).toBe(409);
     const me = await c.get("/api/v1/delivery/me");
     expect(me.body.partner.status).toBe("PENDING");
     expect(me.body.partner.missingDocuments).toContain("AADHAAR");

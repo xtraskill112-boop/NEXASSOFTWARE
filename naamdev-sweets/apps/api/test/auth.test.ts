@@ -1,56 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { prisma } from "@naamdev/db";
-import { client, loginAs, newCustomer, uniquePhone } from "./helpers";
+import { auth as firebaseAuth } from "@naamdev/db";
+import { Client, CUSTOMER_PASSWORD, firebaseSignIn, firebaseSignUp, loginAs, newCustomer, uniqueEmail, userDoc } from "./helpers";
 
-describe("authentication", () => {
-  it("registers a customer via OTP and returns the profile with signup bonus", async () => {
-    const { c, user } = await newCustomer("Asha Sharma");
+describe("authentication (Firebase email + password)", () => {
+  it("signs up a customer, creates the profile with the signup bonus", async () => {
+    const { c, email, user } = await newCustomer("Asha Sharma");
     expect(user.loyaltyPoints).toBe(50);
     const me = await c.get("/api/v1/auth/me");
     expect(me.body.user.name).toBe("Asha Sharma");
+    expect(me.body.user.email).toBe(email);
     expect(me.body.user.role.key).toBe("CUSTOMER");
-    expect(me.body.user.phoneVerified).toBe(true);
+    // Custom claims mirror the role for Firestore security rules.
+    const fb = await firebaseAuth.getUser(user.id);
+    expect(fb.customClaims).toMatchObject({ role: "CUSTOMER", staff: false });
   });
 
-  it("OTP login for an unknown number requires registration, then completes with a token", async () => {
-    const c = await client();
-    const phone = uniquePhone();
-    const otp = await c.post("/api/v1/auth/otp/request", { phone, purpose: "LOGIN" });
-    expect(otp.status).toBe(200);
-    const v = await c.post("/api/v1/auth/otp/verify", { phone, otp: otp.body.devCode });
-    expect(v.body.registrationRequired).toBe(true);
-    const reg = await c.post("/api/v1/auth/register", { name: "Rohan", registrationToken: v.body.registrationToken });
-    expect(reg.status).toBe(201);
-    expect(reg.body.user.hasPassword).toBe(false);
+  it("reports a signed-in Firebase account without a profile as needing one", async () => {
+    const c = new Client("web");
+    c.token = (await firebaseSignUp(uniqueEmail("half"), CUSTOMER_PASSWORD)).idToken;
+    const me = await c.get("/api/v1/auth/me");
+    expect(me.body.user).toBeNull();
+    expect(me.body.needsProfile).toBe(true);
+    const orders = await c.get("/api/v1/orders");
+    expect(orders.status).toBe(401);
   });
 
-  it("rejects a wrong OTP and locks after repeated attempts", async () => {
-    const c = await client();
-    const phone = uniquePhone();
-    await c.post("/api/v1/auth/otp/request", { phone, purpose: "LOGIN" });
-    const bad = await c.post("/api/v1/auth/otp/verify", { phone, otp: "000000" });
-    expect([400, 429]).toContain(bad.status);
+  it("rejects missing, malformed and forged tokens", async () => {
+    const c = new Client("web");
+    expect((await c.get("/api/v1/orders")).status).toBe(401);
+    c.token = "not-a-jwt";
+    expect((await c.get("/api/v1/orders")).status).toBe(401);
+    expect((await c.get("/api/v1/auth/me")).body.user).toBeNull();
   });
 
-  it("logs in with password, rejects bad credentials with a generic message", async () => {
-    const c = await client();
-    const ok = await c.post("/api/v1/auth/login", { identifier: "customer@naamdevsweets.local", password: "Naamdev@123" });
-    expect(ok.status).toBe(200);
-    const bad = await c.post("/api/v1/auth/login", { identifier: "customer@naamdevsweets.local", password: "wrong-password1" });
-    expect(bad.status).toBe(401);
-    const unknown = await c.post("/api/v1/auth/login", { identifier: "nobody@example.com", password: "wrong-password1" });
-    expect(unknown.status).toBe(401);
-    expect(unknown.body.error.message).toBe(bad.body.error.message);
-  });
-
-  it("stores passwords as argon2 hashes, never plaintext", async () => {
-    const u = await prisma.user.findUniqueOrThrow({ where: { email: "customer@naamdevsweets.local" } });
-    expect(u.passwordHash).toMatch(/^\$argon2id\$/);
+  it("validates the profile and never lets the client pick its role", async () => {
+    const c = new Client("web");
+    c.token = (await firebaseSignUp(uniqueEmail("role"), CUSTOMER_PASSWORD)).idToken;
+    const bad = await c.post("/api/v1/auth/register", { name: "X", phone: "123" });
+    expect(bad.status).toBe(400);
+    const ok = await c.post("/api/v1/auth/register", { name: "Sneaky", roleKey: "SUPER_ADMIN", isStaff: true });
+    expect(ok.status).toBe(201);
+    expect(ok.body.user.role.key).toBe("CUSTOMER");
   });
 
   it("blocks customers from the admin console and allows staff", async () => {
-    const c = await client("admin");
-    const r = await c.post("/api/v1/auth/login", { identifier: "customer@naamdevsweets.local", password: "Naamdev@123" });
+    const c = new Client("admin");
+    const r = await c.signIn("customer@naamdevsweets.local", "Naamdev@123");
     expect(r.status).toBe(403);
     const staff = await loginAs("manager@naamdevsweets.local");
     const me = await staff.get("/api/v1/auth/me");
@@ -58,32 +53,31 @@ describe("authentication", () => {
     expect(me.body.user.permissions).toContain("orders.manage");
   });
 
-  it("requires a CSRF token for state-changing requests", async () => {
-    const c = await client();
-    const r = await c.agent.post("/api/v1/auth/login").set("x-nds-app", "web").send({ identifier: "x@y.z", password: "x" });
-    expect(r.status).toBe(403);
-    expect(r.body.error.code).toBe("CSRF_FAILED");
+  it("wrong passwords are rejected by Firebase Auth", async () => {
+    await expect(firebaseSignIn("customer@naamdevsweets.local", "wrong-password1")).rejects.toThrow(/INVALID_PASSWORD|INVALID_LOGIN_CREDENTIALS/);
   });
 
-  it("resets a password with an OTP and revokes old sessions", async () => {
-    const { c, phone } = await newCustomer("Reset Me");
-    const other = await client();
-    const f = await other.post("/api/v1/auth/password/forgot", { identifier: phone });
-    expect(f.body.devCode).toMatch(/^\d{6}$/);
-    const r = await other.post("/api/v1/auth/password/reset", { identifier: phone, otp: f.body.devCode, password: "NewSweets@99" });
+  it("sign out everywhere rejects previously issued tokens", async () => {
+    const { c, email, password } = await newCustomer("Everywhere");
+    const r = await c.post("/api/v1/auth/sign-out-everywhere");
     expect(r.status).toBe(200);
-    const me = await c.get("/api/v1/auth/me");
-    expect(me.body.user).toBeNull();
-    const login = await other.post("/api/v1/auth/login", { identifier: phone, password: "NewSweets@99" });
-    expect(login.status).toBe(200);
+    // Tokens issued in the same second stay valid, as with Firebase's own revocation check.
+    await new Promise((res) => setTimeout(res, 1100));
+    expect((await c.get("/api/v1/auth/me")).body.user).toBeNull();
+    const again = new Client("web");
+    await new Promise((res) => setTimeout(res, 1100));
+    const s = await again.signIn(email, password);
+    expect(s.status).toBe(200);
   });
 
-  it("logs out and invalidates the session", async () => {
-    const { c } = await newCustomer();
-    await c.post("/api/v1/auth/logout");
-    const me = await c.get("/api/v1/auth/me");
-    expect(me.body.user).toBeNull();
-    const orders = await c.get("/api/v1/orders");
-    expect(orders.status).toBe(401);
+  it("suspended customers lose access and can't sign in", async () => {
+    const { c, user, email, password } = await newCustomer("Suspend Me");
+    const admin = await loginAs("admin@naamdevsweets.local");
+    expect((await admin.post(`/api/v1/admin/people/customers/${user.id}/status`, { status: "SUSPENDED", reason: "Abuse" })).status).toBe(200);
+    expect((await c.get("/api/v1/orders")).status).toBe(401);
+    await expect(firebaseSignIn(email, password)).rejects.toThrow(/USER_DISABLED/);
+    expect((await userDoc(user.id)).status).toBe("SUSPENDED");
+    await admin.post(`/api/v1/admin/people/customers/${user.id}/status`, { status: "ACTIVE" });
+    expect((await firebaseSignIn(email, password)).idToken).toBeTruthy();
   });
 });

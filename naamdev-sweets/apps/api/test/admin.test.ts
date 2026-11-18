@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prisma } from "@naamdev/db";
+import { C, countOf, db, FieldValue, getDoc, getDocs, type Category, type InventoryBatch } from "@naamdev/db";
 import { inventoryOf, loginAs, newCustomer, variantBySlug } from "./helpers";
 
 describe("admin permissions & management", () => {
@@ -44,9 +44,10 @@ describe("admin permissions & management", () => {
 
   it("creates a product with unlimited variants and archives it", async () => {
     const mgr = await loginAs("manager@naamdevsweets.local");
-    const cat = await prisma.category.findUniqueOrThrow({ where: { slug: "barfi" } });
+    const [cat] = await getDocs<Category>(db.collection(C.categories).where("slug", "==", "barfi"));
+    expect(cat).toBeTruthy();
     const r = await mgr.post("/api/v1/admin/catalog/products", {
-      name: "Gulkand Barfi", shortDescription: "Rose petal jam barfi", description: "Delicate barfi layered with gulkand.", categoryId: cat.id, sku: "ND-GKB-901",
+      name: "Gulkand Barfi", shortDescription: "Rose petal jam barfi", description: "Delicate barfi layered with gulkand.", categoryId: cat!.id, sku: "ND-GKB-901",
       ingredients: "Khoya, gulkand, sugar", allergens: ["Milk"], shelfLifeDays: 7, storageInstructions: "Refrigerate", images: [{ url: "/static/catalog/coconut-barfi.svg" }],
       variants: [250, 500, 750, 1000, 1500].map((g, i) => ({ label: `${g} g`, weightGrams: g, sku: `ND-GKB-901-${i}`, mrpPaise: g * 80, salePricePaise: g * 75, lowStockThreshold: 5 })),
     });
@@ -58,7 +59,7 @@ describe("admin permissions & management", () => {
     expect(arch.status).toBe(200);
     const pub = await mgr.get(`/api/v1/catalog/products/${r.body.product.slug}`);
     expect(pub.status).toBe(404);
-    expect(await prisma.auditLog.count({ where: { entityId: r.body.product.id } })).toBeGreaterThanOrEqual(2);
+    expect(await countOf(db.collection(C.auditLogs).where("entityId", "==", r.body.product.id))).toBeGreaterThanOrEqual(2);
   });
 
   it("manages inventory: batches, damaged stock and history", async () => {
@@ -80,11 +81,17 @@ describe("admin permissions & management", () => {
   it("auto-expires batches at the sale cutoff so they can't be sold", async () => {
     const { expireBatches } = await import("../src/modules/inventory/service");
     const v = await variantBySlug("jalebi", 0);
-    const batch = await prisma.inventoryBatch.create({ data: { variantId: v.id, batchNumber: `EXP-${Date.now()}`, manufacturedAt: new Date(Date.now() - 86_400_000), expiresAt: new Date(Date.now() + 3600_000), quantity: 4, remaining: 4 } });
-    await prisma.inventory.update({ where: { variantId: v.id }, data: { available: { increment: 4 } } });
+    // A batch that slipped past validation (e.g. imported) and is now inside the sale cutoff.
+    const now = new Date();
+    const batch = db.collection(C.batches).doc();
+    await batch.set({
+      variantId: v.id, productId: (await inventoryOf(v.id)).productId, batchNumber: `EXP-${Date.now()}`, supplierId: null, manufacturedAt: new Date(Date.now() - 86_400_000),
+      expiresAt: new Date(Date.now() + 3600_000), quantity: 4, remaining: 4, costPricePaise: 0, status: "ACTIVE", expiryAlertedAt: null, createdAt: now, updatedAt: now,
+    } satisfies InventoryBatch);
+    await db.collection(C.inventory).doc(v.id).update({ available: FieldValue.increment(4) });
     const before = await inventoryOf(v.id);
     await expireBatches();
-    expect((await prisma.inventoryBatch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe("EXPIRED");
+    expect((await getDoc<InventoryBatch>(batch))!.status).toBe("EXPIRED");
     expect((await inventoryOf(v.id)).available).toBe(before.available - 4);
   });
 

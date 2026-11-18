@@ -1,66 +1,74 @@
 import type { NextFunction, Request, Response } from "express";
-import { prisma } from "@naamdev/db";
+import { auth as firebaseAuth, C, db, getDoc, type Role, type User } from "@naamdev/db";
 import { hasPermission, type PermissionKey } from "@naamdev/shared";
-import { env } from "../config/env";
-import { sha256 } from "../lib/crypto";
 import { forbidden, unauthorized } from "../lib/errors";
+import { logger } from "../lib/logger";
 import type { ClientApp } from "../types";
 
 export const CLIENT_APPS: ClientApp[] = ["web", "admin", "delivery"];
-export const sessionCookieName = (app: ClientApp) => `nds_sid_${app}`;
 
-export function cookieOptions(maxAgeMs?: number) {
-  return {
-    httpOnly: true,
-    secure: env.COOKIE_SECURE,
-    sameSite: "lax" as const,
-    domain: env.COOKIE_DOMAIN || undefined,
-    path: "/",
-    maxAge: maxAgeMs,
-  };
+const roleCache = new Map<string, { role: Role & { id: string }; at: number }>();
+
+export async function getRole(key: string): Promise<(Role & { id: string }) | null> {
+  const hit = roleCache.get(key);
+  if (hit && Date.now() - hit.at < 30_000) return hit.role;
+  const role = await getDoc<Role>(db.collection(C.roles).doc(key));
+  if (role) roleCache.set(key, { role, at: Date.now() });
+  return role;
 }
+export const clearPermissionCache = () => roleCache.clear();
 
-const permissionCache = new Map<string, { perms: string[]; at: number }>();
-export async function permissionsForRole(roleId: string): Promise<string[]> {
-  const hit = permissionCache.get(roleId);
-  if (hit && Date.now() - hit.at < 30_000) return hit.perms;
-  const rows = await prisma.rolePermission.findMany({ where: { roleId }, include: { permission: true } });
-  const perms = rows.map((r) => r.permission.key);
-  permissionCache.set(roleId, { perms, at: Date.now() });
-  return perms;
-}
-export const clearPermissionCache = () => permissionCache.clear();
-
-/** Resolves the client app from a header set by each frontend (proxied through Next.js rewrites). */
+/** Resolves the client app from a header set by each frontend. */
 export function resolveClientApp(req: Request, _res: Response, next: NextFunction) {
   const h = String(req.get("x-nds-app") ?? "web").toLowerCase();
   req.clientApp = (CLIENT_APPS as string[]).includes(h) ? (h as ClientApp) : "web";
   next();
 }
 
-/** Optional authentication: attaches req.auth when a valid session cookie or bearer token is present. */
+/**
+ * Optional authentication. Browsers sign in with Firebase Authentication (email + password) and send
+ * the Firebase ID token as `Authorization: Bearer <token>`. Valid tokens attach `req.auth` (users with a
+ * NAAMDEV profile) or `req.firebaseUser` (signed up but profile not created yet).
+ */
 export async function loadSession(req: Request, _res: Response, next: NextFunction) {
-  const bearer = req.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
-  const token = bearer ?? req.cookies?.[sessionCookieName(req.clientApp)];
-  if (!token || token.length > 200) return next();
-  const session = await prisma.session.findUnique({
-    where: { tokenHash: sha256(token) },
-    include: { user: { include: { role: true, deliveryPartner: { select: { id: true } } } } },
-  });
-  if (!session || session.revokedAt || session.expiresAt < new Date()) return next();
-  if (session.user.status === "SUSPENDED" || session.user.status === "DELETED") return next();
-  if (session.app !== req.clientApp && !bearer) return next();
-  const { deliveryPartner, ...user } = session.user;
+  const token = req.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!token || token.length > 4096) return next();
+  let decoded;
+  try {
+    decoded = await firebaseAuth.verifyIdToken(token);
+  } catch (err) {
+    logger.debug({ err: (err as Error).message }, "invalid ID token");
+    return next();
+  }
+  const user = await getDoc<User>(db.collection(C.users).doc(decoded.uid));
+  if (!user) {
+    req.firebaseUser = { uid: decoded.uid, email: decoded.email ?? null, emailVerified: !!decoded.email_verified, name: (decoded.name as string | undefined) ?? null };
+    return next();
+  }
+  if (user.status === "SUSPENDED" || user.status === "DELETED") return next();
+  // "Sign out everywhere" / password reset by staff: reject tokens issued before that moment.
+  if (user.tokensValidAfter && decoded.iat * 1000 < user.tokensValidAfter.getTime()) return next();
+  const role = await getRole(user.roleKey);
+  if (!role) return next();
   req.auth = {
-    user,
-    session,
-    permissions: await permissionsForRole(user.roleId),
-    roleKey: user.role.key,
-    partnerId: deliveryPartner?.id ?? null,
+    user: { ...user, role },
+    permissions: role.permissions,
+    roleKey: role.key,
+    partnerId: role.key === "DELIVERY_PARTNER" ? user.id : null,
+    token: { email: decoded.email, email_verified: decoded.email_verified, auth_time: decoded.auth_time, iat: decoded.iat },
   };
-  // Touch the session at most every 5 minutes.
-  if (Date.now() - session.lastSeenAt.getTime() > 5 * 60_000)
-    prisma.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
+  // Mirror email (changed via Firebase) and its verification into the profile.
+  const emailChanged = !!decoded.email && decoded.email !== user.email;
+  if (emailChanged || (decoded.email_verified && !user.emailVerifiedAt)) {
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (emailChanged) {
+      patch.email = decoded.email;
+      patch.searchText = [user.name, decoded.email, user.phone ?? ""].join(" ").toLowerCase();
+      req.auth.user.email = decoded.email!;
+    }
+    patch.emailVerifiedAt = decoded.email_verified ? (user.emailVerifiedAt ?? new Date()) : null;
+    db.collection(C.users).doc(user.id).update(patch).catch(() => undefined);
+  }
   next();
 }
 

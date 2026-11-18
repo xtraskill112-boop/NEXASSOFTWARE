@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// All business data is read and written by the API (Firebase Admin SDK, which bypasses these rules).
+// Browsers and apps may only *listen* to small "live" signal documents to receive real-time updates.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isStaff() { return signedIn() && request.auth.token.staff == true; }
+
+    // Order status / rider position for the customer, the assigned rider and staff.
+    match /liveOrders/{orderId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid
+        || resource.data.partnerId == request.auth.uid
+        || isStaff());
+    }
+    // New notifications for one user.
+    match /liveUsers/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+    // New delivery offers / assignment changes for one rider.
+    match /livePartners/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+    // New-order chime and live board for the console.
+    match /liveStaff/{doc} {
+      allow read: if isStaff();
+    }
+    // Everything else is server-only.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -13,33 +13,28 @@
     "dev:web": "pnpm --filter @naamdev/web dev",
     "dev:admin": "pnpm --filter @naamdev/admin dev",
     "dev:delivery": "pnpm --filter @naamdev/delivery dev",
-    "build": "pnpm --filter @naamdev/db generate && pnpm -r --filter \"./packages/*\" build && pnpm -r --filter \"./apps/*\" build",
+    "build": "pnpm -r --filter \"./packages/*\" build && pnpm -r --filter \"./apps/*\" build",
     "typecheck": "pnpm -r typecheck",
-    "db:generate": "pnpm --filter @naamdev/db generate",
-    "db:migrate": "pnpm --filter @naamdev/db migrate:dev",
-    "db:deploy": "pnpm --filter @naamdev/db migrate:deploy",
     "db:seed": "pnpm --filter @naamdev/db seed",
-    "db:reset": "pnpm --filter @naamdev/db reset",
     "test": "pnpm --filter @naamdev/shared test && pnpm --filter @naamdev/api test",
     "test:unit": "pnpm --filter @naamdev/shared test",
     "test:api": "pnpm --filter @naamdev/api test",
     "test:e2e": "bash scripts/e2e.sh",
     "test:e2e:only": "playwright test --config tests/e2e/playwright.config.ts --trace off",
-    "assets": "pnpm --filter @naamdev/api exec tsx scripts/generate-assets.ts"
+    "assets": "pnpm --filter @naamdev/api exec tsx scripts/generate-assets.ts",
+    "emulators": "firebase emulators:start --project demo-naamdev --only auth,firestore,storage",
+    "seed:emulators": "firebase emulators:exec --project demo-naamdev --only auth,firestore,storage \"pnpm --filter @naamdev/db seed\""
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "typescript": "5.9.3",
-    "@types/node": "22.20.5"
+    "@types/node": "22.20.5",
+    "firebase-tools": "15.34.2",
+    "typescript": "5.9.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@prisma/client",
-      "@prisma/engines",
-      "prisma",
       "sharp",
       "esbuild",
-      "@node-rs/argon2",
       "protobufjs"
     ]
   }

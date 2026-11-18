@@ -1,8 +1,9 @@
-import { prisma, type NotificationType, type NotificationChannel } from "@naamdev/db";
-import { SOCKET_EVENTS, formatINR, ORDER_STATUS_META, type OrderStatus } from "@naamdev/shared";
+import { C, db, getDoc, getDocs, SUB, type DeviceToken, type NotificationChannel, type NotificationType, type User } from "@naamdev/db";
+import { formatINR, type OrderStatus } from "@naamdev/shared";
 import { env, isTest } from "../../config/env";
+import { live } from "../../lib/live";
 import { logger } from "../../lib/logger";
-import { emitTo, rooms } from "../../realtime/io";
+import { getRole } from "../../middleware/auth";
 import { renderEmail } from "./email-template";
 import { sendEmail, sendPush, sendSms, type SendResult } from "./providers";
 
@@ -36,23 +37,25 @@ export async function drainNotifications() {
 }
 
 async function logDelivery(userId: string | null, channel: NotificationChannel, template: string, recipient: string, r: SendResult) {
-  await prisma.notificationDelivery.create({
-    data: { userId, channel, template, recipient, status: r.status, provider: r.provider, providerMessageId: r.messageId, error: r.error?.slice(0, 500) },
+  await db.collection(C.notificationDeliveries).add({
+    userId, channel, template, recipient, status: r.status, provider: r.provider, providerMessageId: r.messageId ?? null,
+    error: r.error?.slice(0, 500) ?? null, createdAt: new Date(),
   });
 }
 
 async function deliver(input: NotifyInput) {
   const channels = input.channels ?? ["IN_APP"];
-  const user = await prisma.user.findUnique({ where: { id: input.userId }, include: { profile: true, deviceTokens: true } });
+  const userRef = db.collection(C.users).doc(input.userId);
+  const user = await getDoc<User>(userRef);
   if (!user || user.status === "DELETED") return;
   const prefs = user.profile;
   const absoluteLink = input.link ? (input.link.startsWith("http") ? input.link : `${env.APP_URL_WEB}${input.link}`) : null;
 
   if (channels.includes("IN_APP")) {
-    const n = await prisma.notification.create({
-      data: { userId: user.id, type: input.type, title: input.title, body: input.body, link: input.link, data: input.data },
+    await userRef.collection(SUB.notifications).add({
+      userId: user.id, type: input.type, title: input.title, body: input.body, link: input.link ?? null, data: input.data ?? null, readAt: null, createdAt: new Date(),
     });
-    emitTo(rooms.user(user.id), SOCKET_EVENTS.notification, n);
+    live.user(user.id, { title: input.title, body: input.body, link: input.link ?? null, type: input.type });
   }
   if (channels.includes("EMAIL") && user.email) {
     if (input.promotional && prefs && (!prefs.emailOptIn || !prefs.marketingOptIn)) {
@@ -71,24 +74,24 @@ async function deliver(input: NotifyInput) {
   }
   if (channels.includes("PUSH")) {
     if (input.promotional && prefs && !prefs.pushOptIn) return;
-    const tokens = user.deviceTokens.map((d) => d.token);
+    const devices = await getDocs<DeviceToken>(userRef.collection(SUB.devices));
+    const tokens = devices.map((d) => d.token);
+    if (!tokens.length) return;
     const r = await sendPush(tokens, { title: input.title, body: input.body, link: absoluteLink, data: input.data });
-    if (r.invalidTokens.length) await prisma.deviceToken.deleteMany({ where: { token: { in: r.invalidTokens } } });
+    const invalid = devices.filter((d) => r.invalidTokens.includes(d.token));
+    await Promise.all(invalid.map((d) => userRef.collection(SUB.devices).doc(d.id).delete()));
     await logDelivery(user.id, "PUSH", input.template, `${tokens.length} device(s)`, r);
   }
 }
 
 /** In-app alert to every active staff member holding a permission, plus configured admin emails. */
 export async function notifyStaff(permission: string, input: Omit<NotifyInput, "userId">, alertEmails: string[] = []) {
-  const staff = await prisma.user.findMany({
-    where: {
-      status: "ACTIVE",
-      role: { isStaff: true, permissions: { some: { permission: { key: permission } } } },
-      staffProfile: { isActive: true },
-    },
-    select: { id: true },
-  });
-  for (const s of staff) notify({ ...input, userId: s.id, channels: ["IN_APP"] });
+  const staffUsers = await getDocs<User>(db.collection(C.users).where("isStaff", "==", true));
+  for (const u of staffUsers) {
+    if (u.status !== "ACTIVE" || !u.staff?.isActive) continue;
+    const role = await getRole(u.roleKey);
+    if (role?.permissions.includes(permission)) notify({ ...input, userId: u.id, channels: ["IN_APP"] });
+  }
   if (alertEmails.length && !isTest) {
     const { html, text } = renderEmail({ title: input.title, body: input.body, ctaUrl: input.link ? `${env.APP_URL_ADMIN}${input.link}` : null, ctaLabel: "Open console" });
     for (const email of alertEmails)
@@ -109,10 +112,10 @@ const STATUS_COPY: Partial<Record<OrderStatus, { title: string; body: (n: string
   REFUNDED: { title: "Refund completed", body: (n) => `The refund for order ${n} has been processed.`, channels: ["IN_APP", "EMAIL"] },
 };
 
-export function notifyOrderStatus(order: { id: string; userId: string; orderNumber: string; deliveryOtp?: string | null }, status: OrderStatus) {
+export function notifyOrderStatus(order: { id: string; userId: string; orderNumber: string; deliveryOtp?: string | null; partnerId?: string | null }, status: OrderStatus) {
   const copy = STATUS_COPY[status];
-  emitTo(rooms.order(order.id), SOCKET_EVENTS.orderStatus, { orderId: order.id, status, label: ORDER_STATUS_META[status].label, at: new Date() });
-  emitTo(rooms.staff, SOCKET_EVENTS.adminOrderUpdated, { orderId: order.id, status });
+  live.order(order.id, { userId: order.userId, partnerId: order.partnerId ?? null, status, event: "status" });
+  live.staff("order-updated", { orderId: order.id, status });
   if (!copy) return;
   const otpNote = status === "DISPATCHED" && order.deliveryOtp ? ` Delivery OTP: ${order.deliveryOtp}. Share it only at your doorstep.` : "";
   notify({

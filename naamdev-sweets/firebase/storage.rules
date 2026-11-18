@@ -1,0 +1,10 @@
+rules_version = '2';
+// Uploads go through the API, which validates and re-encodes files. Public images are served with
+// download tokens; partner KYC documents are only streamed by the API to authorised staff.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

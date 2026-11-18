@@ -1,19 +1,20 @@
 import path from "node:path";
 import express from "express";
-import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
-import { prisma } from "@naamdev/db";
+import { C, db } from "@naamdev/db";
 import { allowedOrigins, env, integrations, isTest } from "./config/env";
+import { tick } from "./jobs/scheduler";
+import { safeEqual } from "./lib/crypto";
 import { logger } from "./lib/logger";
 import { loadSession, resolveClientApp } from "./middleware/auth";
-import { csrfProtection } from "./middleware/csrf";
 import { errorHandler, notFoundHandler } from "./middleware/error";
 import { globalLimiter } from "./middleware/rate-limit";
 import { accountRouter } from "./modules/account/routes";
 import { adminRouter } from "./modules/admin";
 import { authRouter } from "./modules/auth/routes";
+import { CART_TOKEN_HEADER } from "./modules/cart/service";
 import { cartRouter } from "./modules/cart/routes";
 import { catalogRouter, publicRouter } from "./modules/catalog/routes";
 import { deliveryRouter } from "./modules/delivery/routes";
@@ -21,7 +22,6 @@ import { checkoutRouter, ordersRouter, paymentsRouter, razorpayWebhook } from ".
 import { reviewsRouter } from "./modules/reviews/routes";
 import { supportRouter } from "./modules/support/routes";
 import { customerUploadsRouter } from "./modules/uploads/routes";
-import { PUBLIC_UPLOAD_DIR } from "./modules/uploads/storage";
 
 export function createApp() {
   const app = express();
@@ -34,20 +34,28 @@ export function createApp() {
       contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], imgSrc: ["'self'", "data:"], styleSrc: ["'unsafe-inline'"], frameAncestors: ["'none'"] } },
     }),
   );
-  app.use(cors({ origin: allowedOrigins, credentials: true }));
+  // Requests authenticate with a bearer token, not cookies, so CORS never needs credentials.
+  app.use(cors({ origin: allowedOrigins, exposedHeaders: [CART_TOKEN_HEADER], maxAge: 600 }));
   if (!isTest) app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/health" || req.url?.startsWith("/static") === true } }));
 
-  // Static assets: seeded catalogue artwork and locally stored uploads (when Cloudinary is not configured).
+  // Seeded catalogue artwork (served through Firebase Hosting's /static/** rewrite).
   app.use("/static", express.static(path.resolve(process.cwd(), "public"), { maxAge: "7d", immutable: false }));
-  app.use("/uploads", express.static(PUBLIC_UPLOAD_DIR, { maxAge: "30d", immutable: true, dotfiles: "deny" }));
 
   app.get("/health", async (_req, res) => {
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await db.collection(C.settings).limit(1).get();
       res.json({ status: "ok", db: "up", time: new Date().toISOString(), integrations });
     } catch {
       res.status(503).json({ status: "degraded", db: "down" });
     }
+  });
+
+  // Cloud Scheduler calls this once a minute with the shared secret header.
+  app.post("/internal/jobs/tick", async (req, res) => {
+    const secret = req.get("x-jobs-secret") ?? "";
+    if (!env.JOBS_SECRET || !safeEqual(secret, env.JOBS_SECRET)) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Not found" } });
+    const sweep = Math.min(Math.max(Number(req.query.sweepSeconds ?? 45), 0), 50) * 1000;
+    res.json({ results: await tick(sweep) });
   });
 
   // Webhooks need the raw body for signature verification, so they are mounted before body parsers.
@@ -55,10 +63,8 @@ export function createApp() {
 
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ extended: false, limit: "100kb" }));
-  app.use(cookieParser());
   app.use(resolveClientApp);
   app.use("/api", globalLimiter);
-  app.use(csrfProtection);
   app.use(loadSession);
 
   const api = express.Router();

@@ -1,8 +1,8 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  // `seed` lets a production image initialise a fresh database: node dist/seed.js
-  entry: { index: "src/index.ts", seed: "../../packages/db/prisma/seed.ts" },
+  // `seed` lets the deployed image initialise a fresh Firestore project: node dist/seed.js
+  entry: { index: "src/index.ts", seed: "../../packages/db/seed/seed.ts" },
   format: ["esm"],
   platform: "node",
   target: "node20",
@@ -11,5 +11,5 @@ export default defineConfig({
   clean: true,
   // Bundle workspace packages (they ship TypeScript source); keep real npm deps external.
   noExternal: [/^@naamdev\//],
-  external: ["@prisma/client", ".prisma/client", "sharp", "@node-rs/argon2", "firebase-admin"],
+  external: ["sharp", "firebase-admin"],
 });

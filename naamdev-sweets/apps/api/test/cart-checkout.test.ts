@@ -1,21 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { prisma } from "@naamdev/db";
-import { addAddress, client, inventoryOf, newCustomer, placeCodOrder, settle, variantBySlug } from "./helpers";
+import { C, countOf, db, FieldValue, getDoc, getDocs, type Coupon, type CouponUsage, type InventoryBatch } from "@naamdev/db";
+import { addAddress, Client, inventoryOf, newCustomer, orderDoc, placeCodOrder, settle, userDoc, variantBySlug } from "./helpers";
 
 describe("cart", () => {
   it("keeps a guest cart and merges it into the user's cart on login", async () => {
-    const { phone } = await newCustomer("Merger");
-    const guest = await client();
+    const { email, password } = await newCustomer("Merger");
+    const guest = new Client("web");
     const v = await variantBySlug("besan-laddu", 1);
     const add = await guest.post("/api/v1/cart/items", { variantId: v.id, quantity: 2 });
     expect(add.status).toBe(201);
     expect(add.body.cart.items[0].quantity).toBe(2);
-    // Persistence across "refresh"
+    expect(guest.cartToken).toBeTruthy();
+    // Persistence across "refresh" (the browser keeps the cart token)
     const again = await guest.get("/api/v1/cart");
     expect(again.body.cart.items).toHaveLength(1);
-    const login = await guest.post("/api/v1/auth/login", { identifier: phone, password: "Sweets@2026" });
+    const login = await guest.signIn(email, password);
     expect(login.status).toBe(200);
+    expect(guest.cartToken).toBeNull();
     const merged = await guest.get("/api/v1/cart");
     expect(merged.body.cart.items[0].variant.id).toBe(v.id);
     expect(merged.body.cart.items[0].quantity).toBe(2);
@@ -75,7 +77,8 @@ describe("checkout & orders (COD)", () => {
     const addressId = await addAddress(c);
     const v = await variantBySlug("kaju-katli", 1);
     const invBefore = await inventoryOf(v.id);
-    const oldest = await prisma.inventoryBatch.findFirstOrThrow({ where: { variantId: v.id, status: "ACTIVE", remaining: { gt: 0 } }, orderBy: { expiresAt: "asc" } });
+    const batches = await getDocs<InventoryBatch>(db.collection(C.batches).where("variantId", "==", v.id).where("status", "==", "ACTIVE"));
+    const oldest = batches.filter((b) => b.remaining > 0).sort((a, b) => +a.expiresAt - +b.expiresAt)[0]!;
 
     await c.post("/api/v1/cart/items", { variantId: v.id, quantity: 2 });
     const coupon = await c.post("/api/v1/cart/coupon", { code: "WELCOME100" });
@@ -100,12 +103,13 @@ describe("checkout & orders (COD)", () => {
     const invAfter = await inventoryOf(v.id);
     expect(invAfter.available).toBe(invBefore.available - 2);
     expect(invAfter.reserved).toBe(invBefore.reserved + 2);
-    const alloc = await prisma.orderItemAllocation.findMany({ where: { orderItem: { orderId: order.id } } });
-    expect(alloc[0]!.batchId).toBe(oldest.id);
+    const stored = await orderDoc(order.id);
+    expect(stored.items[0]!.allocations[0]!.batchId).toBe(oldest.id);
+    expect(stored.totalPaise).toBe(order.totals.totalPaise);
 
     const cart = await c.get("/api/v1/cart");
     expect(cart.body.cart.items).toHaveLength(0);
-    const usage = await prisma.couponUsage.findUnique({ where: { orderId: order.id } });
+    const usage = await getDoc<CouponUsage>(db.collection(C.couponUsages).doc(order.id));
     expect(usage?.userId).toBe(user.id);
 
     // First-order coupon can't be reused.
@@ -126,7 +130,7 @@ describe("checkout & orders (COD)", () => {
     ]);
     const ids = [a, b].filter((x) => x.status < 300).map((x) => x.body.order.id);
     expect(new Set(ids).size).toBe(1);
-    expect(await prisma.order.count({ where: { idempotencyKey: key } })).toBe(1);
+    expect(await countOf(db.collection(C.orders).where("idempotencyKey", "==", key))).toBe(1);
   });
 
   it("prevents ordering more than available stock", async () => {
@@ -136,10 +140,12 @@ describe("checkout & orders (COD)", () => {
     const inv = await inventoryOf(v.id);
     await c.post("/api/v1/cart/items", { variantId: v.id, quantity: inv.available });
     // Someone else buys the stock first
-    await prisma.inventory.update({ where: { variantId: v.id }, data: { available: { decrement: 1 } } });
-    const r = await placeCodOrder(c, addressId);
-    expect(r.status).toBe(409);
-    await prisma.inventory.update({ where: { variantId: v.id }, data: { available: { increment: 1 } } });
+    await db.collection(C.inventory).doc(v.id).update({ available: FieldValue.increment(-1) });
+    // Paid online (a cart this large is above the COD limit).
+    const r = await c.post("/api/v1/checkout/place-order", { addressId, paymentMethod: "ONLINE", idempotencyKey: randomUUID() });
+    expect(r.status, JSON.stringify(r.body)).toBe(409);
+    expect(r.body.error.message).toMatch(/stock|left|available/i);
+    await db.collection(C.inventory).doc(v.id).update({ available: FieldValue.increment(1) });
     expect((await inventoryOf(v.id)).available).toBe(inv.available);
   });
 
@@ -162,19 +168,20 @@ describe("checkout & orders (COD)", () => {
     await c.post("/api/v1/cart/coupon", { code: "WELCOME100" });
     const r = await placeCodOrder(c, addressId);
     expect(r.status).toBe(201);
-    const coupon = await prisma.coupon.findUniqueOrThrow({ where: { code: "WELCOME100" } });
+    const couponRef = db.collection(C.coupons).doc("WELCOME100");
+    const coupon = (await getDoc<Coupon>(couponRef))!;
     const cancel = await c.post(`/api/v1/orders/${r.body.order.id}/cancel`, { reason: "Ordered by mistake" });
     expect(cancel.status).toBe(200);
     expect(cancel.body.order.status).toBe("CANCELLED");
     expect(await inventoryOf(v.id)).toMatchObject({ available: before.available, reserved: before.reserved });
-    expect((await prisma.coupon.findUniqueOrThrow({ where: { code: "WELCOME100" } })).usedCount).toBe(coupon.usedCount - 1);
-    expect(await prisma.couponUsage.findUnique({ where: { orderId: r.body.order.id } })).toBeNull();
+    expect((await getDoc<Coupon>(couponRef))!.usedCount).toBe(coupon.usedCount - 1);
+    expect(await getDoc(db.collection(C.couponUsages).doc(r.body.order.id))).toBeNull();
     await settle();
   });
 
   it("redeems loyalty points at checkout within limits", async () => {
     const { c, user } = await newCustomer();
-    await prisma.user.update({ where: { id: user.id }, data: { loyaltyPoints: 1000 } });
+    await db.collection(C.users).doc(user.id).update({ loyaltyPoints: 1000 });
     const addressId = await addAddress(c);
     const v = await variantBySlug("royal-celebration-hamper", 0);
     await c.post("/api/v1/cart/items", { variantId: v.id, quantity: 1 });
@@ -184,7 +191,7 @@ describe("checkout & orders (COD)", () => {
     expect(pricing.loyaltyDiscountPaise).toBeLessThanOrEqual(Math.floor(pricing.subtotalPaise * 0.2));
     const r = await placeCodOrder(c, addressId, { redeemPoints: 1000 });
     expect(r.status).toBe(201);
-    const u = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const u = await userDoc(user.id);
     expect(u.loyaltyPoints).toBe(1000 - pricing.pointsRedeemed);
   });
 

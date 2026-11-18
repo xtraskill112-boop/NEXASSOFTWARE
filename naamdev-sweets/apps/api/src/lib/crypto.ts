@@ -32,4 +32,3 @@ export function decrypt(payload: string): string {
   return Buffer.concat([decipher.update(Buffer.from(data!, "base64")), decipher.final()]).toString("utf8");
 }
 
-export const referralCode = () => "ND" + randomBytes(4).toString("hex").toUpperCase().slice(0, 6);

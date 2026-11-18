@@ -1,112 +1,139 @@
 import type { Request, Response } from "express";
-import { prisma, type Prisma } from "@naamdev/db";
+import { C, db, getDoc, getDocs, newId, type Cart, type CartItem, type Coupon, type CouponUsage, type Inventory, type Order, type User, type WithId } from "@naamdev/db";
 import { priceCart, sellingPrice, type CouponRule, type PricingResult } from "@naamdev/shared";
 import { randomToken } from "../../lib/crypto";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { getSetting } from "../../lib/settings";
-import { cookieOptions } from "../../middleware/auth";
+import { catalog } from "../catalog/cache";
+import { activeVariants, sortedImages } from "../catalog/serializers";
 
-export const CART_COOKIE = "nds_cart";
+/** Guest carts are identified by a random token the browser keeps and sends in this header. */
+export const CART_TOKEN_HEADER = "x-cart-token";
+const TOKEN_RE = /^[A-Za-z0-9_-]{24,64}$/;
 
-const itemInclude = {
-  variant: {
-    include: {
-      inventory: true,
-      product: { include: { images: { orderBy: { sortOrder: "asc" }, take: 1 }, category: true, variants: { where: { isActive: true }, orderBy: { sortOrder: "asc" }, include: { inventory: true } } } },
-    },
-  },
-} satisfies Prisma.CartItemInclude;
+const cartRef = (id: string) => db.collection(C.carts).doc(id);
+const userCartId = (uid: string) => `u_${uid}`;
+const guestToken = (req: Request) => {
+  const t = req.get(CART_TOKEN_HEADER);
+  return t && TOKEN_RE.test(t) ? t : null;
+};
 
-type CartItemFull = Prisma.CartItemGetPayload<{ include: typeof itemInclude }>;
+function emptyCart(userId: string | null, token: string | null): Cart {
+  const now = new Date();
+  return { userId, guestToken: token, couponCode: null, items: [], createdAt: now, updatedAt: now };
+}
 
-export async function findCart(req: Request, create: boolean, res?: Response) {
+export async function findCart(req: Request, create: boolean, res?: Response): Promise<WithId<Cart> | null> {
   if (req.auth) {
-    const userId = req.auth.user.id;
-    const existing = await prisma.cart.findUnique({ where: { userId } });
+    const id = userCartId(req.auth.user.id);
+    const existing = await getDoc<Cart>(cartRef(id));
     if (existing || !create) return existing;
-    return prisma.cart.create({ data: { userId } });
+    const cart = emptyCart(req.auth.user.id, null);
+    await cartRef(id).set(cart);
+    return { ...cart, id };
   }
-  const token = req.cookies?.[CART_COOKIE] as string | undefined;
+  const token = guestToken(req);
   if (token) {
-    const cart = await prisma.cart.findUnique({ where: { guestToken: token } });
+    const cart = await getDoc<Cart>(cartRef(`g_${token}`));
     if (cart) return cart;
   }
   if (!create || !res) return null;
-  const guestToken = randomToken(24);
-  res.cookie(CART_COOKIE, guestToken, cookieOptions(30 * 86_400_000));
-  return prisma.cart.create({ data: { guestToken } });
+  const fresh = randomToken(24);
+  const cart = emptyCart(null, fresh);
+  await cartRef(`g_${fresh}`).set(cart);
+  res.set(CART_TOKEN_HEADER, fresh);
+  return { ...cart, id: `g_${fresh}` };
 }
 
-/** On login, guest cart lines are merged into the user's cart (quantities summed, capped by stock). */
+/** On sign-in, guest cart lines are merged into the user's cart (quantities summed, capped by stock). */
 export async function mergeGuestCart(req: Request, res: Response, userId: string) {
-  const token = req.cookies?.[CART_COOKIE] as string | undefined;
+  const token = guestToken(req);
   if (!token) return;
-  const guest = await prisma.cart.findUnique({ where: { guestToken: token }, include: { items: { include: { variant: { include: { inventory: true } } } } } });
-  res.clearCookie(CART_COOKIE, cookieOptions());
+  const guest = await getDoc<Cart>(cartRef(`g_${token}`));
+  res.set(CART_TOKEN_HEADER, "");
   if (!guest) return;
-  const checkout = await getSetting("checkout");
-  const userCart = (await prisma.cart.findUnique({ where: { userId } })) ?? (await prisma.cart.create({ data: { userId } }));
-  for (const item of guest.items) {
-    const existing = await prisma.cartItem.findUnique({ where: { cartId_variantId: { cartId: userCart.id, variantId: item.variantId } } });
-    const cap = Math.min(checkout.maxQtyPerItem, Math.max(1, item.variant.inventory?.available ?? 1));
-    const quantity = Math.min(cap, (existing?.quantity ?? 0) + item.quantity);
-    await prisma.cartItem.upsert({
-      where: { cartId_variantId: { cartId: userCart.id, variantId: item.variantId } },
-      update: { quantity, savedForLater: existing?.savedForLater && item.savedForLater },
-      create: { cartId: userCart.id, variantId: item.variantId, quantity, savedForLater: item.savedForLater },
-    });
-  }
-  if (guest.couponCode && !userCart.couponCode) await prisma.cart.update({ where: { id: userCart.id }, data: { couponCode: guest.couponCode } });
-  await prisma.cart.delete({ where: { id: guest.id } });
+  const [checkout, snap] = await Promise.all([getSetting("checkout"), catalog()]);
+  await db.runTransaction(async (tx) => {
+    const ref = cartRef(userCartId(userId));
+    const userCart = (await getDoc<Cart>(ref, tx)) ?? { ...emptyCart(userId, null), id: ref.id };
+    const items = [...userCart.items];
+    for (const item of guest.items) {
+      const existing = items.find((i) => i.variantId === item.variantId);
+      const cap = Math.min(checkout.maxQtyPerItem, Math.max(1, snap.stock.get(item.variantId)?.available ?? 1));
+      const quantity = Math.min(cap, (existing?.quantity ?? 0) + item.quantity);
+      if (existing) Object.assign(existing, { quantity, savedForLater: existing.savedForLater && item.savedForLater, updatedAt: new Date() });
+      else items.push({ ...item, quantity });
+    }
+    const { id: _id, ...data } = userCart;
+    tx.set(ref, { ...data, items, couponCode: userCart.couponCode ?? guest.couponCode, updatedAt: new Date() });
+    tx.delete(cartRef(guest.id));
+  });
 }
 
-function serializeItem(i: CartItemFull) {
-  const v = i.variant;
-  const p = v.product;
-  const available = v.inventory?.available ?? 0;
-  const issues: string[] = [];
-  if (!v.isActive || !p.isActive || p.deletedAt) issues.push("UNAVAILABLE");
-  else if (available <= 0) issues.push("OUT_OF_STOCK");
-  else if (i.quantity > available) issues.push("INSUFFICIENT_STOCK");
+async function serializeItems(items: CartItem[]) {
+  const snap = await catalog();
+  return [...items]
+    .sort((a, b) => +a.createdAt - +b.createdAt)
+    .map((i) => {
+      const hit = snap.variants.get(i.variantId);
+      const issues: string[] = [];
+      if (!hit) return null;
+      const { product: p, variant: v } = hit;
+      const available = snap.stock.get(v.id)?.available ?? 0;
+      const category = snap.categoryById.get(p.categoryId);
+      if (!v.isActive || !p.isActive || p.deletedAt) issues.push("UNAVAILABLE");
+      else if (available <= 0) issues.push("OUT_OF_STOCK");
+      else if (i.quantity > available) issues.push("INSUFFICIENT_STOCK");
+      return {
+        id: i.id,
+        quantity: i.quantity,
+        savedForLater: i.savedForLater,
+        variant: {
+          id: v.id, label: v.label, sku: v.sku, mrpPaise: v.mrpPaise, salePricePaise: v.salePricePaise, pricePaise: sellingPrice(v),
+          available: Math.min(available, 50), inStock: available > 0,
+        },
+        product: {
+          id: p.id, slug: p.slug, name: p.name, nameHi: p.nameHi, image: sortedImages(p)[0]?.url ?? null, foodType: p.foodType,
+          category: { slug: category?.slug ?? "", name: category?.name ?? "" },
+          variants: activeVariants(p).map((pv) => ({ id: pv.id, label: pv.label, pricePaise: sellingPrice(pv), mrpPaise: pv.mrpPaise, inStock: (snap.stock.get(pv.id)?.available ?? 0) > 0 })),
+        },
+        lineTotalPaise: sellingPrice(v) * i.quantity,
+        issues,
+        /** Internal: used for pricing (GST) — not part of the public shape. */
+        _gstRate: p.gstRate ?? category?.gstRate ?? null,
+        _categoryId: p.categoryId,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x);
+}
+
+export type SerializedCartItem = Omit<Awaited<ReturnType<typeof serializeItems>>[number], "_gstRate" | "_categoryId">;
+
+export function couponRule(c: WithId<Coupon>): CouponRule {
   return {
-    id: i.id,
-    quantity: i.quantity,
-    savedForLater: i.savedForLater,
-    variant: {
-      id: v.id, label: v.label, sku: v.sku, mrpPaise: v.mrpPaise, salePricePaise: v.salePricePaise, pricePaise: sellingPrice(v),
-      available: Math.min(available, 50), inStock: available > 0,
-    },
-    product: {
-      id: p.id, slug: p.slug, name: p.name, nameHi: p.nameHi, image: p.images[0]?.url ?? null, foodType: p.foodType,
-      category: { slug: p.category.slug, name: p.category.name },
-      variants: p.variants.map((pv) => ({ id: pv.id, label: pv.label, pricePaise: sellingPrice(pv), mrpPaise: pv.mrpPaise, inStock: (pv.inventory?.available ?? 0) > 0 })),
-    },
-    lineTotalPaise: sellingPrice(v) * i.quantity,
-    issues,
+    code: c.code, type: c.type, scope: c.scope, value: c.value, maxDiscountPaise: c.maxDiscountPaise, minOrderPaise: c.minOrderPaise,
+    startsAt: c.startsAt, endsAt: c.endsAt, usageLimit: c.usageLimit, perUserLimit: c.perUserLimit, usedCount: c.usedCount,
+    firstOrderOnly: c.firstOrderOnly, isActive: c.isActive, productIds: c.productIds, categoryIds: c.categoryIds,
   };
 }
-
-export type SerializedCartItem = ReturnType<typeof serializeItem>;
 
 export async function couponForCode(code: string | null | undefined) {
   if (!code) return null;
-  const c = await prisma.coupon.findUnique({ where: { code: code.toUpperCase() }, include: { products: { select: { id: true } }, categories: { select: { id: true } } } });
+  const c = await getDoc<Coupon>(db.collection(C.coupons).doc(code.toUpperCase()));
   if (!c) return null;
-  const rule: CouponRule = {
-    code: c.code, type: c.type, scope: c.scope, value: c.value, maxDiscountPaise: c.maxDiscountPaise, minOrderPaise: c.minOrderPaise,
-    startsAt: c.startsAt, endsAt: c.endsAt, usageLimit: c.usageLimit, perUserLimit: c.perUserLimit, usedCount: c.usedCount,
-    firstOrderOnly: c.firstOrderOnly, isActive: c.isActive, productIds: c.products.map((p) => p.id), categoryIds: c.categories.map((x) => x.id),
-  };
-  return { coupon: c, rule };
+  return { coupon: c, rule: couponRule(c) };
 }
 
-export async function couponContextFor(userId: string | null, couponId: string | null) {
+/** Orders that count for "first order" rules: anything except cancelled and unpaid online orders. */
+export const countsAsOrder = (o: Pick<Order, "status" | "paymentMethod">) => o.status !== "CANCELLED" && !(o.status === "PENDING" && o.paymentMethod === "ONLINE");
+
+export async function couponContextFor(userId: string | null, couponCode: string | null) {
   if (!userId) return { customerOrderCount: 0, customerUsageCount: 0, isAuthenticated: false };
   const [orders, usage] = await Promise.all([
-    prisma.order.count({ where: { userId, status: { notIn: ["CANCELLED"] }, NOT: { status: "PENDING", paymentMethod: "ONLINE" } } }),
-    couponId ? prisma.couponUsage.count({ where: { userId, couponId } }) : 0,
+    getDocs<Order>(db.collection(C.orders).where("userId", "==", userId).select("status", "paymentMethod").limit(50)),
+    couponCode ? getDocs<CouponUsage>(db.collection(C.couponUsages).where("userId", "==", userId).where("couponCode", "==", couponCode)) : [],
   ]);
-  return { customerOrderCount: orders, customerUsageCount: usage, isAuthenticated: true };
+  return { customerOrderCount: orders.filter(countsAsOrder).length, customerUsageCount: usage.length, isAuthenticated: true };
 }
 
 export interface CartView {
@@ -120,32 +147,30 @@ export interface CartView {
 }
 
 export async function buildCartView(
-  cartId: string | null,
+  cart: WithId<Cart> | null,
   userId: string | null,
   opts: { couponCode?: string | null; redeemPoints?: number; zoneDeliveryFeePaise?: number | null } = {},
 ): Promise<CartView> {
   const [checkout, loyalty] = await Promise.all([getSetting("checkout"), getSetting("loyalty")]);
-  const cart = cartId ? await prisma.cart.findUnique({ where: { id: cartId }, include: { items: { include: itemInclude, orderBy: { createdAt: "asc" } } } }) : null;
-  const all = (cart?.items ?? []).map(serializeItem);
+  const all = await serializeItems(cart?.items ?? []);
   const items = all.filter((i) => !i.savedForLater);
   const savedItems = all.filter((i) => i.savedForLater);
   const purchasable = items.filter((i) => i.issues.length === 0);
 
   const code = opts.couponCode !== undefined ? opts.couponCode : (cart?.couponCode ?? null);
   const found = await couponForCode(code);
-  const user = userId ? await prisma.user.findUnique({ where: { id: userId }, select: { loyaltyPoints: true } }) : null;
+  const user = userId ? await getDoc<User>(db.collection(C.users).doc(userId)) : null;
 
   const pricing = priceCart({
-    lines: purchasable.map((i) => {
-      const full = cart!.items.find((c) => c.id === i.id)!;
-      const gst = full.variant.product.gstRate ?? full.variant.product.category.gstRate ?? checkout.defaultGstRate;
-      return { variantId: i.variant.id, productId: i.product.id, categoryId: full.variant.product.categoryId, quantity: i.quantity, unitMrpPaise: i.variant.mrpPaise, unitPricePaise: i.variant.pricePaise, gstRate: gst };
-    }),
+    lines: purchasable.map((i) => ({
+      variantId: i.variant.id, productId: i.product.id, categoryId: i._categoryId, quantity: i.quantity,
+      unitMrpPaise: i.variant.mrpPaise, unitPricePaise: i.variant.pricePaise, gstRate: i._gstRate ?? checkout.defaultGstRate,
+    })),
     checkout,
     loyalty,
     zoneDeliveryFeePaise: opts.zoneDeliveryFeePaise,
     coupon: found?.rule ?? null,
-    couponContext: await couponContextFor(userId, found?.coupon.id ?? null),
+    couponContext: await couponContextFor(userId, found?.coupon.code ?? null),
     redeemPoints: opts.redeemPoints ?? 0,
     pointsBalance: user?.loyaltyPoints ?? 0,
   });
@@ -156,51 +181,79 @@ export async function buildCartView(
   if (items.some((i) => i.issues.length)) blockers.push("Some items are unavailable or exceed available stock. Please update your cart.");
   if (!pricing.meetsMinimumOrder && items.length) blockers.push(`Minimum order value is ₹${(pricing.minOrderPaise / 100).toFixed(0)}.`);
 
-  return { id: cart?.id ?? null, items, savedItems, couponCode: code ?? null, pricing, canCheckout: blockers.length === 0, blockers };
+  const strip = ({ _gstRate: _g, _categoryId: _c, ...rest }: (typeof all)[number]) => rest;
+  return { id: cart?.id ?? null, items: items.map(strip), savedItems: savedItems.map(strip), couponCode: code ?? null, pricing, canCheckout: blockers.length === 0, blockers };
 }
 
-async function assertPurchasable(variantId: string, quantity: number) {
-  const v = await prisma.productVariant.findUnique({ where: { id: variantId }, include: { product: true, inventory: true } });
-  if (!v || !v.isActive || !v.product.isActive || v.product.deletedAt) throw notFound("Product");
+/** Validates a variant can be bought in this quantity against live (not cached) stock. */
+export async function assertPurchasable(variantId: string, quantity: number) {
+  const snap = await catalog();
+  const hit = snap.variants.get(variantId);
+  if (!hit || !hit.variant.isActive || !hit.product.isActive || hit.product.deletedAt) throw notFound("Product");
   const checkout = await getSetting("checkout");
   if (quantity > checkout.maxQtyPerItem) throw badRequest(`You can order up to ${checkout.maxQtyPerItem} of an item.`);
-  const available = v.inventory?.available ?? 0;
+  const inv = await getDoc<Inventory>(db.collection(C.inventory).doc(variantId));
+  const available = inv?.available ?? 0;
   if (available <= 0) throw conflict("This item just went out of stock.", { available: 0 }, "OUT_OF_STOCK");
   if (quantity > available) throw conflict(`Only ${available} left in stock.`, { available }, "INSUFFICIENT_STOCK");
-  return v;
+  return hit;
 }
 
-export async function addItem(cartId: string, variantId: string, quantity: number) {
-  const existing = await prisma.cartItem.findUnique({ where: { cartId_variantId: { cartId, variantId } } });
+async function saveItems(cart: WithId<Cart>, items: CartItem[], extra: Partial<Cart> = {}) {
+  cart.items = items;
+  Object.assign(cart, extra);
+  await cartRef(cart.id).update({ items, ...extra, updatedAt: new Date() });
+}
+
+export async function addItem(cart: WithId<Cart>, variantId: string, quantity: number) {
+  const existing = cart.items.find((i) => i.variantId === variantId);
   const next = (existing && !existing.savedForLater ? existing.quantity : 0) + quantity;
-  await assertPurchasable(variantId, next);
-  await prisma.cartItem.upsert({
-    where: { cartId_variantId: { cartId, variantId } },
-    update: { quantity: next, savedForLater: false },
-    create: { cartId, variantId, quantity: next },
-  });
+  const { product } = await assertPurchasable(variantId, next);
+  const now = new Date();
+  const items = existing
+    ? cart.items.map((i) => (i === existing ? { ...i, quantity: next, savedForLater: false, updatedAt: now } : i))
+    : [...cart.items, { id: newId(), variantId, productId: product.id, quantity: next, savedForLater: false, createdAt: now, updatedAt: now }];
+  await saveItems(cart, items);
 }
 
-export async function updateItem(cartId: string, itemId: string, patch: { quantity?: number; variantId?: string; savedForLater?: boolean }) {
-  const item = await prisma.cartItem.findFirst({ where: { id: itemId, cartId } });
+export async function updateItem(cart: WithId<Cart>, itemId: string, patch: { quantity?: number; variantId?: string; savedForLater?: boolean }) {
+  const item = cart.items.find((i) => i.id === itemId);
   if (!item) throw notFound("Cart item");
-  if (patch.quantity === 0) return prisma.cartItem.delete({ where: { id: item.id } });
+  if (patch.quantity === 0) return saveItems(cart, cart.items.filter((i) => i.id !== itemId));
+  const now = new Date();
 
   if (patch.variantId && patch.variantId !== item.variantId) {
-    const v = await prisma.productVariant.findUnique({ where: { id: patch.variantId } });
-    const current = await prisma.productVariant.findUnique({ where: { id: item.variantId } });
-    if (!v || v.productId !== current?.productId) throw badRequest("Choose a weight option of the same product.");
+    const snap = await catalog();
+    const target = snap.variants.get(patch.variantId);
+    const current = snap.variants.get(item.variantId);
+    if (!target || target.product.id !== current?.product.id) throw badRequest("Choose a weight option of the same product.");
     const qty = patch.quantity ?? item.quantity;
-    await assertPurchasable(v.id, qty);
-    const clash = await prisma.cartItem.findUnique({ where: { cartId_variantId: { cartId, variantId: v.id } } });
+    await assertPurchasable(target.variant.id, qty);
+    const clash = cart.items.find((i) => i.variantId === target.variant.id);
     if (clash) {
-      await prisma.cartItem.update({ where: { id: clash.id }, data: { quantity: Math.min(qty + clash.quantity, (await getSetting("checkout")).maxQtyPerItem), savedForLater: false } });
-      return prisma.cartItem.delete({ where: { id: item.id } });
+      const max = (await getSetting("checkout")).maxQtyPerItem;
+      return saveItems(
+        cart,
+        cart.items.filter((i) => i.id !== item.id).map((i) => (i === clash ? { ...i, quantity: Math.min(qty + clash.quantity, max), savedForLater: false, updatedAt: now } : i)),
+      );
     }
-    return prisma.cartItem.update({ where: { id: item.id }, data: { variantId: v.id, quantity: qty } });
+    return saveItems(cart, cart.items.map((i) => (i === item ? { ...i, variantId: target.variant.id, quantity: qty, updatedAt: now } : i)));
   }
   const quantity = patch.quantity ?? item.quantity;
   const savedForLater = patch.savedForLater ?? item.savedForLater;
   if (!savedForLater && (patch.quantity !== undefined || patch.savedForLater === false)) await assertPurchasable(item.variantId, quantity);
-  return prisma.cartItem.update({ where: { id: item.id }, data: { quantity, savedForLater } });
+  return saveItems(cart, cart.items.map((i) => (i === item ? { ...i, quantity, savedForLater, updatedAt: now } : i)));
+}
+
+export async function removeItem(cart: WithId<Cart>, itemId: string) {
+  await saveItems(cart, cart.items.filter((i) => i.id !== itemId));
+}
+
+export async function clearCart(cart: WithId<Cart>) {
+  await saveItems(cart, cart.items.filter((i) => i.savedForLater), { couponCode: null });
+}
+
+export async function setCoupon(cart: WithId<Cart>, code: string | null) {
+  cart.couponCode = code;
+  await cartRef(cart.id).update({ couponCode: code, updatedAt: new Date() });
 }

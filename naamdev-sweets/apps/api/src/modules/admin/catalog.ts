@@ -1,20 +1,36 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma, type Prisma } from "@naamdev/db";
+import {
+  C, db, getDoc, getDocs, newId, productDerived, runTx,
+  type Category, type Collection, type Inventory, type Product, type ProductImage, type ProductVariant, type WithId,
+} from "@naamdev/db";
 import { categoryInputSchema, collectionInputSchema, paginationSchema, productInputSchema, sellingPrice, slugify, type ProductInput } from "@naamdev/shared";
 import { audit } from "../../lib/audit";
+import { clearCached } from "../../lib/cache";
 import { badRequest, conflict, notFound } from "../../lib/errors";
-import { body, pageMeta, paginate, param, query } from "../../lib/http";
+import { body, pageOf, param, query } from "../../lib/http";
 import { requireAnyPermission, requirePermission } from "../../middleware/auth";
+import { bumpCatalog, catalog } from "../catalog/cache";
 
 export const adminCatalogRouter = Router();
+const products = () => db.collection(C.products);
+const categories = () => db.collection(C.categories);
+const collections = () => db.collection(C.collections);
 
-const productAdminInclude = {
-  images: { orderBy: { sortOrder: "asc" } },
-  category: { select: { id: true, name: true, slug: true } },
-  subcategory: { select: { id: true, name: true } },
-  variants: { orderBy: { sortOrder: "asc" }, include: { inventory: true } },
-} satisfies Prisma.ProductInclude;
+/** Admin view of a product: sorted images/variants, category refs and stock per variant. */
+async function adminProduct(p: WithId<Product>) {
+  const snap = await catalog();
+  const inv = (await getDocs<Inventory>(db.collection(C.inventory).where("productId", "==", p.id))).reduce((m, i) => m.set(i.id, i), new Map<string, WithId<Inventory>>());
+  const cat = snap.categoryById.get(p.categoryId);
+  const sub = p.subcategoryId ? snap.categoryById.get(p.subcategoryId) : undefined;
+  return {
+    ...p,
+    images: [...p.images].sort((a, b) => a.sortOrder - b.sortOrder),
+    category: cat ? { id: cat.id, name: cat.name, slug: cat.slug } : null,
+    subcategory: sub ? { id: sub.id, name: sub.name } : null,
+    variants: [...p.variants].sort((a, b) => a.sortOrder - b.sortOrder).map((v) => ({ ...v, productId: p.id, inventory: inv.get(v.id) ?? null })),
+  };
+}
 
 adminCatalogRouter.get("/products", requireAnyPermission("products.view", "inventory.view"), async (req, res) => {
   const q = query(req, paginationSchema.extend({
@@ -23,47 +39,51 @@ adminCatalogRouter.get("/products", requireAnyPermission("products.view", "inven
     status: z.enum(["active", "inactive", "archived", "all"]).default("all"),
     stock: z.enum(["low", "out", "all"]).default("all"),
   }));
-  const where: Prisma.ProductWhereInput = {};
-  if (q.status === "archived") where.deletedAt = { not: null };
-  else {
-    where.deletedAt = null;
-    if (q.status === "active") where.isActive = true;
-    if (q.status === "inactive") where.isActive = false;
-  }
-  if (q.categoryId) where.categoryId = q.categoryId;
-  if (q.q) where.OR = [{ name: { contains: q.q, mode: "insensitive" } }, { sku: { contains: q.q, mode: "insensitive" } }, { variants: { some: { sku: { contains: q.q, mode: "insensitive" } } } }];
-  if (q.stock === "out") where.variants = { some: { isActive: true, inventory: { available: { lte: 0 } } } };
-  const [total, rows] = await Promise.all([
-    prisma.product.count({ where }),
-    prisma.product.findMany({ where, include: productAdminInclude, orderBy: { updatedAt: "desc" }, ...paginate(q.page, q.pageSize) }),
-  ]);
-  let items = rows.map((p) => ({
-    id: p.id, name: p.name, slug: p.slug, sku: p.sku, image: p.images[0]?.url ?? null, category: p.category, isActive: p.isActive, deletedAt: p.deletedAt,
-    isFeatured: p.isFeatured, isBestseller: p.isBestseller, isNewArrival: p.isNewArrival, avgRating: p.avgRating, reviewCount: p.reviewCount, soldCount: p.soldCount,
-    variants: p.variants.map((v) => ({ id: v.id, label: v.label, sku: v.sku, pricePaise: sellingPrice(v), mrpPaise: v.mrpPaise, available: v.inventory?.available ?? 0, reserved: v.inventory?.reserved ?? 0, lowStockThreshold: v.inventory?.lowStockThreshold ?? 0, isActive: v.isActive })),
-    totalStock: p.variants.reduce((s, v) => s + (v.inventory?.available ?? 0), 0),
-    lowStock: p.variants.some((v) => v.isActive && (v.inventory?.available ?? 0) <= (v.inventory?.lowStockThreshold ?? 0)),
-  }));
+  const snap = await catalog();
+  const rows = q.status === "archived" ? await getDocs<Product>(products().where("deletedAt", "!=", null)) : snap.products;
+  const term = q.q?.toLowerCase();
+  let items = rows
+    .filter((p) => (q.status === "active" ? p.isActive : q.status === "inactive" ? !p.isActive : true))
+    .filter((p) => !q.categoryId || p.categoryId === q.categoryId)
+    .filter((p) => !term || p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term) || p.variants.some((v) => v.sku.toLowerCase().includes(term)))
+    .sort((a, b) => +b.updatedAt - +a.updatedAt)
+    .map((p) => {
+      const variants = [...p.variants].sort((a, b) => a.sortOrder - b.sortOrder).map((v) => {
+        const i = snap.stock.get(v.id);
+        return { id: v.id, label: v.label, sku: v.sku, pricePaise: sellingPrice(v), mrpPaise: v.mrpPaise, available: i?.available ?? 0, reserved: i?.reserved ?? 0, lowStockThreshold: i?.lowStockThreshold ?? 0, isActive: v.isActive };
+      });
+      const cat = snap.categoryById.get(p.categoryId);
+      return {
+        id: p.id, name: p.name, slug: p.slug, sku: p.sku, image: [...p.images].sort((a, b) => a.sortOrder - b.sortOrder)[0]?.url ?? null,
+        category: cat ? { id: cat.id, name: cat.name, slug: cat.slug } : null, isActive: p.isActive, deletedAt: p.deletedAt,
+        isFeatured: p.isFeatured, isBestseller: p.isBestseller, isNewArrival: p.isNewArrival, avgRating: p.avgRating, reviewCount: p.reviewCount, soldCount: p.soldCount,
+        variants,
+        totalStock: variants.reduce((s, v) => s + v.available, 0),
+        lowStock: variants.some((v) => v.isActive && v.available <= v.lowStockThreshold),
+        outOfStock: variants.some((v) => v.isActive && v.available <= 0),
+      };
+    });
   if (q.stock === "low") items = items.filter((i) => i.lowStock);
-  res.json({ items, meta: pageMeta(total, q.page, q.pageSize) });
+  if (q.stock === "out") items = items.filter((i) => i.outOfStock);
+  res.json(pageOf(items, q.page, q.pageSize));
 });
 
 adminCatalogRouter.get("/products/:id", requireAnyPermission("products.view", "inventory.view"), async (req, res) => {
-  const p = await prisma.product.findUnique({ where: { id: param(req, "id") }, include: { ...productAdminInclude, collections: { select: { collectionId: true } } } });
+  const p = await getDoc<Product>(products().doc(param(req, "id")));
   if (!p) throw notFound("Product");
-  res.json({ product: p });
+  const cols = (await getDocs<Collection>(collections())).filter((c) => c.products.some((x) => x.productId === p.id));
+  res.json({ product: { ...(await adminProduct(p)), collections: cols.map((c) => ({ collectionId: c.id })) } });
 });
 
 async function uniqueSlug(base: string, excludeId?: string) {
-  let slug = slugify(base) || "product";
+  const root = slugify(base) || "product";
+  let slug = root;
   let n = 1;
-  while (await prisma.product.findFirst({ where: { slug, id: excludeId ? { not: excludeId } : undefined } })) slug = `${slugify(base)}-${++n}`;
-  return slug;
-}
-
-function productData(input: ProductInput) {
-  const { images: _i, variants: _v, slug: _s, nutrition, ...rest } = input;
-  return { ...rest, nutrition: nutrition ?? undefined };
+  for (;;) {
+    const hit = (await products().where("slug", "==", slug).limit(2).get()).docs.filter((d) => d.id !== excludeId);
+    if (!hit.length) return slug;
+    slug = `${root}-${++n}`;
+  }
 }
 
 function assertVariants(input: ProductInput) {
@@ -72,134 +92,226 @@ function assertVariants(input: ProductInput) {
   if (input.variants.filter((v) => v.isDefault).length > 1) throw badRequest("Only one variant can be the default.");
 }
 
+function productFields(input: ProductInput) {
+  const { images: _i, variants: _v, slug: _s, ...rest } = input;
+  return {
+    ...rest,
+    nameHi: rest.nameHi ?? null, shortDescriptionHi: rest.shortDescriptionHi ?? null, subcategoryId: rest.subcategoryId ?? null,
+    barcode: rest.barcode ?? null, hsnCode: rest.hsnCode ?? null, nutrition: rest.nutrition ?? null, manufacturingInfo: rest.manufacturingInfo ?? null,
+    videoUrl: rest.videoUrl ?? null, gstRate: rest.gstRate ?? null, seoTitle: rest.seoTitle ?? null, seoDescription: rest.seoDescription ?? null,
+  };
+}
+
+const images = (input: ProductInput): ProductImage[] =>
+  input.images.map((im, i) => ({ id: newId(), url: im.url, alt: im.alt ?? input.name, publicId: im.publicId ?? null, width: null, height: null, sortOrder: i }));
+
+/** Reserves SKUs for this product inside a transaction; fails if another product uses one. */
+async function claimSkus(tx: FirebaseFirestore.Transaction, productId: string, entries: { sku: string; variantId: string | null }[]) {
+  const refs = entries.map((e) => db.collection(C.skus).doc(e.sku.toUpperCase()));
+  const snaps = await tx.getAll(...refs);
+  snaps.forEach((s, i) => {
+    if (s.exists && s.data()?.productId !== productId) throw conflict(`SKU ${entries[i]!.sku} is already used by another product.`, undefined, "DUPLICATE");
+  });
+  entries.forEach((e, i) => tx.set(refs[i]!, { productId, variantId: e.variantId }));
+}
+
 adminCatalogRouter.post("/products", requirePermission("products.manage"), async (req, res) => {
   const input = body(req, productInputSchema);
   assertVariants(input);
-  const slug = input.slug ? await uniqueSlug(input.slug) : await uniqueSlug(input.name);
-  const product = await prisma.$transaction(async (tx) => {
-    const p = await tx.product.create({
-      data: {
-        ...productData(input),
-        slug,
-        images: { create: input.images.map((im, i) => ({ url: im.url, alt: im.alt ?? input.name, publicId: im.publicId, sortOrder: i })) },
-      },
-    });
-    for (const [i, v] of input.variants.entries()) {
-      const { lowStockThreshold, id: _id, ...vd } = v;
-      await tx.productVariant.create({ data: { ...vd, productId: p.id, sortOrder: i, isDefault: v.isDefault || (i === 0 && !input.variants.some((x) => x.isDefault)), inventory: { create: { lowStockThreshold } } } });
-    }
-    return p;
+  const slug = await uniqueSlug(input.slug ?? input.name);
+  const id = newId();
+  const now = new Date();
+  const variants: ProductVariant[] = input.variants.map((v, i) => ({
+    id: newId(), label: v.label, weightGrams: v.weightGrams ?? null, sku: v.sku, barcode: v.barcode ?? null, mrpPaise: v.mrpPaise,
+    salePricePaise: v.salePricePaise ?? null, isActive: v.isActive, isDefault: v.isDefault || (i === 0 && !input.variants.some((x) => x.isDefault)), sortOrder: i,
+  }));
+  await runTx(async (tx) => {
+    await claimSkus(tx, id, [{ sku: input.sku, variantId: null }, ...variants.map((v) => ({ sku: v.sku, variantId: v.id }))]);
+    const base = {
+      ...productFields(input), slug, images: images(input), variants, avgRating: 0, reviewCount: 0, soldCount: 0, viewCount: 0, deletedAt: null, createdAt: now, updatedAt: now,
+    };
+    tx.set(products().doc(id), { ...base, ...productDerived(base) } satisfies Product);
+    input.variants.forEach((v, i) =>
+      tx.set(db.collection(C.inventory).doc(variants[i]!.id), {
+        variantId: variants[i]!.id, productId: id, available: 0, reserved: 0, lowStockThreshold: v.lowStockThreshold, lastRestockedAt: null, lowStockAlertedAt: null, updatedAt: now,
+      } satisfies Inventory),
+    );
+    bumpCatalog(["products", "stock"], tx);
   });
-  await audit(req, "product.create", "Product", product.id, { name: product.name });
-  res.status(201).json({ product: await prisma.product.findUnique({ where: { id: product.id }, include: productAdminInclude }) });
+  clearCached("home:");
+  await audit(req, "product.create", "Product", id, { name: input.name });
+  res.status(201).json({ product: await adminProduct((await getDoc<Product>(products().doc(id)))!) });
 });
 
 adminCatalogRouter.put("/products/:id", requirePermission("products.manage"), async (req, res) => {
   const id = param(req, "id");
   const input = body(req, productInputSchema);
   assertVariants(input);
-  const existing = await prisma.product.findUnique({ where: { id }, include: { variants: true } });
+  const existing = await getDoc<Product>(products().doc(id));
   if (!existing) throw notFound("Product");
   const slug = input.slug && input.slug !== existing.slug ? await uniqueSlug(input.slug, id) : existing.slug;
-  await prisma.$transaction(async (tx) => {
-    await tx.product.update({ where: { id }, data: { ...productData(input), slug } });
-    await tx.productImage.deleteMany({ where: { productId: id } });
-    await tx.productImage.createMany({ data: input.images.map((im, i) => ({ productId: id, url: im.url, alt: im.alt ?? input.name, publicId: im.publicId, sortOrder: i })) });
-    const keep = new Set<string>();
-    for (const [i, v] of input.variants.entries()) {
-      const { lowStockThreshold, id: vid, ...vd } = v;
-      if (vid && existing.variants.some((x) => x.id === vid)) {
-        await tx.productVariant.update({ where: { id: vid }, data: { ...vd, sortOrder: i } });
-        await tx.inventory.upsert({ where: { variantId: vid }, update: { lowStockThreshold }, create: { variantId: vid, lowStockThreshold } });
-        keep.add(vid);
-      } else {
-        const created = await tx.productVariant.create({ data: { ...vd, productId: id, sortOrder: i, inventory: { create: { lowStockThreshold } } } });
-        keep.add(created.id);
-      }
+  // Variants that left the form: delete if never stocked, otherwise deactivate (history must stay intact).
+  const removed = existing.variants.filter((v) => !input.variants.some((x) => x.id === v.id));
+  const used = new Set<string>();
+  for (const v of removed) if (!(await db.collection(C.stockTransactions).where("variantId", "==", v.id).limit(1).get()).empty) used.add(v.id);
+
+  await runTx(async (tx) => {
+    const now = new Date();
+    const next: ProductVariant[] = input.variants.map((v, i) => {
+      const prev = v.id ? existing.variants.find((x) => x.id === v.id) : undefined;
+      return {
+        id: prev?.id ?? newId(), label: v.label, weightGrams: v.weightGrams ?? null, sku: v.sku, barcode: v.barcode ?? null, mrpPaise: v.mrpPaise,
+        salePricePaise: v.salePricePaise ?? null, isActive: v.isActive, isDefault: v.isDefault, sortOrder: i,
+      };
+    });
+    for (const v of removed) if (used.has(v.id)) next.push({ ...v, isActive: false, isDefault: false, sortOrder: next.length });
+    if (!next.some((v) => v.isDefault && v.isActive)) {
+      const first = next.find((v) => v.isActive);
+      if (first) first.isDefault = true;
     }
-    for (const old of existing.variants.filter((v) => !keep.has(v.id))) {
-      const used = (await tx.orderItem.count({ where: { variantId: old.id } })) + (await tx.inventoryBatch.count({ where: { variantId: old.id } }));
-      if (used) await tx.productVariant.update({ where: { id: old.id }, data: { isActive: false, isDefault: false } });
-      else await tx.productVariant.delete({ where: { id: old.id } });
-    }
-    const defaults = await tx.productVariant.count({ where: { productId: id, isDefault: true, isActive: true } });
-    if (!defaults) {
-      const first = await tx.productVariant.findFirst({ where: { productId: id, isActive: true }, orderBy: { sortOrder: "asc" } });
-      if (first) await tx.productVariant.update({ where: { id: first.id }, data: { isDefault: true } });
-    }
+    await claimSkus(tx, id, [{ sku: input.sku, variantId: null }, ...next.filter((v) => v.isActive || used.has(v.id)).map((v) => ({ sku: v.sku, variantId: v.id }))]);
+    const invRefs = input.variants.map((_, i) => db.collection(C.inventory).doc(next[i]!.id));
+    const invSnaps = await tx.getAll(...invRefs);
+    // Free SKUs that are no longer used by this product.
+    const keepSkus = new Set([input.sku, ...next.map((v) => v.sku)].map((s) => s.toUpperCase()));
+    for (const old of [existing.sku, ...existing.variants.map((v) => v.sku)]) if (!keepSkus.has(old.toUpperCase())) tx.delete(db.collection(C.skus).doc(old.toUpperCase()));
+    const base = { ...existing, ...productFields(input), slug, images: images(input), variants: next, updatedAt: now };
+    const { id: _id, ...doc } = { ...base, ...productDerived(base) };
+    tx.set(products().doc(id), doc);
+    input.variants.forEach((v, i) => {
+      const variantId = next[i]!.id;
+      if (invSnaps[i]!.exists) tx.update(invRefs[i]!, { lowStockThreshold: v.lowStockThreshold, updatedAt: now });
+      else
+        tx.set(invRefs[i]!, {
+          variantId, productId: id, available: 0, reserved: 0, lowStockThreshold: v.lowStockThreshold, lastRestockedAt: null, lowStockAlertedAt: null, updatedAt: now,
+        } satisfies Inventory);
+    });
+    for (const v of removed.filter((x) => !used.has(x.id))) tx.delete(db.collection(C.inventory).doc(v.id));
+    bumpCatalog(["products", "stock"], tx);
   });
+  clearCached("home:");
   await audit(req, "product.update", "Product", id, { name: input.name });
-  res.json({ product: await prisma.product.findUnique({ where: { id }, include: productAdminInclude }) });
+  res.json({ product: await adminProduct((await getDoc<Product>(products().doc(id)))!) });
 });
+
+async function patchProduct(id: string, data: Partial<Product>) {
+  const ref = products().doc(id);
+  if (!(await ref.get()).exists) throw notFound("Product");
+  await ref.update({ ...data, updatedAt: new Date() });
+  bumpCatalog("products");
+  clearCached("home:");
+  return (await getDoc<Product>(ref))!;
+}
 
 adminCatalogRouter.patch("/products/:id/flags", requirePermission("products.manage"), async (req, res) => {
   const data = body(req, z.object({ isActive: z.boolean().optional(), isFeatured: z.boolean().optional(), isBestseller: z.boolean().optional(), isNewArrival: z.boolean().optional() }));
-  const p = await prisma.product.update({ where: { id: param(req, "id") }, data });
+  const p = await patchProduct(param(req, "id"), data);
   await audit(req, "product.flags", "Product", p.id, data);
   res.json({ product: p });
 });
 
 adminCatalogRouter.post("/products/:id/archive", requirePermission("products.manage"), async (req, res) => {
-  const p = await prisma.product.update({ where: { id: param(req, "id") }, data: { deletedAt: new Date(), isActive: false } });
-  await prisma.cartItem.deleteMany({ where: { variant: { productId: p.id } } });
+  // Carts drop archived products automatically (they no longer resolve in the catalogue).
+  const p = await patchProduct(param(req, "id"), { deletedAt: new Date(), isActive: false });
   await audit(req, "product.archive", "Product", p.id);
   res.json({ product: p });
 });
 
 adminCatalogRouter.post("/products/:id/restore", requirePermission("products.manage"), async (req, res) => {
-  const p = await prisma.product.update({ where: { id: param(req, "id") }, data: { deletedAt: null } });
+  const p = await patchProduct(param(req, "id"), { deletedAt: null });
   await audit(req, "product.restore", "Product", p.id);
   res.json({ product: p });
 });
 
 // ── Categories ──
 adminCatalogRouter.get("/categories", requireAnyPermission("products.view", "categories.manage", "content.manage", "coupons.manage"), async (_req, res) => {
-  const categories = await prisma.category.findMany({ orderBy: { sortOrder: "asc" }, include: { _count: { select: { products: { where: { deletedAt: null } } } }, parent: { select: { name: true } } } });
-  res.json({ categories });
+  const snap = await catalog();
+  const counts = new Map<string, number>();
+  for (const p of snap.products) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
+  res.json({
+    categories: snap.categories.map((c) => ({
+      ...c,
+      _count: { products: counts.get(c.id) ?? 0 },
+      parent: c.parentId ? { name: snap.categoryById.get(c.parentId)?.name ?? "" } : null,
+    })),
+  });
 });
+
+async function slugTaken(slug: string, excludeId?: string) {
+  return (await categories().where("slug", "==", slug).get()).docs.some((d) => d.id !== excludeId);
+}
 
 adminCatalogRouter.post("/categories", requirePermission("categories.manage"), async (req, res) => {
   const input = body(req, categoryInputSchema);
   const slug = slugify(input.slug ?? input.name);
-  if (await prisma.category.findUnique({ where: { slug } })) throw conflict("A category with this slug already exists.");
-  const c = await prisma.category.create({ data: { ...input, slug } });
-  await audit(req, "category.create", "Category", c.id, { name: c.name });
-  res.status(201).json({ category: c });
+  if (await slugTaken(slug)) throw conflict("A category with this slug already exists.");
+  const now = new Date();
+  const ref = categories().doc();
+  const c: Category = {
+    name: input.name, nameHi: input.nameHi ?? null, slug, description: input.description ?? null, imageUrl: input.imageUrl ?? null,
+    accentColor: input.accentColor ?? null, parentId: input.parentId ?? null, sortOrder: input.sortOrder, isActive: input.isActive, gstRate: input.gstRate ?? null,
+    createdAt: now, updatedAt: now,
+  };
+  await ref.set(c);
+  bumpCatalog("products");
+  clearCached("home:");
+  await audit(req, "category.create", "Category", ref.id, { name: c.name });
+  res.status(201).json({ category: { ...c, id: ref.id } });
 });
 
 adminCatalogRouter.put("/categories/:id", requirePermission("categories.manage"), async (req, res) => {
   const input = body(req, categoryInputSchema);
   const id = param(req, "id");
   if (input.parentId === id) throw badRequest("A category can't be its own parent.");
-  const c = await prisma.category.update({ where: { id }, data: { ...input, slug: input.slug ? slugify(input.slug) : undefined } });
-  await audit(req, "category.update", "Category", id, { name: c.name });
-  res.json({ category: c });
+  const existing = await getDoc<Category>(categories().doc(id));
+  if (!existing) throw notFound("Category");
+  const slug = input.slug ? slugify(input.slug) : existing.slug;
+  if (slug !== existing.slug && (await slugTaken(slug, id))) throw conflict("A category with this slug already exists.");
+  const patch = {
+    name: input.name, nameHi: input.nameHi ?? null, slug, description: input.description ?? null, imageUrl: input.imageUrl ?? existing.imageUrl,
+    accentColor: input.accentColor ?? null, parentId: input.parentId ?? null, sortOrder: input.sortOrder, isActive: input.isActive, gstRate: input.gstRate ?? null, updatedAt: new Date(),
+  };
+  await categories().doc(id).update(patch);
+  bumpCatalog("products");
+  clearCached("home:");
+  await audit(req, "category.update", "Category", id, { name: input.name });
+  res.json({ category: { ...existing, ...patch } });
 });
 
 adminCatalogRouter.delete("/categories/:id", requirePermission("categories.manage"), async (req, res) => {
   const id = param(req, "id");
-  const count = await prisma.product.count({ where: { categoryId: id } });
+  const count = (await products().where("categoryId", "==", id).select().get()).size;
   if (count) throw conflict(`Move or archive the ${count} product(s) in this category first.`);
-  await prisma.category.delete({ where: { id } });
+  await categories().doc(id).delete();
+  bumpCatalog("products");
+  clearCached("home:");
   await audit(req, "category.delete", "Category", id);
   res.json({ ok: true });
 });
 
 // ── Collections ──
 adminCatalogRouter.get("/collections", requireAnyPermission("categories.manage", "content.manage"), async (_req, res) => {
-  const collections = await prisma.collection.findMany({ orderBy: { createdAt: "desc" }, include: { products: { orderBy: { sortOrder: "asc" }, select: { productId: true } } } });
-  res.json({ collections: collections.map((c) => ({ ...c, productIds: c.products.map((p) => p.productId) })) });
+  const rows = (await getDocs<Collection>(collections())).sort((a, b) => +b.createdAt - +a.createdAt);
+  res.json({ collections: rows.map((c) => ({ ...c, productIds: [...c.products].sort((a, b) => a.sortOrder - b.sortOrder).map((p) => p.productId) })) });
 });
 
 async function saveCollection(id: string | null, input: z.infer<typeof collectionInputSchema>) {
   const { productIds, slug: s, ...data } = input;
   const slug = slugify(s ?? input.name);
-  return prisma.$transaction(async (tx) => {
-    const c = id ? await tx.collection.update({ where: { id }, data: { ...data, slug } }) : await tx.collection.create({ data: { ...data, slug } });
-    await tx.collectionProduct.deleteMany({ where: { collectionId: c.id } });
-    if (productIds.length) await tx.collectionProduct.createMany({ data: productIds.map((productId, i) => ({ collectionId: c.id, productId, sortOrder: i })) });
-    return c;
-  });
+  const dup = (await collections().where("slug", "==", slug).get()).docs.some((d) => d.id !== id);
+  if (dup) throw conflict("A collection with this slug already exists.");
+  const ref = id ? collections().doc(id) : collections().doc();
+  const existing = id ? await getDoc<Collection>(ref) : null;
+  if (id && !existing) throw notFound("Collection");
+  const now = new Date();
+  const doc = {
+    ...data, nameHi: data.nameHi ?? null, description: data.description ?? null, slug,
+    products: productIds.map((productId, i) => ({ productId, sortOrder: i })),
+    createdAt: existing?.createdAt ?? now, updatedAt: now,
+  };
+  await ref.set(doc, { merge: true });
+  clearCached("home:");
+  return { ...existing, ...doc, id: ref.id };
 }
 
 adminCatalogRouter.post("/collections", requireAnyPermission("categories.manage", "content.manage"), async (req, res) => {
@@ -215,7 +327,8 @@ adminCatalogRouter.put("/collections/:id", requireAnyPermission("categories.mana
 });
 
 adminCatalogRouter.delete("/collections/:id", requireAnyPermission("categories.manage", "content.manage"), async (req, res) => {
-  await prisma.collection.delete({ where: { id: param(req, "id") } });
+  await collections().doc(param(req, "id")).delete();
+  clearCached("home:");
   await audit(req, "collection.delete", "Collection", param(req, "id"));
   res.json({ ok: true });
 });
