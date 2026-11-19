@@ -23,9 +23,12 @@ in the app immediately, with no app update. The shell adds what a browser tab ca
 ## Get the APKs
 
 GitHub Actions builds both apps on every change to this folder (workflow
-`.github/workflows/naamdev-android.yml`). Open the repository's **Actions** tab → *NAAMDEV Android
-apps* → the latest run → **Artifacts**, and download `naamdev-android-apks-1.0.N` (a zip containing
-both APKs and their SHA-256 checksums).
+`.github/workflows/naamdev-android.yml`) and publishes them as a GitHub **release**
+(`naamdev-android-v1.0.N`) — open the repository's **Releases** page on the phone and tap the APK to
+download it; no GitHub login needed. Each run also keeps them as an artifact zip for 30 days.
+
+Builds without a release signing key (`NAAMDEV_ANDROID_KEYSTORE_*` secrets) use a new temporary key
+each time, so **uninstall the previous build before installing a new one**.
 
 To install on a phone, allow "Install unknown apps" for your browser or file manager, then open the APK.
 

@@ -1,7 +1,7 @@
 name: NAAMDEV Android apps
 
-# Builds the customer app (NAAMDEV SWEETS) and the delivery partner app (NAAMDEV Partner) as APKs.
-# Download them from the run's "Artifacts" section.
+# Builds the customer app (NAAMDEV SWEETS) and the delivery partner app (NAAMDEV Partner) as APKs
+# and publishes them as a GitHub release with direct download links (also kept as run artifacts).
 on:
   push:
     paths:
@@ -17,9 +17,13 @@ on:
         description: "Partner site address for the partner app (empty = https://naamdevseets-partner.web.app)"
         required: false
         default: ""
+      publish:
+        description: "Publish the APKs as a GitHub release (direct download links)"
+        type: boolean
+        default: true
 
 permissions:
-  contents: read
+  contents: write # create the release that holds the APKs
 
 jobs:
   apk:
@@ -105,3 +109,28 @@ jobs:
           path: ${{ runner.temp }}/apk/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish release (direct download links)
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          V="1.0.${{ github.run_number }}"
+          TAG="naamdev-android-v$V"
+          OUT="$RUNNER_TEMP/apk"
+          PRE="--prerelease"; [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && PRE="--latest"
+          cat > "$RUNNER_TEMP/notes.md" <<NOTES
+          **NAAMDEV SWEETS** (customer app) and **NAAMDEV Partner** (delivery riders), version $V, built from \`$GITHUB_REF_NAME\`.
+
+          | App | Opens |
+          |---|---|
+          | naamdev-sweets-$V.apk | $NAAMDEV_CUSTOMER_URL |
+          | naamdev-partner-$V.apk | $NAAMDEV_PARTNER_URL |
+
+          Install: tap the APK on your Android phone and allow "Install unknown apps" for your browser or file manager.
+          Signed with: $SIGNING
+          NOTES
+          gh release create "$TAG" "$OUT"/*.apk "$OUT/SHA256SUMS.txt" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "NAAMDEV Android apps $V" --notes-file "$RUNNER_TEMP/notes.md" $PRE
+          echo "- Download: ${{ github.server_url }}/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
