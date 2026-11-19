@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # keyless sign-in to Google Cloud (Workload Identity Federation)
 
 concurrency:
   group: naamdev-deploy
@@ -31,6 +32,8 @@ concurrency:
 
 env:
   PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID || 'naamdevseets' }}
+  # The project number (Firebase "messagingSenderId"), used for keyless sign-in.
+  PROJECT_NUMBER: ${{ vars.FIREBASE_PROJECT_NUMBER || '1008791450524' }}
   REGION: asia-south1
   WEB_SITE: ${{ vars.NAAMDEV_WEB_SITE || 'naamdevseets' }}
   ADMIN_SITE: ${{ vars.NAAMDEV_ADMIN_SITE || 'naamdevseets-admin' }}
@@ -46,20 +49,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the service account secret
+      # Sign in to Google Cloud: with a service-account key file (FIREBASE_SERVICE_ACCOUNT) when one is
+      # stored, otherwise keyless through Workload Identity Federation (one-time Cloud Shell setup in
+      # docs/DEPLOYMENT.md) — no long-lived key at all.
+      - name: Choose how to sign in to Google Cloud
+        id: cred
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          if [ -z "$SA" ]; then
-            echo "::error::Add the FIREBASE_SERVICE_ACCOUNT repository secret first (see naamdev-sweets/docs/DEPLOYMENT.md)."
-            exit 1
+          if printf %s "$SA" | jq -e '.type == "service_account"' >/dev/null 2>&1; then
+            echo "mode=key" >> "$GITHUB_OUTPUT"; echo "Using the service-account key."
+          else
+            [ -n "$SA" ] && echo "::warning::FIREBASE_SERVICE_ACCOUNT isn't a key file (JSON) — using keyless sign-in instead."
+            echo "mode=keyless" >> "$GITHUB_OUTPUT"; echo "Using keyless sign-in (Workload Identity Federation)."
           fi
 
       - uses: google-github-actions/auth@v2
-        id: gauth
+        if: steps.cred.outputs.mode == 'key'
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/auth@v2
+        id: keyless
+        if: steps.cred.outputs.mode == 'keyless'
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deploy@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Explain keyless sign-in setup
+        if: failure() && steps.cred.outputs.mode == 'keyless'
+        run: |
+          echo "::error::Keyless sign-in isn't set up yet. Run the one-time Cloud Shell command in naamdev-sweets/docs/DEPLOYMENT.md, wait 2 minutes, then run this workflow again."
+          exit 1
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -226,13 +249,10 @@ jobs:
             echo "::error::Demo logins need the NAAMDEV_ADMIN_PASSWORD secret (they use the same private password)."
             exit 1
           fi
-          NODE_ENV=production FIREBASE_PROJECT_ID="$PROJECT_ID" SEED_DEMO_ACCOUNTS=false \
-            GOOGLE_APPLICATION_CREDENTIALS="${{ steps.gauth.outputs.credentials_file_path }}" \
-            pnpm --filter @naamdev/db seed
+          # GOOGLE_APPLICATION_CREDENTIALS comes from the sign-in step (key file or keyless).
+          NODE_ENV=production FIREBASE_PROJECT_ID="$PROJECT_ID" pnpm --filter @naamdev/db seed
 
       - name: Firebase Hosting, Firestore rules & indexes, Storage rules
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.gauth.outputs.credentials_file_path }}
         run: |
           for site in "$ADMIN_SITE" "$PARTNER_SITE"; do
             npx firebase hosting:sites:get "$site" --project "$PROJECT_ID" >/dev/null 2>&1 || \

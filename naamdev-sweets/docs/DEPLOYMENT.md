@@ -30,6 +30,11 @@ A GitHub Actions workflow does the whole deploy; you only add three secrets and 
    Owner is the simplest choice because the workflow enables APIs, creates the Firestore database,
    a runtime service account, secrets, Cloud Run services, Hosting sites and the scheduler. Delete the
    key (or downgrade the account) whenever you like; deploys need it again only when you re-run them.
+   **No key file? (easier on a phone)** Skip the key and allow GitHub to deploy keylessly instead: open
+   [Cloud Shell](https://console.cloud.google.com/?cloudshell=true&project=naamdevseets), paste the
+   contents of `scripts/setup-keyless-deploy.sh` and press Enter (click *Authorize* if asked). The
+   workflow uses a key only when `FIREBASE_SERVICE_ACCOUNT` holds a real key file; otherwise it signs in
+   keylessly (Workload Identity Federation).
 3. **Run the deploy** — GitHub → Actions → **NAAMDEV deploy to Firebase** → *Run workflow*.
    Leave *load the sample sweets catalogue* ticked on the first run if you want a ready-made menu to
    edit; untick it to start with empty categories.
