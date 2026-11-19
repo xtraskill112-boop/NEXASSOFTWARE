@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# NAAMDEV SWEETS API (Cloud Run) — build from the monorepo root:
+# NAAMDEV SWEETS API — build from the monorepo root (Render builds it the same way):
 #   docker build -f infra/docker/api.Dockerfile -t naamdev-api .
-# Data lives in Firestore; credentials come from the Cloud Run service account (no keys in the image).
+# Data lives in Firestore; credentials come from the environment (FIREBASE_SERVICE_ACCOUNT_BASE64 on
+# Render, or the service account on Google Cloud) — never baked into the image.
 
 FROM node:22-bookworm AS build
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true
@@ -11,7 +12,7 @@ COPY . .
 # Optional extra CA (corporate proxies): docker build --secret id=extra_ca,src=/path/ca.crt …
 RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -f /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi && \
-    pnpm install --frozen-lockfile && \
+    pnpm install --frozen-lockfile --filter "@naamdev/api..." && \
     pnpm --filter @naamdev/api build && \
     pnpm --filter @naamdev/api deploy --legacy --prod /out && \
     cp -r apps/api/dist apps/api/public /out/

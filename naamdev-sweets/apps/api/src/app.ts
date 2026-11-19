@@ -23,6 +23,7 @@ import { checkoutRouter, ordersRouter, paymentsRouter, razorpayWebhook } from ".
 import { reviewsRouter } from "./modules/reviews/routes";
 import { supportRouter } from "./modules/support/routes";
 import { customerUploadsRouter } from "./modules/uploads/routes";
+import { readPublicMedia } from "./modules/uploads/storage";
 
 export function createApp() {
   const app = express();
@@ -37,13 +38,25 @@ export function createApp() {
   );
   // Requests authenticate with a bearer token, not cookies, so CORS never needs credentials.
   app.use(cors({ origin: allowedOrigins, exposedHeaders: [CART_TOKEN_HEADER], maxAge: 600 }));
-  if (!isTest) app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/health" || req.url?.startsWith("/static") === true } }));
+  if (!isTest) app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/health" || req.url === "/healthz" || req.url?.startsWith("/static") === true || req.url?.startsWith("/media/") === true } }));
 
   // Responses wait for notifications/live updates the request started (CPU is throttled after a response on Cloud Run).
   app.use(finishBackgroundWork());
 
   // Seeded catalogue artwork (served through Firebase Hosting's /static/** rewrite).
   app.use("/static", express.static(path.resolve(process.cwd(), "public"), { maxAge: "7d", immutable: false }));
+
+  // Liveness without a database read (keep-alive pings and the host's health check).
+  app.get("/healthz", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+
+  // Uploaded photos stored in Firestore (free plan has no Cloud Storage). Immutable, so cached long.
+  app.get("/media/:file", async (req, res) => {
+    const { data, contentType } = await readPublicMedia(String(req.params.file).replace(/\.[a-z0-9]+$/i, ""));
+    res.set({ "Content-Type": contentType, "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" });
+    res.send(data);
+  });
 
   app.get("/health", async (_req, res) => {
     try {

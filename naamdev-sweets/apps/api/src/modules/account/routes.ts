@@ -1,3 +1,4 @@
+import { isOurUpload } from "../uploads/storage";
 import { Router } from "express";
 import { z } from "zod";
 import {
@@ -48,8 +49,6 @@ accountRouter.patch("/phone", async (req, res) => {
   res.json({ user: await currentUserPayload(u.id) });
 });
 
-const isOurUpload = (url: string) =>
-  url.startsWith("https://firebasestorage.googleapis.com/") || (!!process.env.FIREBASE_STORAGE_EMULATOR_HOST && url.startsWith(`http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}/`));
 
 accountRouter.patch("/avatar", async (req, res) => {
   const { url } = body(req, z.object({ url: z.string().max(800).nullable() }));

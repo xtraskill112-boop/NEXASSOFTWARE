@@ -14,6 +14,8 @@ const schema = z.object({
   PORT: z.coerce.number().default(4000),
   // Firebase: on Cloud Run the project and credentials come from the runtime service account.
   FIREBASE_PROJECT_ID: z.string().optional(),
+  // Public URL of this API (used for uploaded-photo links). Render sets RENDER_EXTERNAL_URL itself.
+  API_PUBLIC_URL: z.string().url().optional(),
   APP_URL_WEB: z.string().url().default("http://localhost:3000"),
   APP_URL_ADMIN: z.string().url().default("http://localhost:3001"),
   APP_URL_DELIVERY: z.string().url().default("http://localhost:3002"),
@@ -74,7 +76,7 @@ export const isTest = env.NODE_ENV === "test";
 export const integrations = {
   razorpay: Boolean(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET),
   razorpayWebhook: Boolean(env.RAZORPAY_WEBHOOK_SECRET),
-  storage: true,
+  storage: true, // Firestore-backed by default (free plan); Cloud Storage with STORAGE_DRIVER=firebase
   email: env.EMAIL_PROVIDER === "smtp" ? Boolean(env.SMTP_HOST) : env.EMAIL_PROVIDER === "console",
   sms:
     env.SMS_PROVIDER === "msg91"

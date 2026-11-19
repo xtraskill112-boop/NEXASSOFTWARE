@@ -21,7 +21,13 @@ const TYPES = {
 };
 const glob = (g) => new RegExp("^" + g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\u0000/g, ".*") + "$");
 const rewrites = (site.rewrites ?? []).map((r) => ({ re: glob(r.source), destination: r.destination }));
-const headerRules = (site.headers ?? []).map((h) => ({ re: glob(h.source), headers: h.headers }));
+// Local testing only: extra CSP sources (the local API and Firebase emulators), e.g. CSP_EXTRA="http://localhost:4000".
+const extra = process.env.CSP_EXTRA ?? "";
+const withExtra = (h) =>
+  extra && h.key === "Content-Security-Policy"
+    ? { ...h, value: h.value.replace(/(connect-src|img-src) ([^;]*)/g, (_m, d, v) => `${d} ${v} ${extra}`) }
+    : h;
+const headerRules = (site.headers ?? []).map((h) => ({ re: glob(h.source), headers: h.headers.map(withExtra) }));
 
 const file = (p) => {
   const f = path.join(dir, p);

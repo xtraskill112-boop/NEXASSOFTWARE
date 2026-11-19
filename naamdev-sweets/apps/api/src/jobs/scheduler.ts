@@ -28,9 +28,12 @@ interface Job {
   run: () => Promise<unknown>;
 }
 
+// Each run costs Firestore reads, so on the free plan offers are checked once a minute (JOBS_OFFER_EVERY_MS).
+const OFFER_EVERY_MS = Number(process.env.JOBS_OFFER_EVERY_MS ?? 15_000);
+
 const JOBS: Job[] = [
   { name: "expire-unpaid-orders", everyMs: 60_000, run: expireUnpaidOrders },
-  { name: "expire-delivery-offers", everyMs: 15_000, run: expireOffers },
+  { name: "expire-delivery-offers", everyMs: OFFER_EVERY_MS, run: expireOffers },
   { name: "expire-batches", everyMs: 10 * 60_000, run: expireBatches },
   { name: "inventory-alerts", everyMs: 30 * 60_000, run: inventoryAlerts },
   { name: "cleanup", everyMs: 6 * 3600_000, run: cleanup },
@@ -46,7 +49,18 @@ interface JobRun {
  * Claims a job through a lease document (jobRuns/{name}) so overlapping ticks — or several API
  * instances — never run the same job at once, and a job only runs when it is due.
  */
+// With a single API instance (the free Render setup) jobs are coordinated in memory, which saves
+// Firestore reads and writes; with several instances a lease document guards each job.
+const USE_LEASES = process.env.JOBS_LEASES !== "false";
+const lastRunInMemory = new Map<string, number>();
+
 async function claim(job: Job, leaseMs: number): Promise<boolean> {
+  if (!USE_LEASES) {
+    const last = lastRunInMemory.get(job.name) ?? 0;
+    if (Date.now() - last < job.everyMs - 5_000) return false;
+    lastRunInMemory.set(job.name, Date.now());
+    return true;
+  }
   const ref = db.collection(C.jobRuns).doc(job.name);
   return db.runTransaction(async (tx) => {
     const now = Date.now();
@@ -64,11 +78,11 @@ async function runJob(job: Job, leaseMs = 5 * 60_000) {
   const ref = db.collection(C.jobRuns).doc(job.name);
   try {
     const result = await job.run();
-    await ref.set({ lockedUntil: null, lastRunAt: new Date(), lastError: null }, { merge: true });
+    if (USE_LEASES) await ref.set({ lockedUntil: null, lastRunAt: new Date(), lastError: null }, { merge: true });
     return { job: job.name, result: result ?? null };
   } catch (err) {
     logger.error({ err, job: job.name }, "job failed");
-    await ref.set({ lockedUntil: null, lastRunAt: new Date(), lastError: String((err as Error)?.message ?? err).slice(0, 500) }, { merge: true });
+    if (USE_LEASES) await ref.set({ lockedUntil: null, lastRunAt: new Date(), lastError: String((err as Error)?.message ?? err).slice(0, 500) }, { merge: true });
     return { job: job.name, error: true };
   }
 }

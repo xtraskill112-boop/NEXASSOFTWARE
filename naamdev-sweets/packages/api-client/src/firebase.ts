@@ -5,6 +5,7 @@ import {
   verifyBeforeUpdateEmail, type Auth, type User,
 } from "firebase/auth";
 import { connectFirestoreEmulator, doc, getFirestore, onSnapshot, type Firestore } from "firebase/firestore";
+import { API_URL } from "./client";
 
 /**
  * Firebase web configuration. These values identify the project to the Firebase SDK; they are
@@ -175,5 +176,7 @@ export function nativeAuthHandoff(): string | null {
     apiKey: firebaseConfig.apiKey,
     refreshToken: user.refreshToken,
     tokenUrl: AUTH_EMULATOR ? `http://${AUTH_EMULATOR}/securetoken.googleapis.com/v1/token` : "https://securetoken.googleapis.com/v1/token",
+    // Locations go to the API server (the partner site itself is static files).
+    apiUrl: API_URL,
   });
 }

@@ -28,6 +28,8 @@ export const C = {
   refunds: "refunds",
   returns: "returns",
   upiReferences: "upiReferences",
+  media: "media",
+  privateMedia: "privateMedia",
   webhookEvents: "webhookEvents",
   coupons: "coupons",
   couponUsages: "couponUsages",

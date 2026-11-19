@@ -20,12 +20,15 @@ export interface CatalogSnapshot {
 }
 
 const META = () => db.collection("meta").doc("catalog");
-const CHECK_EVERY_MS = 5_000;
-const MAX_PRODUCTS_AGE_MS = 10 * 60_000;
+// How often other instances' changes are looked for, and the safety full reload. A single instance
+// (the free Render setup) sees its own changes immediately, so it can check rarely and save reads.
+const CHECK_EVERY_MS = Number(process.env.CATALOG_CHECK_MS ?? 5_000);
+const MAX_AGE_MS = Number(process.env.CATALOG_MAX_AGE_MS ?? 10 * 60_000);
 
 let snapshot: CatalogSnapshot | null = null;
 let versions = { products: -1, stock: -1 };
 let productsLoadedAt = 0;
+let stockLoadedAt = 0;
 let lastCheck = 0;
 let loading: Promise<CatalogSnapshot> | null = null;
 
@@ -35,14 +38,25 @@ async function refresh(): Promise<CatalogSnapshot> {
   let products = snapshot?.products ?? [];
   let categories = snapshot?.categories ?? [];
   let stockList = snapshot ? [...snapshot.stock.values()] : [];
-  if (!snapshot || v.products !== versions.products || Date.now() - productsLoadedAt > MAX_PRODUCTS_AGE_MS) {
+  if (!snapshot || v.products !== versions.products || Date.now() - productsLoadedAt > MAX_AGE_MS) {
     [products, categories] = await Promise.all([
       getDocs<Product>(db.collection(C.products).where("deletedAt", "==", null)),
       getDocs<Category>(db.collection(C.categories)),
     ]);
     productsLoadedAt = Date.now();
   }
-  if (!snapshot || v.stock !== versions.stock) stockList = await getDocs<Inventory>(db.collection(C.inventory));
+  const started = Date.now();
+  if (!snapshot || Date.now() - stockLoadedAt > MAX_AGE_MS) {
+    stockList = await getDocs<Inventory>(db.collection(C.inventory));
+    stockLoadedAt = started;
+  } else if (v.stock !== versions.stock) {
+    // Only the stock records that changed since the last load (one read each, not the whole table).
+    const changed = await getDocs<Inventory>(db.collection(C.inventory).where("updatedAt", ">", new Date(stockLoadedAt - 60_000)));
+    const merged = new Map(stockList.map((x) => [x.id, x]));
+    for (const x of changed) merged.set(x.id, x);
+    stockList = [...merged.values()];
+    stockLoadedAt = started;
+  }
   versions = v;
   products.sort((a, b) => +a.createdAt - +b.createdAt);
   categories.sort((a, b) => a.sortOrder - b.sortOrder);
@@ -94,4 +108,6 @@ export function bumpCatalog(kind: Kind | Kind[], tx?: Transaction) {
 export function invalidateCatalog() {
   lastCheck = 0;
   versions = { products: -1, stock: -1 };
+  stockLoadedAt = 0;
+  productsLoadedAt = 0;
 }

@@ -52,6 +52,7 @@ public class TrackingService extends Service implements LocationListener {
     private static volatile String apiKey;
     private static volatile String refreshToken;
     private static volatile String tokenUrl = TOKEN_URL;
+    private static volatile String apiUrl; // where /api/v1/delivery/location lives (null = the site origin)
     private static String idToken;
     private static long idTokenExpiresAt;
 
@@ -77,7 +78,9 @@ public class TrackingService extends Service implements LocationListener {
             String refresh = o.optString("refreshToken", "");
             String url = o.optString("tokenUrl", TOKEN_URL);
             boolean urlOk = TOKEN_URL.equals(url) || (BuildConfig.DEBUG && url.startsWith("http://") && url.endsWith("/securetoken.googleapis.com/v1/token"));
-            if (key.isEmpty() || refresh.isEmpty() || !urlOk) return false;
+            String api = ShellConfig.originOf(o.optString("apiUrl", ""));
+            boolean apiOk = api.isEmpty() || api.startsWith("https://") || BuildConfig.DEBUG;
+            if (key.isEmpty() || refresh.isEmpty() || !urlOk || !apiOk) return false;
             if (!refresh.equals(refreshToken)) {
                 idToken = null;
                 idTokenExpiresAt = 0;
@@ -85,6 +88,7 @@ public class TrackingService extends Service implements LocationListener {
             apiKey = key;
             refreshToken = refresh;
             tokenUrl = url;
+            apiUrl = api.isEmpty() ? null : api;
             return true;
         } catch (Exception e) {
             return false;
@@ -285,7 +289,8 @@ public class TrackingService extends Service implements LocationListener {
     private int post(byte[] bytes, String token) throws Exception {
         HttpURLConnection c = null;
         try {
-            c = (HttpURLConnection) new URL(origin + "/api/v1/delivery/location").openConnection();
+            String base = apiUrl != null ? apiUrl : origin;
+            c = (HttpURLConnection) new URL(base + "/api/v1/delivery/location").openConnection();
             c.setRequestMethod("POST");
             c.setConnectTimeout(10_000);
             c.setReadTimeout(10_000);

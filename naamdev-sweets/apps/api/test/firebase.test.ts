@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import sharp from "sharp";
 import { auth as firebaseAuth, bucket, C, db, getDoc, getDocs, type DeliveryZone, type PartnerEarning } from "@naamdev/db";
@@ -83,7 +83,50 @@ describe("customer privacy", () => {
   });
 });
 
-describe("Firebase Storage uploads", () => {
+describe("uploads on the free plan (stored in Firestore)", () => {
+  it("stores photos in Firestore, serves them from /media and rejects videos", async () => {
+    const { c } = await newCustomer("Free Uploader");
+    const r = await c.upload("/api/v1/uploads/avatar", await png(), "me.png");
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.file.url).toMatch(/^http:\/\/localhost:\d+\/media\/[A-Za-z0-9]+\.webp$/);
+    const path = new URL(r.body.file.url).pathname;
+    const img = await request(app).get(path);
+    expect(img.status).toBe(200);
+    expect(img.headers["content-type"]).toBe("image/webp");
+    expect(img.headers["cache-control"]).toMatch(/immutable/);
+    expect((await request(app).get("/media/doesnotexist123.webp")).status).toBe(404);
+    expect((await c.patch("/api/v1/account/avatar", { url: r.body.file.url })).body.user.avatarUrl).toBe(r.body.file.url);
+    const admin = await loginAs("admin@naamdevsweets.local");
+    const video = await admin.upload("/api/v1/admin/uploads/video", Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from("ftypmp42"), Buffer.alloc(64)]), "clip.mp4");
+    expect(video.status).toBe(400);
+    expect(video.body.error.code).toBe("VIDEO_UNAVAILABLE");
+  });
+
+  it("keeps KYC documents private in Firestore, readable only by partners.manage", async () => {
+    const rider = new Client("delivery");
+    rider.token = (await firebaseSignUp(uniqueEmail("kycfree"), CUSTOMER_PASSWORD)).idToken;
+    expect((await rider.post("/api/v1/delivery/register", { name: "KYC Free", phone: uniquePhone(), city: "Jaipur", vehicleType: "SCOOTER" })).status).toBe(201);
+    expect((await rider.upload("/api/v1/delivery/documents", await png(), "pan.png", { type: "PAN" })).status).toBe(201);
+    const partnerId = (await rider.get("/api/v1/delivery/me")).body.partner.id as string;
+    const stored = (await db.collection(C.partners).doc(partnerId).collection("documents").doc("PAN").get()).data()!;
+    expect(stored.storageKey).toMatch(/^fs:/);
+    const admin = await loginAs("admin@naamdevsweets.local");
+    const doc = await admin.get(`/api/v1/admin/people/partners/${partnerId}/documents/PAN/file`);
+    expect(doc.status).toBe(200);
+    expect(doc.headers["content-type"]).toBe("image/jpeg");
+    // Private files have no public address.
+    expect((await request(app).get(`/media/${stored.storageKey.slice(3)}.jpg`)).status).toBe(404);
+  });
+});
+
+describe("Cloud Storage uploads (paid plan, STORAGE_DRIVER=firebase)", () => {
+  beforeAll(() => {
+    process.env.STORAGE_DRIVER = "firebase";
+  });
+  afterAll(() => {
+    delete process.env.STORAGE_DRIVER;
+  });
+
   it("stores public images with a download URL and rejects non-images", async () => {
     const { c } = await newCustomer("Uploader");
     const r = await c.upload("/api/v1/uploads/avatar", await png(), "me.png");
