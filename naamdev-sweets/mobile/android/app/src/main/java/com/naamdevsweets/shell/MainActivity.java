@@ -737,9 +737,23 @@ public class MainActivity extends Activity {
             main.post(MainActivity.this::requestTracking);
         }
 
+        /** Hands the signed-in rider's Firebase credentials to the tracking service (memory only). */
+        @JavascriptInterface
+        public boolean setAuth(String json) {
+            if (!fromSite() || !ShellConfig.isPartner() || json == null || json.length() > 8192) return false;
+            return TrackingService.setAuth(json);
+        }
+
         @JavascriptInterface
         public void stopTracking() {
             if (!fromSite()) return;
+            main.post(MainActivity.this::stopTrackingService);
+        }
+
+        @JavascriptInterface
+        public void signedOut() {
+            if (!fromSite()) return;
+            TrackingService.clearAuth();
             main.post(MainActivity.this::stopTrackingService);
         }
 

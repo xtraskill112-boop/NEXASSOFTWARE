@@ -1,46 +1,53 @@
 "use client";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { connectRealtime, type Socket } from "@naamdev/api-client";
-import { SOCKET_EVENTS } from "@naamdev/shared";
-import { api, SOCKET_URL } from "./api";
+import { watchLive } from "@naamdev/api-client/firebase";
+import { api } from "./api";
 import { useAuth } from "./auth";
 
 interface RealtimeCtx {
-  socket: Socket | null;
   unread: number;
   setUnread: (n: number) => void;
 }
-const Ctx = createContext<RealtimeCtx>({ socket: null, unread: 0, setUnread: () => undefined });
+const Ctx = createContext<RealtimeCtx>({ unread: 0, setUnread: () => undefined });
 
+/** New in-app notifications arrive through the user's Firestore live document. */
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [unread, setUnread] = useState(0);
-  const ref = useRef<Socket | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    let cancelled = false;
     api.get<{ unread: number }>("/account/notifications", { query: { pageSize: 1 } }).then((r) => setUnread(r.unread)).catch(() => undefined);
-    connectRealtime(api, SOCKET_URL).then((s) => {
-      if (cancelled) return s.disconnect();
-      ref.current = s;
-      setSocket(s);
-      s.on(SOCKET_EVENTS.notification, (n: { title: string; body: string }) => {
+    let seen: number | null = null;
+    return watchLive("liveUsers", user.id, (data) => {
+      const version = Number(data?.version ?? 0);
+      if (seen !== null && version > seen) {
+        const last = data?.last as { title?: string; body?: string } | undefined;
         setUnread((u) => u + 1);
-        toast(n.title, { description: n.body, icon: "🔔" });
-      });
+        if (last?.title) toast(last.title, { description: last.body, icon: "🔔" });
+      }
+      seen = version;
     });
-    return () => {
-      cancelled = true;
-      ref.current?.disconnect();
-      ref.current = null;
-      setSocket(null);
-    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <Ctx.Provider value={{ socket, unread, setUnread }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ unread, setUnread }}>{children}</Ctx.Provider>;
 }
 
 export const useRealtime = () => useContext(Ctx);
+
+/** Re-runs `onChange` whenever the order's live signal changes (status, rider position). */
+export function useOrderLive(orderId: string | null | undefined, onChange: (data: Record<string, unknown> | null) => void) {
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!orderId || !user) return;
+    let first = true;
+    return watchLive("liveOrders", orderId, (data) => {
+      if (first) {
+        first = false;
+        return;
+      }
+      onChange(data);
+    });
+  }, [orderId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+}

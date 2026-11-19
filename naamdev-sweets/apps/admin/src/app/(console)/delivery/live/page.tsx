@@ -1,31 +1,26 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Bike, Store } from "lucide-react";
-import { SOCKET_EVENTS, haversineKm } from "@naamdev/shared";
+import { haversineKm } from "@naamdev/shared";
 import { Badge, Card, EmptyState } from "@naamdev/ui";
 import { Guard, PageHeader } from "@/components/kit";
 import { dt } from "@/lib/api";
-import { useAdminRealtime } from "@/lib/realtime";
 import { useResource } from "@/lib/use-resource";
 
 interface Live { partners: { id: string; name: string; phone: string | null; lat: number | null; lng: number | null; lastLocationAt: string | null; vehicleType: string; assignments: { id: string; status: string; orderId: string; orderNumber: string }[] }[]; store: { lat: number; lng: number; name: string } | null }
 
 /** Live fleet view: online partners plotted to scale around the kitchen using real GPS. */
 export default function LiveDelivery() {
-  const { socket } = useAdminRealtime();
   const { data, reload } = useResource<Live>("/admin/people/partners/live");
-  const [pos, setPos] = useState<Record<string, { lat: number; lng: number; at: string }>>({});
+  // Riders report GPS every few seconds; the board refreshes every 10 s.
   useEffect(() => {
-    if (!socket) return;
-    const h = (p: { partnerId: string; lat: number; lng: number; at: string }) => setPos((x) => ({ ...x, [p.partnerId]: p }));
-    socket.on(SOCKET_EVENTS.partnerLocation, h);
-    const id = setInterval(() => void reload(), 30000);
-    return () => { socket.off(SOCKET_EVENTS.partnerLocation, h); clearInterval(id); };
-  }, [socket, reload]);
+    const id = setInterval(() => void reload(), 10_000);
+    return () => clearInterval(id);
+  }, [reload]);
   if (!data) return null;
   const store = data.store;
-  const partners = data.partners.map((p) => ({ ...p, lat: pos[p.id]?.lat ?? p.lat, lng: pos[p.id]?.lng ?? p.lng, lastLocationAt: pos[p.id]?.at ?? p.lastLocationAt })).filter((p) => p.lat != null && p.lng != null);
+  const partners = data.partners.filter((p) => p.lat != null && p.lng != null);
   const R = Math.max(2, ...partners.map((p) => (store ? haversineKm(store, { lat: p.lat!, lng: p.lng! }) : 0))) * 1.15;
   const place = (lat: number, lng: number) => {
     if (!store) return { x: 50, y: 50 };
@@ -34,7 +29,7 @@ export default function LiveDelivery() {
   };
   return (
     <Guard any={["delivery.manage"]}>
-      <PageHeader title="Live delivery" subtitle={`${data.partners.length} partner(s) online · positions update in real time`} />
+      <PageHeader title="Live delivery" subtitle={`${data.partners.length} partner(s) online · positions refresh every 10 seconds`} />
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <Card className="relative aspect-square overflow-hidden bg-[radial-gradient(circle,var(--nd-surface-2)_0%,var(--nd-surface)_70%)] xl:aspect-[4/3]">
           {[0.25, 0.5, 0.75, 1].map((f) => <div key={f} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-line" style={{ width: `${f * 92}%`, height: `${f * 92}%` }}><span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-surface px-1 text-[10px] text-muted">{(R * f).toFixed(1)} km</span></div>)}
@@ -55,7 +50,7 @@ export default function LiveDelivery() {
         <div className="space-y-3">
           {data.partners.length === 0 ? <EmptyState icon={<Bike className="h-7 w-7" />} title="No partners online" description="Partners appear here when they go online in the delivery app." /> : data.partners.map((p) => (
             <Card key={p.id} className="p-4">
-              <div className="flex items-center justify-between"><Link href={`/delivery/partners/${p.id}`} className="font-semibold text-ink hover:underline">{p.name}</Link><span className="text-xs text-muted">GPS {dt(pos[p.id]?.at ?? p.lastLocationAt)}</span></div>
+              <div className="flex items-center justify-between"><Link href={`/delivery/partners/${p.id}`} className="font-semibold text-ink hover:underline">{p.name}</Link><span className="text-xs text-muted">GPS {dt(p.lastLocationAt)}</span></div>
               <p className="text-xs text-muted">{p.phone} · {p.vehicleType.toLowerCase()}</p>
               <div className="mt-2 flex flex-wrap gap-1">{p.assignments.length === 0 ? <Badge tone="success">Available</Badge> : p.assignments.map((a) => <Link key={a.id} href={`/orders/${a.orderId}`}><Badge tone="brand">{a.orderNumber} · {a.status.toLowerCase().replace(/_/g, " ")}</Badge></Link>)}</div>
             </Card>

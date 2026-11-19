@@ -1,16 +1,11 @@
 "use client";
+import { firebaseApp, firebaseConfig } from "@naamdev/api-client/firebase";
 import { api, errorMessage } from "./api";
 
-const cfg = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
+// Web push needs a VAPID key from Firebase console → Project settings → Cloud Messaging → Web Push certificates.
 const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 
-export const pushSupported = () =>
-  typeof window !== "undefined" && "serviceWorker" in navigator && "Notification" in window && !!cfg.apiKey && !!cfg.projectId && !!vapidKey;
+export const pushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "Notification" in window && !!vapidKey;
 
 /** Registers this browser for Firebase Cloud Messaging and stores the token on the account. */
 export async function enablePush(): Promise<string> {
@@ -18,11 +13,11 @@ export async function enablePush(): Promise<string> {
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return "Notifications are blocked in your browser settings.";
-    const qs = new URLSearchParams(cfg as Record<string, string>).toString();
+    const { apiKey, projectId, messagingSenderId, appId } = firebaseConfig;
+    const qs = new URLSearchParams({ apiKey, projectId, messagingSenderId, appId }).toString();
     const reg = await navigator.serviceWorker.register(`/firebase-messaging-sw.js?${qs}`);
-    const [{ initializeApp, getApps }, { getMessaging, getToken }] = await Promise.all([import("firebase/app"), import("firebase/messaging")]);
-    const app = getApps()[0] ?? initializeApp(cfg as Record<string, string>);
-    const token = await getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration: reg });
+    const { getMessaging, getToken } = await import("firebase/messaging");
+    const token = await getToken(getMessaging(firebaseApp()), { vapidKey, serviceWorkerRegistration: reg });
     if (!token) return "Couldn't get a push token from your browser.";
     await api.post("/account/devices", { token, platform: "web" });
     return "Push notifications enabled on this device ✓";

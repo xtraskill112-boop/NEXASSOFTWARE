@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Clock, FileText, HelpCircle, MapPin, PackageX, RotateCcw, Star, Undo2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import type { Order, OrderActions, Tracking } from "@naamdev/api-client";
-import { CANCELLATION_REASONS, ORDER_STATUS_META, RETURN_REASONS, SOCKET_EVENTS, formatINR } from "@naamdev/shared";
+import { CANCELLATION_REASONS, ORDER_STATUS_META, RETURN_REASONS, formatINR, type OrderStatus } from "@naamdev/shared";
 import { BrandLoader, Button, Card, ErrorState, Field, InlineAlert, Modal, OrderStatusBadge, PaymentStatusBadge, Select, Stars, Textarea, buttonStyles } from "@naamdev/ui";
 import { ProductImage } from "@/components/common/product-image";
 import { payWithRazorpay } from "@/components/checkout/razorpay";
@@ -13,12 +13,11 @@ import { TrackingCard } from "@/components/orders/tracking";
 import { api, errorMessage } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
-import { useRealtime } from "@/lib/realtime";
+import { useOrderLive } from "@/lib/realtime";
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { socket } = useRealtime();
   const { refresh: refreshCart } = useCart();
   const { t, locale } = useI18n();
   const [order, setOrder] = useState<Order | null>(null);
@@ -41,19 +40,20 @@ export default function OrderDetailPage() {
   }, [id]);
   useEffect(() => { void load(); }, [load]);
 
-  // Realtime: status changes and live rider location.
-  useEffect(() => {
-    if (!socket) return;
-    socket.emit(SOCKET_EVENTS.subscribeOrder, { orderId: id });
-    const onStatus = (p: { orderId: string; label: string }) => { if (p.orderId === id) { void load(); toast(p.label, { icon: "📦" }); } };
-    const onLoc = (p: { orderId: string; lat: number; lng: number; at: string; etaMinutes: number | null }) => {
-      if (p.orderId !== id) return;
-      setTracking((tr) => tr ? { ...tr, partnerLocation: { lat: p.lat, lng: p.lng, heading: null, at: p.at }, etaMinutes: p.etaMinutes, path: [...tr.path, { lat: p.lat, lng: p.lng }].slice(-60) } : tr);
-    };
-    socket.on(SOCKET_EVENTS.orderStatus, onStatus);
-    socket.on(SOCKET_EVENTS.trackingLocation, onLoc);
-    return () => { socket.emit(SOCKET_EVENTS.unsubscribeOrder, { orderId: id }); socket.off(SOCKET_EVENTS.orderStatus, onStatus); socket.off(SOCKET_EVENTS.trackingLocation, onLoc); };
-  }, [socket, id, load]);
+  // Realtime (Firestore live signal): status changes and the rider's position.
+  useOrderLive(id, (live) => {
+    if (!live) return;
+    if (live.event === "location") {
+      const p = live.location as { lat: number; lng: number; at?: { toDate?: () => Date } | string; etaMinutes: number | null } | undefined;
+      if (!p) return;
+      const at = typeof p.at === "string" ? p.at : (p.at?.toDate?.() ?? new Date()).toISOString();
+      setTracking((tr) => (tr ? { ...tr, partnerLocation: { lat: p.lat, lng: p.lng, heading: null, at }, etaMinutes: p.etaMinutes, path: [...tr.path, { lat: p.lat, lng: p.lng }].slice(-60) } : tr));
+      return;
+    }
+    const status = live.status as OrderStatus | undefined;
+    if (status && status !== order?.status) toast(ORDER_STATUS_META[status]?.label ?? "Order updated", { icon: "📦" });
+    void load();
+  });
 
   if (error) return <ErrorState description={error} action={<Button onClick={() => router.push("/account/orders")}>Back to orders</Button>} />;
   if (!order || !actions) return <BrandLoader className="py-24" />;

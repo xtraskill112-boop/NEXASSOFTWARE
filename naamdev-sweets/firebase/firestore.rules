@@ -9,7 +9,9 @@ service cloud.firestore {
 
     // Order status / rider position for the customer, the assigned rider and staff.
     match /liveOrders/{orderId} {
-      allow read: if signedIn() && (resource.data.userId == request.auth.uid
+      // A listener may attach before the first signal is written (the document doesn't exist yet).
+      allow read: if signedIn() && (resource == null
+        || resource.data.userId == request.auth.uid
         || resource.data.partnerId == request.auth.uid
         || isStaff());
     }

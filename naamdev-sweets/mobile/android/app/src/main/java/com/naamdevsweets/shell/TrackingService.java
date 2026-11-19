@@ -14,7 +14,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.HandlerThread;
 import android.os.IBinder;
-import android.webkit.CookieManager;
 
 import org.json.JSONObject;
 
@@ -22,12 +21,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
  * Partner build only: a foreground service that keeps sending the rider's GPS position to
  * POST /api/v1/delivery/location while they are online — also while they navigate in another app.
- * It reuses the partner site's session cookie and CSRF token, exactly like the web page does.
+ * It authenticates like the web page: a Firebase ID token as a bearer token. The partner site hands
+ * over the signed-in rider's Firebase refresh token (setAuth), and the service exchanges it for
+ * short-lived ID tokens with Firebase's secure-token endpoint, so tracking keeps working for hours
+ * in the background. Nothing is written to disk.
  */
 public class TrackingService extends Service implements LocationListener {
     static final String EXTRA_ORIGIN = "origin";
@@ -43,6 +46,14 @@ public class TrackingService extends Service implements LocationListener {
     private static final long MIN_INTERVAL_MS = 10_000L; // same throttle as the web app: ≥10 s …
     private static final float MIN_DISTANCE_M = 30f;      // … or ≥30 m moved
     private static volatile String state = STATE_OFF;
+    static final String TOKEN_URL = "https://securetoken.googleapis.com/v1/token";
+
+    // Firebase credentials handed over by the partner site (memory only).
+    private static volatile String apiKey;
+    private static volatile String refreshToken;
+    private static volatile String tokenUrl = TOKEN_URL;
+    private static String idToken;
+    private static long idTokenExpiresAt;
 
     private LocationManager locationManager;
     private HandlerThread thread;
@@ -56,6 +67,73 @@ public class TrackingService extends Service implements LocationListener {
 
     static void setState(String s) {
         state = s;
+    }
+
+    /** Called from the partner site (JSON: apiKey, refreshToken, optional tokenUrl for the local emulator). */
+    static synchronized boolean setAuth(String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            String key = o.optString("apiKey", "");
+            String refresh = o.optString("refreshToken", "");
+            String url = o.optString("tokenUrl", TOKEN_URL);
+            boolean urlOk = TOKEN_URL.equals(url) || (BuildConfig.DEBUG && url.startsWith("http://") && url.endsWith("/securetoken.googleapis.com/v1/token"));
+            if (key.isEmpty() || refresh.isEmpty() || !urlOk) return false;
+            if (!refresh.equals(refreshToken)) {
+                idToken = null;
+                idTokenExpiresAt = 0;
+            }
+            apiKey = key;
+            refreshToken = refresh;
+            tokenUrl = url;
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    static synchronized void clearAuth() {
+        apiKey = null;
+        refreshToken = null;
+        idToken = null;
+        idTokenExpiresAt = 0;
+    }
+
+    static boolean hasAuth() {
+        return refreshToken != null && apiKey != null;
+    }
+
+    /** A valid Firebase ID token, refreshed when it is about to expire; null when signed out. */
+    private static synchronized String idToken(boolean forceRefresh) throws Exception {
+        if (!hasAuth()) return null;
+        if (!forceRefresh && idToken != null && System.currentTimeMillis() < idTokenExpiresAt - 120_000L) return idToken;
+        HttpURLConnection c = null;
+        try {
+            byte[] form = ("grant_type=refresh_token&refresh_token=" + URLEncoder.encode(refreshToken, "UTF-8")).getBytes(StandardCharsets.UTF_8);
+            c = (HttpURLConnection) new URL(tokenUrl + "?key=" + URLEncoder.encode(apiKey, "UTF-8")).openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(10_000);
+            c.setReadTimeout(10_000);
+            c.setDoOutput(true);
+            c.setFixedLengthStreamingMode(form.length);
+            c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            try (OutputStream os = c.getOutputStream()) {
+                os.write(form);
+            }
+            int code = c.getResponseCode();
+            if (code >= 400) {
+                drain(c.getErrorStream());
+                if (code == 400 || code == 401 || code == 403) clearAuth(); // revoked / password changed / disabled
+                return null;
+            }
+            JSONObject r = new JSONObject(readAll(c.getInputStream()));
+            idToken = r.getString("id_token");
+            idTokenExpiresAt = System.currentTimeMillis() + r.optLong("expires_in", 3600L) * 1000L;
+            String rotated = r.optString("refresh_token", "");
+            if (!rotated.isEmpty()) refreshToken = rotated;
+            return idToken;
+        } finally {
+            if (c != null) c.disconnect();
+        }
     }
 
     @Override
@@ -73,7 +151,6 @@ public class TrackingService extends Service implements LocationListener {
             return START_NOT_STICKY;
         }
         origin = o;
-        CookieManager.getInstance(); // initialise on the main thread before the worker uses it
         if (thread == null) {
             thread = new HandlerThread("naamdev-gps");
             thread.start();
@@ -173,11 +250,9 @@ public class TrackingService extends Service implements LocationListener {
     }
 
     private void send(Location loc) {
-        HttpURLConnection c = null;
         try {
-            String cookies = CookieManager.getInstance().getCookie(origin);
-            String csrf = cookieValue(cookies, "nds_csrf");
-            if (cookies == null || csrf == null) {
+            String token = idToken(false);
+            if (token == null) {
                 state = STATE_SIGNED_OUT;
                 stopSelf();
                 return;
@@ -190,6 +265,26 @@ public class TrackingService extends Service implements LocationListener {
             if (loc.hasAccuracy()) body.put("accuracy", clamp(loc.getAccuracy(), 0, 10_000));
             byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
 
+            int code = post(bytes, token);
+            if (code == 401) {
+                // The ID token may have been revoked early: refresh once before giving up.
+                token = idToken(true);
+                code = token == null ? 401 : post(bytes, token);
+            }
+            if (code == 401 || code == 403) {
+                state = STATE_SIGNED_OUT; // signed out, partner went offline or account suspended
+                stopSelf();
+            } else {
+                state = code < 400 ? STATE_OK : STATE_ERROR;
+            }
+        } catch (Exception e) {
+            state = STATE_WAITING; // no network right now; the next fix retries
+        }
+    }
+
+    private int post(byte[] bytes, String token) throws Exception {
+        HttpURLConnection c = null;
+        try {
             c = (HttpURLConnection) new URL(origin + "/api/v1/delivery/location").openConnection();
             c.setRequestMethod("POST");
             c.setConnectTimeout(10_000);
@@ -199,22 +294,14 @@ public class TrackingService extends Service implements LocationListener {
             c.setRequestProperty("Content-Type", "application/json");
             c.setRequestProperty("Accept", "application/json");
             c.setRequestProperty("x-nds-app", "delivery");
-            c.setRequestProperty("x-csrf-token", csrf);
-            c.setRequestProperty("Cookie", cookies);
+            c.setRequestProperty("Authorization", "Bearer " + token);
             c.setRequestProperty("User-Agent", "NaamdevPartner/" + BuildConfig.VERSION_NAME + " (Android " + Build.VERSION.RELEASE + ")");
             try (OutputStream os = c.getOutputStream()) {
                 os.write(bytes);
             }
             int code = c.getResponseCode();
             drain(code >= 400 ? c.getErrorStream() : c.getInputStream());
-            if (code == 401 || code == 403) {
-                state = STATE_SIGNED_OUT; // session ended or partner went offline/suspended
-                stopSelf();
-            } else {
-                state = code < 400 ? STATE_OK : STATE_ERROR;
-            }
-        } catch (Exception e) {
-            state = STATE_WAITING; // no network right now; the next fix retries
+            return code;
         } finally {
             if (c != null) c.disconnect();
         }
@@ -224,17 +311,14 @@ public class TrackingService extends Service implements LocationListener {
         return Math.max(min, Math.min(max, v));
     }
 
-    static String cookieValue(String cookies, String name) {
-        if (cookies == null) return null;
-        for (String part : cookies.split(";")) {
-            String p = part.trim();
-            int eq = p.indexOf('=');
-            if (eq > 0 && p.substring(0, eq).equals(name)) {
-                String v = p.substring(eq + 1);
-                return v.isEmpty() ? null : v;
-            }
+    private static String readAll(InputStream in) throws Exception {
+        try (InputStream is = in) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[2048];
+            int n;
+            while ((n = is.read(buf)) != -1) out.write(buf, 0, n);
+            return out.toString("UTF-8");
         }
-        return null;
     }
 
     private static void drain(InputStream in) {

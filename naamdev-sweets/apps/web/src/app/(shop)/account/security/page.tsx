@@ -1,82 +1,114 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Laptop, LogOut, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { LogOut, MailCheck, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Me } from "@naamdev/api-client";
-import { Badge, Button, Card, Field, InlineAlert, Input, Modal, OtpInput, Textarea } from "@naamdev/ui";
+import { authErrorMessage, changeEmail, changePassword, resendVerification, signOutFirebase } from "@naamdev/api-client/firebase";
+import { Badge, Button, Card, Field, InlineAlert, Input, Modal, Textarea } from "@naamdev/ui";
 import { PageTitle } from "@/components/account/nav";
 import { ApiError, api, errorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-interface S { id: string; app: string; userAgent: string | null; ip: string | null; lastSeenAt: string; current: boolean }
-
 export default function SecurityPage() {
   const { user, setUser, logout } = useAuth();
   const [pw, setPw] = useState({ currentPassword: "", newPassword: "" });
-  const [fe, setFe] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [sessions, setSessions] = useState<S[]>([]);
-  const [verify, setVerify] = useState<null | { kind: "email" | "phone"; value: string; sent: boolean; otp: string; dev?: string }>(null);
+  const [emailModal, setEmailModal] = useState<null | { email: string; password: string; sent: boolean }>(null);
+  const [phone, setPhone] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | undefined>();
   const [del, setDel] = useState(false);
   const [reason, setReason] = useState("");
-  const loadSessions = () => api.get<{ sessions: S[] }>("/auth/sessions").then((r) => setSessions(r.sessions));
-  useEffect(() => { void loadSessions(); }, []);
   if (!user) return null;
 
-  const changePw = async (e: React.FormEvent) => {
-    e.preventDefault(); setBusy(true); setFe({});
-    try { await api.post("/auth/password/change", user.hasPassword ? pw : { newPassword: pw.newPassword }); toast.success("Password updated. Other devices were signed out."); setPw({ currentPassword: "", newPassword: "" }); setUser({ ...user, hasPassword: true }); void loadSessions(); }
-    catch (err) { if (err instanceof ApiError) setFe(err.fieldErrors); toast.error(errorMessage(err)); } finally { setBusy(false); }
+  const savePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await changePassword(pw.currentPassword, pw.newPassword);
+      toast.success("Password updated. Other devices will need to log in again.");
+      setPw({ currentPassword: "", newPassword: "" });
+    } catch (err) {
+      toast.error(authErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const sendVerify = async () => {
-    if (!verify) return;
-    try { const r = await api.post<{ devCode?: string }>(`/auth/verify/${verify.kind}/request`, verify.kind === "email" ? { email: verify.value } : { phone: verify.value }); setVerify({ ...verify, sent: true, dev: r.devCode }); }
-    catch (e) { toast.error(errorMessage(e)); }
+  const savePhone = async () => {
+    setPhoneError(undefined);
+    try {
+      const r = await api.patch<{ user: Me }>("/account/phone", { phone });
+      setUser(r.user);
+      setPhone(null);
+      toast.success("Mobile number updated");
+    } catch (err) {
+      if (err instanceof ApiError) setPhoneError(err.fieldErrors.phone ?? err.message);
+      else toast.error(errorMessage(err));
+    }
   };
-  const confirmVerify = async () => {
-    if (!verify) return;
-    try { const r = await api.post<{ user: Me }>(`/auth/verify/${verify.kind}/confirm`, { [verify.kind]: verify.value, otp: verify.otp }); setUser(r.user); setVerify(null); toast.success("Verified ✓"); }
-    catch (e) { toast.error(errorMessage(e)); }
+
+  const submitEmail = async () => {
+    if (!emailModal) return;
+    try {
+      await changeEmail(emailModal.password, emailModal.email);
+      setEmailModal({ ...emailModal, sent: true });
+    } catch (err) {
+      toast.error(authErrorMessage(err));
+    }
+  };
+
+  const signOutEverywhere = async () => {
+    try {
+      await api.post("/auth/sign-out-everywhere");
+      await signOutFirebase();
+      setUser(null);
+      toast.success("Signed out on all devices");
+      window.location.href = "/login";
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   };
 
   return (
     <div className="max-w-2xl space-y-6">
       <PageTitle title="Password & security" />
       <Card className="p-6">
-        <h2 className="font-display text-xl font-semibold text-ink">{user.hasPassword ? "Change password" : "Set a password"}</h2>
-        <p className="mb-4 text-sm text-muted">{user.hasPassword ? "Changing your password signs you out on other devices." : "You currently log in with OTP. Add a password for faster login."}</p>
-        <form onSubmit={changePw} className="space-y-4">
-          {user.hasPassword && <Field label="Current password" error={fe.currentPassword}>{(p) => <Input {...p} type="password" autoComplete="current-password" value={pw.currentPassword} onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })} />}</Field>}
-          <Field label="New password" hint="At least 8 characters, with a letter and a number" error={fe.newPassword}>{(p) => <Input {...p} type="password" autoComplete="new-password" value={pw.newPassword} onChange={(e) => setPw({ ...pw, newPassword: e.target.value })} />}</Field>
-          <Button type="submit" loading={busy} disabled={pw.newPassword.length < 8}>Save password</Button>
+        <h2 className="font-display text-xl font-semibold text-ink">Change password</h2>
+        <p className="mb-4 text-sm text-muted">Forgot your current password? Log out and use &ldquo;Forgot password&rdquo; to get a reset link by email.</p>
+        <form onSubmit={savePassword} className="space-y-4">
+          <Field label="Current password">{(p) => <Input {...p} type="password" autoComplete="current-password" value={pw.currentPassword} onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })} />}</Field>
+          <Field label="New password" hint="At least 8 characters, with a letter and a number">{(p) => <Input {...p} type="password" autoComplete="new-password" value={pw.newPassword} onChange={(e) => setPw({ ...pw, newPassword: e.target.value })} />}</Field>
+          <Button type="submit" loading={busy} disabled={!pw.currentPassword || pw.newPassword.length < 8}>Save password</Button>
         </form>
       </Card>
 
       <Card className="p-6">
-        <h2 className="mb-4 font-display text-xl font-semibold text-ink">Contact verification</h2>
-        {[["phone", user.phone, user.phoneVerified], ["email", user.email, user.emailVerified]].map(([kind, value, ok]) => (
-          <div key={kind as string} className="flex items-center justify-between gap-3 border-b border-line-soft py-3 last:border-0">
-            <div><p className="text-sm font-semibold capitalize text-ink">{kind as string}</p><p className="text-sm text-muted">{(value as string) || "Not added"}</p></div>
-            <div className="flex items-center gap-2">
-              {value && <Badge tone={ok ? "success" : "warning"}>{ok ? "Verified" : "Unverified"}</Badge>}
-              <Button variant="outline" size="sm" onClick={() => setVerify({ kind: kind as "email" | "phone", value: (value as string)?.replace(/^\+91/, "") ?? "", sent: false, otp: "" })}>{value ? (ok ? "Change" : "Verify") : "Add"}</Button>
-            </div>
+        <h2 className="mb-4 font-display text-xl font-semibold text-ink">Login email & mobile</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-soft py-3">
+          <div><p className="text-sm font-semibold text-ink">Email (used to log in)</p><p className="text-sm text-muted">{user.email}</p></div>
+          <div className="flex items-center gap-2">
+            <Badge tone={user.emailVerified ? "success" : "warning"}>{user.emailVerified ? "Verified" : "Unverified"}</Badge>
+            {!user.emailVerified && <Button variant="ghost" size="sm" onClick={() => void resendVerification().then(() => toast.success("Verification email sent"), (e) => toast.error(authErrorMessage(e)))}><MailCheck className="h-4 w-4" />Resend link</Button>}
+            <Button variant="outline" size="sm" onClick={() => setEmailModal({ email: "", password: "", sent: false })}>Change</Button>
           </div>
-        ))}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-ink">Mobile number</p>
+            {phone === null ? <p className="text-sm text-muted">{user.phone ?? "Not added"}</p> : (
+              <Field label="" error={phoneError}>{(p) => <Input {...p} value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d+ ]/g, "").slice(0, 14))} inputMode="tel" autoFocus leading={<span className="text-sm font-bold text-ink-soft">+91</span>} />}</Field>
+            )}
+          </div>
+          {phone === null ? <Button variant="outline" size="sm" onClick={() => setPhone(user.phone?.replace(/^\+91/, "") ?? "")}>{user.phone ? "Change" : "Add"}</Button> : (
+            <div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => setPhone(null)}>Cancel</Button><Button size="sm" onClick={() => void savePhone()}>Save</Button></div>
+          )}
+        </div>
       </Card>
 
       <Card className="p-6">
-        <h2 className="mb-4 font-display text-xl font-semibold text-ink">Active sessions</h2>
-        <ul className="space-y-3">
-          {sessions.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 rounded-2xl bg-surface-2 p-3">
-              <Laptop className="h-5 w-5 text-muted" />
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{s.userAgent?.split(") ")[0]?.replace("(", "· ") ?? "Unknown device"}</p><p className="text-xs text-muted">{s.app} · last active {new Date(s.lastSeenAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</p></div>
-              {s.current ? <Badge tone="success">This device</Badge> : <Button variant="ghost" size="sm" onClick={async () => { await api.del(`/auth/sessions/${s.id}`); void loadSessions(); }}><LogOut className="h-4 w-4" />Sign out</Button>}
-            </li>
-          ))}
-        </ul>
+        <h2 className="font-display text-xl font-semibold text-ink">Sign out everywhere</h2>
+        <p className="mb-4 mt-1 text-sm text-muted">Lost a phone or used a shared computer? This signs your account out on every device, including this one.</p>
+        <Button variant="outline" onClick={() => void signOutEverywhere()}><ShieldCheck className="h-4 w-4" />Sign out of all devices</Button>
       </Card>
 
       <Card className="border-maroon-200 p-6 dark:border-maroon-500/30">
@@ -88,25 +120,22 @@ export default function SecurityPage() {
           </>
         ) : (
           <>
-            <p className="mt-1 text-sm text-muted">Your personal data will be anonymised. Order records are retained as required for tax compliance. Unused points will be lost.</p>
+            <p className="mt-1 text-sm text-muted">Your personal data will be anonymised and your login removed. Order records are retained as required for tax compliance. Unused points will be lost.</p>
             <Button variant="danger" className="mt-4" onClick={() => setDel(true)}><Trash2 className="h-4 w-4" />Request account deletion</Button>
           </>
         )}
       </Card>
 
-      <Modal open={!!verify} onClose={() => setVerify(null)} title={`Verify ${verify?.kind ?? ""}`}>
-        {verify && (
-          <div className="space-y-4">
-            <Field label={verify.kind === "email" ? "Email address" : "Mobile number"}>{(p) => <Input {...p} value={verify.value} onChange={(e) => setVerify({ ...verify, value: e.target.value, sent: false })} type={verify.kind === "email" ? "email" : "tel"} />}</Field>
-            {!verify.sent ? <Button block onClick={sendVerify}>Send code</Button> : (
-              <>
-                {verify.dev && <InlineAlert>Development mode: code <b className="font-mono">{verify.dev}</b></InlineAlert>}
-                <OtpInput value={verify.otp} onChange={(otp) => setVerify({ ...verify, otp })} autoFocus />
-                <Button block disabled={verify.otp.length !== 6} onClick={confirmVerify}>Verify</Button>
-              </>
-            )}
-          </div>
-        )}
+      <Modal open={!!emailModal} onClose={() => setEmailModal(null)} title="Change login email">
+        {emailModal && (emailModal.sent ? (
+          <InlineAlert tone="success">We sent a confirmation link to <b>{emailModal.email}</b>. Your login email changes once you click it.</InlineAlert>
+        ) : (
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void submitEmail(); }}>
+            <Field label="New email address">{(p) => <Input {...p} type="email" value={emailModal.email} onChange={(e) => setEmailModal({ ...emailModal, email: e.target.value })} autoComplete="email" autoFocus />}</Field>
+            <Field label="Current password" hint="Needed to confirm it's you">{(p) => <Input {...p} type="password" value={emailModal.password} onChange={(e) => setEmailModal({ ...emailModal, password: e.target.value })} autoComplete="current-password" />}</Field>
+            <Button type="submit" block disabled={!emailModal.email || !emailModal.password}>Send confirmation link</Button>
+          </form>
+        ))}
       </Modal>
       <Modal open={del} onClose={() => setDel(false)} title="Delete your account?" description="This can't be undone once processed."
         footer={<div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setDel(false)}>Keep account</Button><Button variant="danger" onClick={async () => { try { const r = await api.post<{ user: Me }>("/account/deletion-request", { reason }); setUser(r.user); setDel(false); toast.success("Deletion requested"); } catch (e) { toast.error(errorMessage(e)); } }}>Request deletion</Button></div>}>

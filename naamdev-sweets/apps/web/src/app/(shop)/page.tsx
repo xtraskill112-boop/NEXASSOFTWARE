@@ -22,7 +22,7 @@ const LINKS: Record<string, string> = {
 
 export default async function HomePage() {
   const feed = await fetchPublic<HomeFeed>("/catalog/home", 30);
-  const locale = (await cookies()).get("nd_lang")?.value === "hi" ? "hi" : "en";
+  const locale = (await cookies()).get("__session")?.value === "hi" ? "hi" : "en";
   if (!feed)
     return (
       <div className="mx-auto max-w-xl px-4 py-20">

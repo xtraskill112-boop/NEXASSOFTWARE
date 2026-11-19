@@ -14,7 +14,8 @@ const Ctx = createContext<I18nCtx | null>(null);
 export function I18nProvider({ initialLocale, children }: { initialLocale: Locale; children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
   const setLocale = useCallback((l: Locale) => {
-    document.cookie = `nd_lang=${l}; path=/; max-age=31536000; samesite=lax`;
+    // Firebase Hosting only forwards the cookie named "__session" to the server, so the language lives there.
+    document.cookie = `__session=${l}; path=/; max-age=31536000; samesite=lax; secure`;
     document.documentElement.lang = l;
     setLocaleState(l);
   }, []);

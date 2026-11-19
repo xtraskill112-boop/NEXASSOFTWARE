@@ -36,7 +36,7 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const jar = await cookies();
-  const locale = jar.get("nd_lang")?.value === "hi" ? "hi" : "en";
+  const locale = jar.get("__session")?.value === "hi" ? "hi" : "en";
   const settings = await fetchPublic<PublicSettings>("/public/settings", 60);
   const orgLd = {
     "@context": "https://schema.org",

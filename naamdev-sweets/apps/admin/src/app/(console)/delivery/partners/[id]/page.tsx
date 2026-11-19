@@ -27,9 +27,17 @@ export default function PartnerPage() {
     void run(() => api.post(`/admin/people/partners/${id}/status`, { status, reason }), `Partner ${status.toLowerCase()}`);
   };
   const viewDoc = async (docId: string) => {
-    const r = await fetch(`/api/v1/admin/people/partners/${id}/documents/${docId}/file`, { credentials: "include", headers: { "x-nds-app": "admin" } });
-    if (!r.ok) return toast.error("Couldn't open document");
-    window.open(URL.createObjectURL(await r.blob()), "_blank", "noopener");
+    // Opened synchronously so pop-up blockers allow it, then filled once the private file downloads.
+    const win = window.open("", "_blank");
+    try {
+      const blob = await api.download(`/admin/people/partners/${id}/documents/${docId}/file`);
+      const url = URL.createObjectURL(blob);
+      if (win) win.location.href = url;
+      else window.open(url, "_blank", "noopener");
+    } catch (e) {
+      win?.close();
+      toast.error(errorMessage(e, "Couldn't open document"));
+    }
   };
   const missing = REQUIRED_PARTNER_DOCUMENTS.filter((t) => !p.documents.some((d) => d.type === t && d.status === "VERIFIED"));
   return (

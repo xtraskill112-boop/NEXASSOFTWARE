@@ -4,12 +4,12 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Bike, ExternalLink, MapPin, Phone, Printer, RefreshCw, Send, Undo2 } from "lucide-react";
 import { toast } from "sonner";
-import { ORDER_STATUS_META, SOCKET_EVENTS, formatINR, googleMapsDirectionsUrl, type OrderStatus } from "@naamdev/shared";
+import { ORDER_STATUS_META, formatINR, googleMapsDirectionsUrl, type OrderStatus } from "@naamdev/shared";
 import { Badge, Button, Card, ErrorState, Field, Input, Modal, OrderStatusBadge, PaymentStatusBadge, Select, Skeleton, Textarea } from "@naamdev/ui";
 import { Can, Guard, KeyValue, PageHeader, confirmAction } from "@/components/kit";
 import { api, dt, errorMessage, toPaise } from "@/lib/api";
 import { useAdmin } from "@/lib/auth";
-import { useAdminRealtime } from "@/lib/realtime";
+import { useOrderLive } from "@/lib/realtime";
 import { useResource } from "@/lib/use-resource";
 
 interface AdminOrder {
@@ -31,7 +31,6 @@ interface Resp { order: AdminOrder; allowedTransitions: OrderStatus[]; tracking:
 export default function AdminOrderPage() {
   const { id } = useParams<{ id: string }>();
   const { can } = useAdmin();
-  const { socket } = useAdminRealtime();
   const { data, error, reload } = useResource<Resp>(`/admin/orders/${id}`);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -40,14 +39,7 @@ export default function AdminOrderPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
 
-  useEffect(() => {
-    if (!socket) return;
-    socket.emit(SOCKET_EVENTS.subscribeOrder, { orderId: id });
-    const h = (p: { orderId: string }) => p.orderId === id && void reload();
-    socket.on(SOCKET_EVENTS.orderStatus, h);
-    socket.on(SOCKET_EVENTS.trackingLocation, h);
-    return () => { socket.off(SOCKET_EVENTS.orderStatus, h); socket.off(SOCKET_EVENTS.trackingLocation, h); };
-  }, [socket, id, reload]);
+  useOrderLive(id, () => void reload());
 
   if (error) return <ErrorState description={error} />;
   if (!data) return <Skeleton className="h-[70vh]" />;

@@ -9,9 +9,9 @@ import { Gallery } from "@/components/product/gallery";
 import { ProductRail } from "@/components/product/product-rail";
 import { PurchasePanel } from "@/components/product/purchase-panel";
 import { SITE_URL } from "@/lib/api";
-import { fetchAsUser } from "@/lib/server-api";
+import { fetchFresh } from "@/lib/server-api";
 
-const getProduct = cache(async (slug: string) => (await fetchAsUser<{ product: ProductDetail }>(`/catalog/products/${encodeURIComponent(slug)}`))?.product ?? null);
+const getProduct = cache(async (slug: string) => (await fetchFresh<{ product: ProductDetail }>(`/catalog/products/${encodeURIComponent(slug)}`))?.product ?? null);
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const p = await getProduct((await params).slug);

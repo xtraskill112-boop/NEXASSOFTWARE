@@ -2,8 +2,10 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
+import { saveBlob } from "@naamdev/api-client";
 import { Button, Card, Field, Input, Select } from "@naamdev/ui";
 import { Can, DataTable, Guard, PageHeader } from "@/components/kit";
+import { api, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/use-resource";
 
 const REPORTS = [
@@ -19,12 +21,11 @@ export default function ReportsPage() {
   const q = { from: new Date(from).toISOString(), to: new Date(to + "T23:59:59").toISOString() };
   const { data, loading, error } = useResource<{ rows: Record<string, unknown>[] }>(`/admin/reports/${type}`, q);
   const download = async () => {
-    const r = await fetch(`/api/v1/admin/reports/${type}?format=csv&from=${encodeURIComponent(q.from)}&to=${encodeURIComponent(q.to)}`, { credentials: "include", headers: { "x-nds-app": "admin" } });
-    if (!r.ok) return toast.error("Export failed");
-    const url = URL.createObjectURL(await r.blob());
-    const a = document.createElement("a");
-    a.href = url; a.download = `naamdev-${type}-${from}-to-${to}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    try {
+      saveBlob(await api.download(`/admin/reports/${type}`, { query: { ...q, format: "csv" } }), `naamdev-${type}-${from}-to-${to}.csv`);
+    } catch (e) {
+      toast.error(errorMessage(e, "Export failed"));
+    }
   };
   const cols = data?.rows[0] ? Object.keys(data.rows[0]) : [];
   return (

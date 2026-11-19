@@ -2,9 +2,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button, Field, Input, Modal } from "@naamdev/ui";
-import { ApiError, api, errorMessage } from "@/lib/api";
+import { authErrorMessage, changePassword } from "@naamdev/api-client/firebase";
 
-/** Lets any staff member change their own console password (other sessions are signed out). */
+/** Lets any staff member change their own console password (Firebase signs other devices out). */
 export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [f, setF] = useState({ currentPassword: "", newPassword: "", confirm: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -19,12 +19,13 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
     setBusy(true);
     setErrors({});
     try {
-      await api.post("/auth/password/change", { currentPassword: f.currentPassword, newPassword: f.newPassword });
-      toast.success("Password changed. Other devices have been signed out.");
+      await changePassword(f.currentPassword, f.newPassword);
+      toast.success("Password changed. Other devices will need to sign in again.");
       close();
     } catch (e) {
-      if (e instanceof ApiError && Object.keys(e.fieldErrors).length) setErrors(e.fieldErrors);
-      else toast.error(errorMessage(e));
+      const code = (e as { code?: string }).code;
+      if (code === "auth/invalid-credential" || code === "auth/wrong-password") setErrors({ currentPassword: "Current password is incorrect" });
+      else toast.error(authErrorMessage(e));
     } finally {
       setBusy(false);
     }

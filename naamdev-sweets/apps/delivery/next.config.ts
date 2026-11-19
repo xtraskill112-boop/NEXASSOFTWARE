@@ -2,16 +2,22 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const API = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
-const SOCKET = process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:4000";
 const isDev = process.env.NODE_ENV !== "production";
+// Local Firebase emulators (development and end-to-end tests only).
+const EMULATORS = [process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST, process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST, process.env.NEXT_PUBLIC_STORAGE_EMULATOR_HOST]
+  .filter(Boolean)
+  .map((h) => `http://${h}`)
+  .join(" ");
+// Firebase Auth, Firestore live listeners and Storage downloads.
+const FIREBASE = "https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com";
 
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://maps.googleapis.com`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://res.cloudinary.com https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.razorpay.com",
+  `img-src 'self' data: blob: https://firebasestorage.googleapis.com https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.razorpay.com ${EMULATORS}`,
   "font-src 'self' data:",
-  `connect-src 'self' ${SOCKET} ${SOCKET.replace(/^http/, "ws")} https://*.razorpay.com https://maps.googleapis.com https://*.googleapis.com https://www.gstatic.com${isDev ? " ws: http://localhost:*" : ""}`,
+  `connect-src 'self' ${FIREBASE} ${EMULATORS} https://*.razorpay.com https://maps.googleapis.com https://*.googleapis.com https://www.gstatic.com${isDev ? " ws: http://localhost:*" : ""}`,
   "frame-src 'self'",
   "worker-src 'self'",
   "object-src 'none'",
@@ -32,7 +38,6 @@ const config: NextConfig = {
     return [
       { source: "/api/v1/:path*", destination: `${API}/api/v1/:path*` },
       { source: "/static/:path*", destination: `${API}/static/:path*` },
-      { source: "/uploads/:path*", destination: `${API}/uploads/:path*` },
     ];
   },
   async headers() {

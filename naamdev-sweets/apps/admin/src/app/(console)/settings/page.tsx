@@ -124,10 +124,10 @@ function Integrations({ status }: { status: Record<string, boolean | string | nu
   const rows: [string, State, string][] = [
     ["Razorpay payments", state(!!status.razorpay), status.razorpayMode ? `${status.razorpayMode} mode` : "Set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET"],
     ["Razorpay webhooks", state(!!status.razorpayWebhook), "Set RAZORPAY_WEBHOOK_SECRET and add the webhook URL in the Razorpay dashboard"],
-    ["Cloudinary images", state(!!status.cloudinary), status.cloudinary ? "Uploads stored on Cloudinary" : "Using local disk storage"],
-    ["Email", state(!!status.email, status.emailProvider), status.emailProvider === "console" ? devNote : `Provider: ${status.emailProvider}`],
-    ["SMS / OTP", state(!!status.sms, status.smsProvider), status.smsProvider === "console" ? devNote : `Provider: ${status.smsProvider}`],
-    ["Push (Firebase)", state(!!status.push), "Set FIREBASE_SERVICE_ACCOUNT_BASE64"],
+    ["Firebase Storage", state(!!status.storage), "Product images, avatars and private partner documents"],
+    ["Order emails", state(!!status.email, status.emailProvider), status.emailProvider === "console" ? devNote : status.email ? `Provider: ${status.emailProvider}` : "Set EMAIL_PROVIDER=smtp and SMTP_* (sign-in emails are sent by Firebase Auth)"],
+    ["SMS updates", state(!!status.sms, status.smsProvider), status.smsProvider === "console" ? devNote : status.sms ? `Provider: ${status.smsProvider}` : "Optional: set SMS_PROVIDER and its keys"],
+    ["Push (Firebase Cloud Messaging)", state(!!status.push), status.push ? "Enabled" : "Set PUSH_ENABLED=true and the web VAPID key"],
   ];
   return (
     <div className="space-y-6">

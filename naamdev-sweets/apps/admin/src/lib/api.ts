@@ -1,8 +1,8 @@
 import { ApiError, createApiClient } from "@naamdev/api-client";
+import { currentIdToken } from "@naamdev/api-client/firebase";
 
-export const api = createApiClient({ app: "admin" });
+export const api = createApiClient({ app: "admin", getToken: currentIdToken });
 export { ApiError };
-export const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:4000";
 export const STOREFRONT_URL = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3000";
 
 export function errorMessage(err: unknown, fallback = "Something went wrong"): string {

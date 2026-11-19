@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function ContentPage({ params }: { params: Promise<{ slug: string }> }) {
   const d = await fetchPublic<{ page: Page }>(`/public/pages/${(await params).slug}`, 300);
   if (!d) notFound();
-  const hi = (await cookies()).get("nd_lang")?.value === "hi";
+  const hi = (await cookies()).get("__session")?.value === "hi";
   const p = d.page;
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:px-6">

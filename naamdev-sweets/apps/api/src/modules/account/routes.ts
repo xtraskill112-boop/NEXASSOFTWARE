@@ -5,7 +5,7 @@ import {
   type Address, type Coupon, type DeliveryZone, type LoyaltyTransaction, type Notification, type Order, type Referral, type User,
 } from "@naamdev/db";
 import { createHash } from "node:crypto";
-import { addressSchema, LOYALTY_TIERS, nextTier, paginationSchema, profileUpdateSchema, tierFor } from "@naamdev/shared";
+import { addressSchema, LOYALTY_TIERS, nextTier, paginationSchema, profileUpdateSchema, tierFor, normalizeIndianPhone } from "@naamdev/shared";
 import { badRequest, notFound } from "../../lib/errors";
 import { audit } from "../../lib/audit";
 import { body, pageOf, pageQuery, param, query } from "../../lib/http";
@@ -41,7 +41,6 @@ accountRouter.patch("/profile", async (req, res) => {
 
 accountRouter.patch("/phone", async (req, res) => {
   const { phone } = body(req, z.object({ phone: z.string().trim().max(20) }));
-  const { normalizeIndianPhone } = await import("@naamdev/shared");
   const p = normalizeIndianPhone(phone);
   if (!p) throw badRequest("Enter a valid 10-digit mobile number", { fields: { phone: "Enter a valid 10-digit mobile number" } }, "VALIDATION_ERROR");
   const u = req.auth!.user;
