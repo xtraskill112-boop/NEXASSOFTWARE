@@ -36,6 +36,10 @@ creates the API server on Render (or updates it), seeds the data, builds the thr
 deploys them to Firebase Hosting with the security rules and indexes, and prints the live addresses.
 The first Render build takes 5–15 minutes.
 
+To check the live shop at any time, run **NAAMDEV live check** (Actions tab): it opens the storefront,
+console and partner app in a real browser, checks the menu loads from the API without errors and that the
+demo logins (if created) can sign in. It creates no data.
+
 After it's live, sign in to the console and set your shop address (Settings → Store location), delivery
 PIN codes, UPI ID (Settings → UPI payments, default `paytmqr6rgzn2@ptys`) and staff logins.
 

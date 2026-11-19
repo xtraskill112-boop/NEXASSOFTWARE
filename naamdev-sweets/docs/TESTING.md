@@ -87,11 +87,20 @@ browser contexts:
 
 Server logs go to `$E2E_LOG_DIR` (default `$TMPDIR` or `/tmp`), `nd-e2e-*.log`.
 
+## Live check (`tests/live`)
+
+`.github/workflows/naamdev-live-check.yml` runs read-only Playwright checks against the deployed sites:
+API health and home feed, storefront home/product/search pages loading data from the API with no CSP,
+CORS or server errors, and sign-in with the demo customer, store-owner and rider logins. First run
+against the live shop on 2026-11-19: **5 / 5 passed** (after fixing the seeded catalogue not appearing
+until the API's cache expired).
+
 ## Not covered by automated tests
 
 * The real Firebase project (`naamdevseets`): deploys, production security-rule evaluation and
   composite indexes (the emulator doesn't enforce indexes) are exercised by the deploy workflow's smoke
-  test, not by CI.
+  test and the live check, not by CI. Placing real orders on the live shop is left to the manual
+  checklists.
 * Real third-party providers (Razorpay accounts, SMTP, SMS, FCM, Google Maps) and actual UPI apps —
   see the manual checklists in [INTEGRATIONS.md](INTEGRATIONS.md).
 * The Android apps on devices (the Java code is compiled in CI's Android workflow).
@@ -108,4 +117,4 @@ Run on 2026-11-19 in this repository's development container (Node 22, Java 21, 
 | `pnpm test:api` | 68 / 68 passed (8 files) |
 | `pnpm test:e2e` | 7 / 7 passed (emulators, static builds served with the Hosting rules) |
 | API Docker image | Builds and, run the way Render runs it (production mode, `PORT`, against the emulators), serves `/healthz`, `/health`, the catalogue and static artwork, allows CORS only for the three sites, and runs the in-process jobs |
-| Deploy workflow, Render step | Exercised against a local stand-in for the Render API (create, then update keeping `ENCRYPTION_KEY`/`JOBS_SECRET`); **not yet run against real Render or Firebase** |
+| Deploy workflow | Ran against the real Firebase project and Render (free plans) on 2026-11-19: succeeded; the live check then passed 5 / 5 |

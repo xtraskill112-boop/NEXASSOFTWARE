@@ -58,7 +58,7 @@ Status of every area in the original brief. ✅ built and covered by automated t
 - ✅ Security: Firebase ID-token verification, revocation, RBAC with custom claims, deny-by-default Firestore/Storage rules, rate limits, secure uploads, encryption at rest, audit log, production startup guards
 - ⏳ SMS (MSG91/Twilio), order emails (SMTP), web push (FCM VAPID key) — implemented, need credentials
 - ✅ Tests: 37 unit, 66 API integration on the Firebase emulators, 7-step Playwright journey across all three apps (see [TESTING.md](TESTING.md))
-- ☑️ One-click free deploy (`.github/workflows/naamdev-deploy.yml`): Firestore, Auth, Hosting ×3 on Firebase Spark + the API on Render free, with a keep-alive — parts tested locally (static builds, Docker image, Render API calls against a stand-in), **not yet run against the real accounts**
+- ☑️ One-click free deploy (`.github/workflows/naamdev-deploy.yml`): Firestore, Auth, Hosting ×3 on Firebase Spark + the API on Render free, with a keep-alive — parts tested locally (static builds, Docker image, Render API calls against a stand-in), deployed and checked live on 2026-11-19 (NAAMDEV live check: 5 / 5)
 - ✅ CI workflow (typecheck, unit, API and end-to-end tests on emulators)
 - ✅ Documentation (this folder)
 
