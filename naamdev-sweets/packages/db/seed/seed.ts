@@ -9,7 +9,7 @@ import { randomBytes } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { DEFAULT_SETTINGS, SYSTEM_ROLES, sellingPrice } from "@naamdev/shared";
 import {
-  auth, C, SUB, createUserDoc, db, ensureAuthUser, newId, productDerived, syncClaims,
+  auth, C, SUB, FieldValue, createUserDoc, db, ensureAuthUser, newId, productDerived, syncClaims,
   type Category, type DeliveryPartner, type Inventory, type InventoryBatch, type Product, type ProductVariant, type StaffProfile,
 } from "../src/index";
 import { CATEGORIES, COLLECTIONS, PRODUCTS } from "./catalog";
@@ -435,6 +435,8 @@ export async function seed() {
   await seedMarketing();
   await seedContent();
   await seedAccounts();
+  // Tell running API servers the catalogue changed, so they reload it instead of keeping an older copy.
+  await db.collection("meta").doc("catalog").set({ products: FieldValue.increment(1), stock: FieldValue.increment(1) }, { merge: true });
   console.log("Done.");
 }
 

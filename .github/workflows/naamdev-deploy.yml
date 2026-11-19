@@ -130,6 +130,30 @@ jobs:
             exit 1
           fi
 
+      # Seed before (re)starting the API, so a fresh server loads a complete catalogue.
+      - name: Seed data (idempotent)
+        id: seed
+        env:
+          SEED_ADMIN_EMAIL: ${{ secrets.NAAMDEV_ADMIN_EMAIL }}
+          # Optional: without it the owner sets a password from the reset email sent below.
+          SEED_ADMIN_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
+          SEED_SAMPLE_CATALOG: ${{ inputs.seed_sample_catalog }}
+          # Demo logins on a live shop use the owner's private password, never the public dev one.
+          SEED_DEMO_ACCOUNTS: ${{ inputs.create_demo_logins }}
+          SEED_DEMO_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
+          SEED_REMOVE_DEMO_ACCOUNTS: ${{ inputs.remove_demo_logins }}
+        run: |
+          if [ -z "$SEED_ADMIN_EMAIL" ]; then
+            echo "::error::Add the NAAMDEV_ADMIN_EMAIL secret (your email) — it becomes your console login."
+            exit 1
+          fi
+          if [ "$SEED_DEMO_ACCOUNTS" = "true" ] && [ -z "$SEED_DEMO_PASSWORD" ]; then
+            echo "::error::Demo logins need the NAAMDEV_ADMIN_PASSWORD secret (they use the same private password)."
+            exit 1
+          fi
+          # GOOGLE_APPLICATION_CREDENTIALS comes from the sign-in step (key file or keyless).
+          NODE_ENV=production FIREBASE_PROJECT_ID="$PROJECT_ID" pnpm --filter @naamdev/db seed
+
       - name: Key for the API server (rotated on every deploy)
         run: |
           SA="naamdev-run@$PROJECT_ID.iam.gserviceaccount.com"
@@ -226,29 +250,6 @@ jobs:
           echo "API_URL=$API_URL" >> "$GITHUB_ENV"
           for i in $(seq 1 12); do curl -sf "$API_URL/health" && break; sleep 10; done
           echo
-
-      - name: Seed data (idempotent)
-        id: seed
-        env:
-          SEED_ADMIN_EMAIL: ${{ secrets.NAAMDEV_ADMIN_EMAIL }}
-          # Optional: without it the owner sets a password from the reset email sent below.
-          SEED_ADMIN_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
-          SEED_SAMPLE_CATALOG: ${{ inputs.seed_sample_catalog }}
-          # Demo logins on a live shop use the owner's private password, never the public dev one.
-          SEED_DEMO_ACCOUNTS: ${{ inputs.create_demo_logins }}
-          SEED_DEMO_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
-          SEED_REMOVE_DEMO_ACCOUNTS: ${{ inputs.remove_demo_logins }}
-        run: |
-          if [ -z "$SEED_ADMIN_EMAIL" ]; then
-            echo "::error::Add the NAAMDEV_ADMIN_EMAIL secret (your email) — it becomes your console login."
-            exit 1
-          fi
-          if [ "$SEED_DEMO_ACCOUNTS" = "true" ] && [ -z "$SEED_DEMO_PASSWORD" ]; then
-            echo "::error::Demo logins need the NAAMDEV_ADMIN_PASSWORD secret (they use the same private password)."
-            exit 1
-          fi
-          # GOOGLE_APPLICATION_CREDENTIALS comes from the sign-in step (key file or keyless).
-          NODE_ENV=production FIREBASE_PROJECT_ID="$PROJECT_ID" pnpm --filter @naamdev/db seed
 
       - name: Build the three apps (static files)
         env:
