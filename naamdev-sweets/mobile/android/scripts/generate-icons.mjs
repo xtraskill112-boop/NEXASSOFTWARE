@@ -1,4 +1,4 @@
-// Generates the Android launcher icons for both apps from the brand SVGs in packages/ui/assets.
+// Generates the Android launcher icons for the three apps from the brand SVGs in packages/ui/assets.
 // Run from the repository: node naamdev-sweets/mobile/android/scripts/generate-icons.mjs
 import { mkdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -28,8 +28,9 @@ function parts(svg) {
 const BACKGROUNDS = {
   customer: `<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6E1528"/><stop offset="1" stop-color="#2E0711"/></linearGradient>`,
   partner: `<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD39C"/><stop offset="1" stop-color="#F59E1B"/></linearGradient>`,
+  admin: `<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F2A44"/><stop offset="1" stop-color="#121022"/></linearGradient>`,
 };
-const ARTWORK = { customer: parts(appIcon), partner: parts(emblem) };
+const ARTWORK = { customer: parts(appIcon), partner: parts(emblem), admin: parts(emblem) };
 
 const svg = (inner, defs = "") => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">${defs}${inner}</svg>`;
 const scaled = (body, s) => `<g transform="translate(256 256) scale(${s}) translate(-256 -256)">${body}</g>`;
@@ -39,7 +40,7 @@ async function png(svgText, size, file) {
   await sharp(Buffer.from(svgText)).resize(size, size).png({ compressionLevel: 9 }).toFile(file);
 }
 
-for (const flavour of ["customer", "partner"]) {
+for (const flavour of ["customer", "partner", "admin"]) {
   const { defs, body } = ARTWORK[flavour];
   const allDefs = defs.replace("</defs>", `${BACKGROUNDS[flavour]}</defs>`);
   const resDir = path.join(here, `../app/src/${flavour}/res`);
