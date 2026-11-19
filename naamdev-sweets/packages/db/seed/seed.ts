@@ -17,7 +17,11 @@ import { CONTENT_PAGES, FAQS } from "./content";
 
 const isProd = process.env.NODE_ENV === "production";
 const seedDemo = process.env.SEED_DEMO_ACCOUNTS ? process.env.SEED_DEMO_ACCOUNTS === "true" : !isProd;
-const demoPassword = process.env.SEED_DEMO_PASSWORD || "Naamdev@123";
+// Development uses the documented demo password; on a live project the demo logins must use a
+// private password (the deploy passes the owner's admin password secret), never the public one.
+const demoPassword = process.env.SEED_DEMO_PASSWORD || (isProd ? "" : "Naamdev@123");
+const removeDemo = process.env.SEED_REMOVE_DEMO_ACCOUNTS === "true";
+const DEMO_HANDLES = ["owner", "manager", "orders", "inventory", "packing", "support", "rider", "rider2", "customer"] as const;
 const adminPassword = process.env.SEED_ADMIN_PASSWORD || (isProd ? "" : "Naamdev@123");
 const adminEmail = (process.env.SEED_ADMIN_EMAIL || "admin@naamdevsweets.local").toLowerCase();
 const adminPhone = process.env.SEED_ADMIN_PHONE || (isProd ? null : "+919000000001");
@@ -356,7 +360,12 @@ async function seedAccounts() {
   } else {
     console.warn("! SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set — skipping super admin creation.");
   }
+  if (removeDemo) return removeDemoAccounts();
   if (!seedDemo) return;
+  if (!demoPassword) {
+    console.warn("! Demo logins skipped: set SEED_DEMO_PASSWORD (the deploy uses NAAMDEV_ADMIN_PASSWORD).");
+    return;
+  }
   const staff = [
     ["Store Owner (Demo)", "owner", "+919000000002", "STORE_OWNER", "Owner"],
     ["Store Manager (Demo)", "manager", "+919000000003", "STORE_MANAGER", "Store Manager"],
@@ -393,7 +402,29 @@ async function seedAccounts() {
       line2: "Ashok Marg, C-Scheme", landmark: "Near Statue Circle", city: "Jaipur", state: "Rajasthan", pincode: "302001",
       lat: 26.9056, lng: 75.8031, instructions: null, isDefault: true, deletedAt: null, createdAt: now(), updatedAt: now(),
     });
-  console.log(`✓ demo staff (${staff.length}), 2 delivery partners, 1 demo customer — password: ${demoPassword}`);
+  console.log(`✓ demo staff (${staff.length}), 2 delivery partners, 1 demo customer${isProd ? "" : ` — password: ${demoPassword}`}`);
+}
+
+/** Removes the demo logins from a live project (orders they placed are kept). */
+async function removeDemoAccounts() {
+  let removed = 0;
+  for (const handle of DEMO_HANDLES) {
+    const email = `${handle}@naamdevsweets.local`;
+    let uid: string;
+    try {
+      uid = (await auth.getUserByEmail(email)).uid;
+    } catch {
+      continue;
+    }
+    await auth.deleteUser(uid);
+    const userRef = db.collection(C.users).doc(uid);
+    const user = (await userRef.get()).data();
+    if (user) await userRef.update({ status: "DELETED", isStaff: false, ...(user.staff ? { staff: { ...user.staff, isActive: false } } : {}), updatedAt: now() });
+    const partnerRef = db.collection(C.partners).doc(uid);
+    if ((await partnerRef.get()).exists) await partnerRef.update({ status: "SUSPENDED", isOnline: false, statusReason: "Demo login removed", updatedAt: now() });
+    removed++;
+  }
+  console.log(`✓ removed ${removed} demo login(s)`);
 }
 
 export async function seed() {

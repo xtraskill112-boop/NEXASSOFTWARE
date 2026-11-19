@@ -45,6 +45,15 @@ with `NAAMDEV_ADMIN_EMAIL`, then:
   manager and Order manager roles have it).
 - **Products**: edit prices, photos and stock, or archive the sample products.
 
+### Demo logins for testing
+
+Tick **Create demo logins** when running the workflow to try every role on the live shop:
+`owner@`, `manager@`, `orders@`, `inventory@`, `packing@`, `support@` (console), `rider@` (partner app,
+approved), `rider2@` (partner app, pending) and `customer@` (storefront) — all `@naamdevsweets.local`.
+They use **your `NAAMDEV_ADMIN_PASSWORD` secret** (the development password in the code is public, so it
+is never used on a live shop). When you've finished testing, run the workflow again with
+**Remove demo logins** ticked: the logins are deleted; orders they placed stay for your records.
+
 ### If a step asks for a click in the Firebase console
 
 Two Firebase features are normally switched on in the console. The workflow tries to do it for you and

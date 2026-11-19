@@ -13,6 +13,14 @@ on:
         description: "First deploy only: load the sample sweets catalogue (edit or archive it later in the console)"
         type: boolean
         default: true
+      create_demo_logins:
+        description: "Create demo logins for testing (owner@, manager@, orders@, packing@, support@, rider@, customer@naamdevsweets.local) with your NAAMDEV_ADMIN_PASSWORD"
+        type: boolean
+        default: false
+      remove_demo_logins:
+        description: "Remove the demo logins (do this once you've finished testing)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -205,9 +213,17 @@ jobs:
           # Optional: without it the owner sets a password from the reset email sent below.
           SEED_ADMIN_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
           SEED_SAMPLE_CATALOG: ${{ inputs.seed_sample_catalog }}
+          # Demo logins on a live shop use the owner's private password, never the public dev one.
+          SEED_DEMO_ACCOUNTS: ${{ inputs.create_demo_logins }}
+          SEED_DEMO_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
+          SEED_REMOVE_DEMO_ACCOUNTS: ${{ inputs.remove_demo_logins }}
         run: |
           if [ -z "$SEED_ADMIN_EMAIL" ]; then
             echo "::error::Add the NAAMDEV_ADMIN_EMAIL secret (your email) — it becomes your console login."
+            exit 1
+          fi
+          if [ "$SEED_DEMO_ACCOUNTS" = "true" ] && [ -z "$SEED_DEMO_PASSWORD" ]; then
+            echo "::error::Demo logins need the NAAMDEV_ADMIN_PASSWORD secret (they use the same private password)."
             exit 1
           fi
           NODE_ENV=production FIREBASE_PROJECT_ID="$PROJECT_ID" SEED_DEMO_ACCOUNTS=false \
