@@ -115,8 +115,46 @@ export function createApiClient(opts: ApiClientOptions) {
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-/** Saves a downloaded blob as a file in the browser. */
+/** The NAAMDEV Android apps' file bridge (window.NaamdevAndroid), when the page runs inside one. */
+function androidFiles(): { saveFile(base64: string, filename: string, mime: string, open: boolean): void } | null {
+  if (typeof window === "undefined") return null;
+  const shell = (window as unknown as { NaamdevAndroid?: { saveFile?: unknown } }).NaamdevAndroid;
+  return shell && typeof shell.saveFile === "function" ? (shell as never) : null;
+}
+
+/** True inside a NAAMDEV Android app that can save files (its WebView ignores browser downloads). */
+export const canSaveInApp = () => androidFiles() !== null;
+
+function toBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ""));
+    r.onerror = () => reject(r.error ?? new Error("Couldn't read the file"));
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Hands a file to the Android app, which asks where to save it (and can open it afterwards). */
+export async function saveInApp(blob: Blob, filename: string, open = false) {
+  const files = androidFiles();
+  if (!files) throw new Error("Not running in the NAAMDEV app");
+  files.saveFile(await toBase64(blob), filename, blob.type || "application/octet-stream", open);
+}
+
+/** File extension for common download types ("" when unknown). */
+export function extensionFor(mime: string): string {
+  const map: Record<string, string> = {
+    "application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/heic": ".heic", "text/csv": ".csv",
+  };
+  return map[mime.split(";")[0]!.trim().toLowerCase()] ?? "";
+}
+
+/** Saves a downloaded blob as a file (browser download, or the Android app's save dialog). */
 export function saveBlob(blob: Blob, filename: string) {
+  if (androidFiles()) {
+    void saveInApp(blob, filename);
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

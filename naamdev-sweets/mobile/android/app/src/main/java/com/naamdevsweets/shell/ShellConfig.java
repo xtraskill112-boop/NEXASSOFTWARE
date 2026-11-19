@@ -17,6 +17,11 @@ final class ShellConfig {
         return "partner".equals(BuildConfig.APP_KIND);
     }
 
+    /** The staff console app (store owner, managers, packing staff). */
+    static boolean isAdmin() {
+        return "admin".equals(BuildConfig.APP_KIND);
+    }
+
     /** True when the site address was fixed at build time (production builds). */
     static boolean isLocked() {
         return !BuildConfig.START_URL.isEmpty();

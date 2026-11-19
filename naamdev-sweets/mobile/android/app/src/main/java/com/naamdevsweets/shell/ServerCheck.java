@@ -14,7 +14,8 @@ final class ServerCheck {
     private ServerCheck() {}
 
     /** @return null when the site is reachable and is the right app, otherwise a message for the user. */
-    static String check(String origin, boolean partner) {
+    /** @param kind "customer", "partner" or "admin" — the site this app is for. */
+    static String check(String origin, String kind) {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(origin + "/manifest.webmanifest").openConnection();
@@ -26,10 +27,11 @@ final class ServerCheck {
             if (code != 200) return "That address answered with an error (" + code + "). Check it and try again.";
             String body = read(c.getInputStream()).toLowerCase(Locale.ROOT);
             if (!body.contains("naamdev")) return "That address doesn't look like a NAAMDEV SWEETS site.";
-            boolean isPartnerSite = body.contains("partner");
-            if (partner && !isPartnerSite) return "That's the storefront. Enter the delivery partner site address instead.";
-            if (!partner && isPartnerSite) return "That's the delivery partner site. Enter the storefront address instead.";
-            return null;
+            String site = body.contains("partner") ? "partner" : body.contains("console") ? "admin" : "customer";
+            if (site.equals(kind)) return null;
+            String found = site.equals("partner") ? "the delivery partner site" : site.equals("admin") ? "the staff console" : "the storefront";
+            String wanted = kind.equals("partner") ? "the delivery partner site" : kind.equals("admin") ? "the staff console" : "the storefront";
+            return "That's " + found + ". Enter the address of " + wanted + " instead.";
         } catch (SSLException e) {
             return "Secure connection failed. Check the address and that the site's HTTPS certificate is valid.";
         } catch (Exception e) {

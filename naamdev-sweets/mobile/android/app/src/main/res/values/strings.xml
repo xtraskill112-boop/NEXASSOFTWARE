@@ -11,4 +11,6 @@
     <string name="tracking_channel_description">Shown while you are online and sharing your location for deliveries.</string>
     <string name="tracking_title">You\'re online</string>
     <string name="tracking_text">Sharing your location so the store and customers can follow your deliveries.</string>
+    <string name="saved">Saved</string>
+    <string name="save_failed">Couldn\'t save the file</string>
 </resources>

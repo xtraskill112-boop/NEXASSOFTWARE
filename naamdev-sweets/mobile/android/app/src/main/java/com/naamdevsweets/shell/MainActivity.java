@@ -21,6 +21,7 @@ import android.os.Message;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
 import android.provider.MediaStore;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -46,21 +47,27 @@ import android.widget.Toast;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Hosts the NAAMDEV SWEETS storefront (customer build) or partner site (partner build) in a WebView
- * and adds what a browser tab can't: camera uploads, location prompts, UPI/phone/maps hand-off,
- * printing invoices, an offline screen and — for riders — background location sharing.
+ * Hosts the NAAMDEV SWEETS storefront (customer build), partner site (partner build) or staff console
+ * (admin build) in a WebView and adds what a browser tab can't: camera uploads, location prompts,
+ * UPI/phone/maps hand-off, printing invoices and slips, saving downloaded files (reports, documents),
+ * an offline screen and — for riders — background location sharing.
  */
 public class MainActivity extends Activity {
     static final String ASSET_BASE = "file:///android_asset/";
     private static final int REQ_FILE = 101;
     private static final int REQ_GEO = 102;
     private static final int REQ_TRACK = 103;
+    private static final int REQ_SAVE = 104;
+    /** Largest download the page may hand over for saving (base64 characters, about 15 MB of data). */
+    private static final int MAX_SAVE_BASE64 = 20 * 1024 * 1024;
     private static final String[] LOCATION_PERMISSIONS = {
             Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION,
     };
@@ -81,6 +88,10 @@ public class MainActivity extends Activity {
 
     private Dialog popupDialog;
     private WebView popupWeb;
+
+    private byte[] pendingSave;
+    private String pendingSaveMime;
+    private boolean pendingSaveOpen;
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -557,6 +568,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQ_SAVE) {
+            finishSave(resultCode == RESULT_OK && data != null ? data.getData() : null);
+            return;
+        }
         if (requestCode != REQ_FILE) {
             super.onActivityResult(requestCode, resultCode, data);
             return;
@@ -584,6 +599,53 @@ public class MainActivity extends Activity {
         ValueCallback<Uri[]> cb = fileCallback;
         fileCallback = null;
         cb.onReceiveValue(result);
+    }
+
+    // ── Saving downloads (reports, documents) ──────────────────────────────────
+
+    /** Asks where to save (Android's file picker, no storage permission needed), then writes the file. */
+    private void startSave(byte[] bytes, String name, String mime, boolean open) {
+        pendingSave = bytes;
+        pendingSaveMime = mime;
+        pendingSaveOpen = open;
+        Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, name);
+        try {
+            startActivityForResult(i, REQ_SAVE);
+        } catch (ActivityNotFoundException e) {
+            pendingSave = null;
+            toast(getString(R.string.save_failed));
+        }
+    }
+
+    private void finishSave(Uri target) {
+        byte[] bytes = pendingSave;
+        String mime = pendingSaveMime;
+        boolean open = pendingSaveOpen;
+        pendingSave = null;
+        if (bytes == null || target == null) return; // cancelled
+        try (OutputStream out = getContentResolver().openOutputStream(target)) {
+            if (out == null) throw new IOException("no output stream");
+            out.write(bytes);
+        } catch (IOException | RuntimeException e) {
+            toast(getString(R.string.save_failed));
+            return;
+        }
+        toast(getString(R.string.saved));
+        if (!open) return;
+        Intent view = new Intent(Intent.ACTION_VIEW).setDataAndType(target, mime)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            startActivity(view);
+        } catch (ActivityNotFoundException e) {
+            toast(getString(R.string.no_app));
+        }
+    }
+
+    /** Keeps a page-suggested file name to plain characters (no folders), with a fallback. */
+    static String safeFileName(String name) {
+        String s = name == null ? "" : name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
+        if (s.length() > 100) s = s.substring(s.length() - 100);
+        return s.isEmpty() || s.startsWith(".") ? "naamdev-download" + s : s;
     }
 
     // ── Permissions ────────────────────────────────────────────────────────────
@@ -687,7 +749,7 @@ public class MainActivity extends Activity {
                 return;
             }
             new Thread(() -> {
-                String error = ServerCheck.check(server, ShellConfig.isPartner());
+                String error = ServerCheck.check(server, BuildConfig.APP_KIND);
                 main.post(() -> {
                     if (error != null) {
                         reply(error);
@@ -724,6 +786,21 @@ public class MainActivity extends Activity {
         public void print() {
             if (!fromSite()) return;
             main.post(MainActivity.this::printPage);
+        }
+
+        /** Saves a file the page downloaded (reports, documents); with open=true it is opened afterwards. */
+        @JavascriptInterface
+        public void saveFile(String base64, String filename, String mime, boolean open) {
+            if (!fromSite() || base64 == null || base64.isEmpty() || base64.length() > MAX_SAVE_BASE64) return;
+            final byte[] bytes;
+            try {
+                bytes = Base64.decode(base64, Base64.DEFAULT);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+            final String name = safeFileName(filename);
+            final String type = mime != null && mime.matches("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+") ? mime : "application/octet-stream";
+            main.post(() -> startSave(bytes, name, type, open));
         }
 
         @JavascriptInterface

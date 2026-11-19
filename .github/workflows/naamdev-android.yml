@@ -1,6 +1,7 @@
 name: NAAMDEV Android apps
 
-# Builds the customer app (NAAMDEV SWEETS) and the delivery partner app (NAAMDEV Partner) as APKs
+# Builds the customer app (NAAMDEV SWEETS), the delivery partner app (NAAMDEV Partner) and the staff
+# console app (NAAMDEV Admin) as APKs
 # and publishes them as a GitHub release with direct download links (also kept as run artifacts).
 on:
   push:
@@ -15,6 +16,10 @@ on:
         default: ""
       partner_url:
         description: "Partner site address for the partner app (empty = https://naamdevseets-partner.web.app)"
+        required: false
+        default: ""
+      admin_url:
+        description: "Staff console address for the admin app (empty = https://naamdevseets-admin.web.app)"
         required: false
         default: ""
       publish:
@@ -37,6 +42,7 @@ jobs:
       # Override them with repository variables (Settings → Secrets and variables → Actions → Variables).
       NAAMDEV_CUSTOMER_URL: ${{ inputs.customer_url || vars.NAAMDEV_CUSTOMER_URL || 'https://naamdevseets.web.app' }}
       NAAMDEV_PARTNER_URL: ${{ inputs.partner_url || vars.NAAMDEV_PARTNER_URL || 'https://naamdevseets-partner.web.app' }}
+      NAAMDEV_ADMIN_URL: ${{ inputs.admin_url || vars.NAAMDEV_ADMIN_URL || 'https://naamdevseets-admin.web.app' }}
       NAAMDEV_VERSION_CODE: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +86,7 @@ jobs:
           echo "NAAMDEV_KEYSTORE_FILE=$KS" >> "$GITHUB_ENV"
 
       - name: Build APKs
-        run: ./gradlew --no-daemon --stacktrace assembleCustomerRelease assemblePartnerRelease
+        run: ./gradlew --no-daemon --stacktrace assembleCustomerRelease assemblePartnerRelease assembleAdminRelease
 
       - name: Collect APKs
         run: |
@@ -89,6 +95,7 @@ jobs:
           mkdir -p "$OUT"
           cp app/build/outputs/apk/customer/release/app-customer-release.apk "$OUT/naamdev-sweets-$V.apk"
           cp app/build/outputs/apk/partner/release/app-partner-release.apk "$OUT/naamdev-partner-$V.apk"
+          cp app/build/outputs/apk/admin/release/app-admin-release.apk "$OUT/naamdev-admin-$V.apk"
           (cd "$OUT" && sha256sum *.apk > SHA256SUMS.txt)
           {
             echo "### NAAMDEV Android apps $V"
@@ -97,9 +104,11 @@ jobs:
             echo "|---|---|"
             echo "| Customer (NAAMDEV SWEETS) | naamdev-sweets-$V.apk |"
             echo "| Delivery partner (NAAMDEV Partner) | naamdev-partner-$V.apk |"
+            echo "| Staff console (NAAMDEV Admin) | naamdev-admin-$V.apk |"
             echo ""
             echo "- Storefront address: ${NAAMDEV_CUSTOMER_URL:-asked on first launch}"
             echo "- Partner site address: ${NAAMDEV_PARTNER_URL:-asked on first launch}"
+            echo "- Staff console address: ${NAAMDEV_ADMIN_URL:-asked on first launch}"
             echo "- Signed with: $SIGNING"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -121,12 +130,13 @@ jobs:
           OUT="$RUNNER_TEMP/apk"
           PRE="--prerelease"; [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && PRE="--latest"
           cat > "$RUNNER_TEMP/notes.md" <<NOTES
-          **NAAMDEV SWEETS** (customer app) and **NAAMDEV Partner** (delivery riders), version $V, built from \`$GITHUB_REF_NAME\`.
+          **NAAMDEV SWEETS** (customers), **NAAMDEV Partner** (delivery riders) and **NAAMDEV Admin** (staff console), version $V, built from \`$GITHUB_REF_NAME\`.
 
           | App | Opens |
           |---|---|
           | naamdev-sweets-$V.apk | $NAAMDEV_CUSTOMER_URL |
           | naamdev-partner-$V.apk | $NAAMDEV_PARTNER_URL |
+          | naamdev-admin-$V.apk | $NAAMDEV_ADMIN_URL |
 
           Install: tap the APK on your Android phone and allow "Install unknown apps" for your browser or file manager.
           Signed with: $SIGNING

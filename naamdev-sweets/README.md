@@ -2,7 +2,7 @@
 
 A complete Indian sweets & food-delivery platform that runs on **free plans**: Firebase (Spark) for data,
 sign-in and hosting, and a free Render server for the API. A customer storefront (English + हिन्दी, INR),
-a store/staff console, a delivery-partner app, live order tracking and Android apps for customers and riders.
+a store/staff console, a delivery-partner app, live order tracking and Android apps for customers, riders and staff.
 
 | App | Path | Live address (after deploy) | Who uses it |
 |---|---|---|---|
@@ -16,7 +16,8 @@ Authentication (**email + password only**), Firebase Hosting (the three apps as 
 free web service (the API, with in-process background jobs), Firestore listeners for real-time updates
 (order status, rider location, new orders, delivery offers) and a GitHub Actions keep-alive.
 
-Android apps (`mobile/android`): **NAAMDEV SWEETS** for customers and **NAAMDEV Partner** for riders.
+Android apps (`mobile/android`): **NAAMDEV SWEETS** for customers, **NAAMDEV Partner** for riders and
+**NAAMDEV Admin** (the staff console).
 They open the live sites above directly — nobody has to type a shop address. APKs are built by GitHub
 Actions; see [mobile/android/README.md](mobile/android/README.md).
 

@@ -1,20 +1,23 @@
 # NAAMDEV Android apps
 
-One Android project, two apps:
+One Android project, three apps:
 
 | App | Package | Opens |
 |---|---|---|
 | **NAAMDEV SWEETS** (customers) | `com.naamdevsweets.app` | the storefront (`apps/web`) |
 | **NAAMDEV Partner** (delivery riders) | `com.naamdevsweets.partner` | the partner site (`apps/delivery`) |
+| **NAAMDEV Admin** (store owner and staff) | `com.naamdevsweets.admin` | the staff console (`apps/admin`) |
 
-Both are native shells around the live websites, so every feature, price and fix on the site appears
+All three are native shells around the live websites, so every feature, price and fix on the site appears
 in the app immediately, with no app update. The shell adds what a browser tab can't:
 
 - camera or gallery picker for uploads (partner KYC documents, return photos, profile photo);
 - location permission prompts for the address pin and live delivery tracking;
 - hand-off to UPI apps, the phone dialer, WhatsApp and Google Maps;
 - Razorpay payment pop-ups (bank and 3-D Secure pages) inside the app;
-- printing or saving invoices as PDF;
+- printing or saving invoices and packing slips as PDF;
+- saving downloaded files — console reports (CSV) and riders' documents — through Android's
+  *Save to* picker (the page hands the file to the app, which a plain WebView can't download);
 - an offline screen that retries automatically; light and dark theme following the phone;
 - **Partner app only:** a foreground location service that keeps sending the rider's position
   while they are online, even while they navigate in Google Maps. It shows a "You're online"
@@ -35,12 +38,13 @@ To install on a phone, allow "Install unknown apps" for your browser or file man
 ### Which site the app opens
 
 - **GitHub Actions builds (default):** the customer app opens `https://naamdevseets.web.app` and the
-  partner app `https://naamdevseets-partner.web.app` — the Firebase Hosting sites created by the
+  partner app `https://naamdevseets-partner.web.app` and the admin app
+  `https://naamdevseets-admin.web.app` — the Firebase Hosting sites created by the
   deploy workflow. There is **no address to type**; the apps only allow HTTPS. Deploy the sites first
   (docs/DEPLOYMENT.md), otherwise the app shows its offline screen.
 - **Different addresses** (custom domain, renamed Hosting site): run the workflow manually
-  (*Run workflow*) and enter them, or save repository variables `NAAMDEV_CUSTOMER_URL` and
-  `NAAMDEV_PARTNER_URL` (*Settings → Secrets and variables → Actions → Variables*).
+  (*Run workflow*) and enter them, or save repository variables `NAAMDEV_CUSTOMER_URL`,
+  `NAAMDEV_PARTNER_URL` and `NAAMDEV_ADMIN_URL` (*Settings → Secrets and variables → Actions → Variables*).
 - **Local debug builds without an address:** the app asks for one on first launch (e.g.
   `http://192.168.1.20:3000` for a computer on the same Wi-Fi) and checks it really is a NAAMDEV site.
 
@@ -65,7 +69,7 @@ out. (The API address must be `https`; debug builds also accept a local `http` a
   Add the repository secrets `NAAMDEV_ANDROID_KEYSTORE_BASE64`, `NAAMDEV_ANDROID_KEYSTORE_PASSWORD`,
   `NAAMDEV_ANDROID_KEY_ALIAS` and `NAAMDEV_ANDROID_KEY_PASSWORD`. Keystores are git-ignored here;
   never commit one.
-- Google Play needs an App Bundle: `./gradlew bundleCustomerRelease bundlePartnerRelease`.
+- Google Play needs an App Bundle: `./gradlew bundleCustomerRelease bundlePartnerRelease bundleAdminRelease`.
 
 ## Build locally
 
@@ -74,12 +78,13 @@ Studio, or:
 
 ```bash
 cd naamdev-sweets/mobile/android
-./gradlew assembleCustomerDebug assemblePartnerDebug          # debug builds (ask for the address)
+./gradlew assembleCustomerDebug assemblePartnerDebug assembleAdminDebug   # debug builds (ask for the address)
 NAAMDEV_CUSTOMER_URL=https://naamdevseets.web.app \
 NAAMDEV_PARTNER_URL=https://naamdevseets-partner.web.app \
+NAAMDEV_ADMIN_URL=https://naamdevseets-admin.web.app \
 NAAMDEV_KEYSTORE_FILE=/path/naamdev-release.keystore NAAMDEV_KEYSTORE_PASSWORD=… \
 NAAMDEV_KEY_ALIAS=naamdev NAAMDEV_KEY_PASSWORD=… \
-./gradlew assembleCustomerRelease assemblePartnerRelease
+./gradlew assembleCustomerRelease assemblePartnerRelease assembleAdminRelease
 ```
 
 Debug builds install side by side with release builds (`.debug` package suffix) and allow Chrome

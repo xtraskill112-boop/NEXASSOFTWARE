@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { ArrowLeft, Check, ExternalLink, X } from "lucide-react";
 import { toast } from "sonner";
+import { canSaveInApp, extensionFor, saveInApp } from "@naamdev/api-client";
 import { REQUIRED_PARTNER_DOCUMENTS, formatINR } from "@naamdev/shared";
 import { Badge, Button, Card, Skeleton } from "@naamdev/ui";
 import { Can, DataTable, Guard, KeyValue, PageHeader } from "@/components/kit";
@@ -27,6 +28,17 @@ export default function PartnerPage() {
     void run(() => api.post(`/admin/people/partners/${id}/status`, { status, reason }), `Partner ${status.toLowerCase()}`);
   };
   const viewDoc = async (docId: string) => {
+    if (canSaveInApp()) {
+      // In the Android app: save the private file where the staff member chooses, then open it.
+      try {
+        const blob = await api.download(`/admin/people/partners/${id}/documents/${docId}/file`);
+        const doc = p.documents.find((d) => d.id === docId);
+        await saveInApp(blob, `${p.user.name}-${doc?.type ?? "document"}${extensionFor(blob.type)}`.replace(/\s+/g, "-"), true);
+      } catch (e) {
+        toast.error(errorMessage(e, "Couldn't open document"));
+      }
+      return;
+    }
     // Opened synchronously so pop-up blockers allow it, then filled once the private file downloads.
     const win = window.open("", "_blank");
     try {

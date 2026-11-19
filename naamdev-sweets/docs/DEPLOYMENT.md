@@ -106,5 +106,6 @@ Cloud Storage uploads (videos), and run the API anywhere that runs a Docker imag
 ## Android apps
 
 Run **NAAMDEV Android apps** after the first deploy. The APKs open `https://naamdevseets.web.app`
-(customer) and `https://naamdevseets-partner.web.app` (partner) directly; the partner app's background
+(customer), `https://naamdevseets-partner.web.app` (partner) and `https://naamdevseets-admin.web.app`
+(admin) directly — download them from the repository's **Releases** page; the partner app's background
 location goes to the API address handed over by the partner site.

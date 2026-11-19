@@ -10,7 +10,8 @@ def setting = { String gradleProp, String envName, String fallback = "" ->
 
 def customerUrl = setting("naamdev.customerUrl", "NAAMDEV_CUSTOMER_URL")
 def partnerUrl = setting("naamdev.partnerUrl", "NAAMDEV_PARTNER_URL")
-[customerUrl, partnerUrl].each { url ->
+def adminUrl = setting("naamdev.adminUrl", "NAAMDEV_ADMIN_URL")
+[customerUrl, partnerUrl, adminUrl].each { url ->
     if (!url.isEmpty() && !(url ==~ /^https?:\/\/[A-Za-z0-9.\-]+(:[0-9]{1,5})?\/?$/)) {
         throw new GradleException("Site address must look like https://shop.example.com (got: ${url})")
     }
@@ -58,6 +59,14 @@ android {
             buildConfigField "String", "APP_KIND", "\"partner\""
             buildConfigField "String", "START_URL", "\"${partnerUrl}\""
             manifestPlaceholders = [cleartext: cleartextFor(partnerUrl)]
+        }
+        admin {
+            dimension "app"
+            applicationId "com.naamdevsweets.admin"
+            resValue "string", "app_name", "NAAMDEV Admin"
+            buildConfigField "String", "APP_KIND", "\"admin\""
+            buildConfigField "String", "START_URL", "\"${adminUrl}\""
+            manifestPlaceholders = [cleartext: cleartextFor(adminUrl)]
         }
     }
 
