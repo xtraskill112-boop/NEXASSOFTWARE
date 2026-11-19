@@ -1,0 +1,47 @@
+name: NAAMDEV live check
+
+# Read-only browser check of the deployed shop: the storefront shows the catalogue from the API,
+# and the demo logins (if created) can sign in to the storefront, console and partner app.
+# It creates no orders, accounts or other data. Run it from the Actions tab after a deploy.
+on:
+  workflow_dispatch:
+  push:
+    paths: ["naamdev-sweets/tests/live/**", ".github/workflows/naamdev-live-check.yml"]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: naamdev-sweets
+
+jobs:
+  live-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: naamdev-sweets/package.json }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: naamdev-sweets/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Check the live sites
+        env:
+          LIVE_WEB_URL: https://${{ vars.NAAMDEV_WEB_SITE || 'naamdevseets' }}.web.app
+          LIVE_ADMIN_URL: https://${{ vars.NAAMDEV_ADMIN_SITE || 'naamdevseets-admin' }}.web.app
+          LIVE_PARTNER_URL: https://${{ vars.NAAMDEV_PARTNER_SITE || 'naamdevseets-partner' }}.web.app
+          LIVE_API_URL: ${{ vars.NAAMDEV_API_URL || 'https://naamdev-api.onrender.com' }}
+          LIVE_DEMO_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
+        run: npx playwright test --config tests/live/playwright.config.ts --trace off
+      - name: Screenshots of failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-check-failures
+          path: naamdev-sweets/test-results/live
+          retention-days: 7
