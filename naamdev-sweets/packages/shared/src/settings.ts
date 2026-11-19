@@ -72,6 +72,23 @@ export interface NotificationSettings {
   expiryAlertDays: number;
 }
 
+/**
+ * Direct UPI payments to the shop's own UPI ID. The customer pays from their UPI app; there is no
+ * gateway callback, so staff confirm each payment against the shop's UPI account before the order
+ * is accepted.
+ */
+export interface UpiSettings {
+  enabled: boolean;
+  /** UPI ID (VPA) that receives the money, e.g. a Paytm merchant QR ID. */
+  vpa: string;
+  /** Payee name shown in the customer's UPI app. */
+  payeeName: string;
+  /** Transaction note; {ORDER_NUMBER} is replaced with the order number. */
+  noteTemplate: string;
+  /** How long the customer has to pay and submit the UPI reference. */
+  payWithinMinutes: number;
+}
+
 export interface SettingsMap {
   checkout: CheckoutSettings;
   loyalty: LoyaltySettings;
@@ -79,6 +96,7 @@ export interface SettingsMap {
   storeProfile: StoreProfileSettings;
   social: SocialSettings;
   returns: ReturnSettings;
+  upi: UpiSettings;
   announcement: AnnouncementSettings;
   notifications: NotificationSettings;
 }
@@ -131,6 +149,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   },
   social: {},
   returns: { enabled: true, windowHours: 24 },
+  upi: { enabled: true, vpa: "paytmqr6rgzn2@ptys", payeeName: "RAKESH TAILOR", noteTemplate: "ORDER #{ORDER_NUMBER}", payWithinMinutes: 30 },
   announcement: { active: false, text: "" },
   notifications: { adminAlertEmails: [], lowStockAlerts: true, expiryAlertDays: 2 },
 };

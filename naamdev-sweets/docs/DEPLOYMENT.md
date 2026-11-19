@@ -1,130 +1,115 @@
-# Deployment
+# Deployment (Firebase)
 
-The repository ships a single-server production stack with Docker Compose. It suits a launch and
-moderate traffic; the same images run on any container platform (see *Scaling* below).
+Everything runs in the Firebase project **`naamdevseets`** (Blaze plan), region **asia-south1 (Mumbai)**.
+A GitHub Actions workflow does the whole deploy; you only add three secrets and press *Run workflow*.
 
-| Service | Image | Role |
-|---|---|---|
-| `postgres` | `postgres:16-alpine` | Database (volume `pgdata`) |
-| `api` | `infra/docker/api.Dockerfile` | Express + Socket.IO + jobs; runs `prisma migrate deploy` on every start (volume `uploads`) |
-| `web`, `admin`, `delivery` | `infra/docker/next.Dockerfile` (`APP` build arg) | Next.js standalone servers |
-| `caddy` | `caddy:2.8-alpine` | TLS certificates (Let's Encrypt), HTTP/3, HSTS, compression, reverse proxy |
-| `backup` | `postgres:16-alpine` + `infra/backup/backup.sh` | Daily `pg_dump` to `./backups`, retention pruning |
-
-## 1. Server and DNS
-
-* A Linux host with Docker Engine 24+ and the Compose plugin; 2 vCPU / 4 GB RAM is enough to start
-  (Next.js builds need ~2 GB).
-* Four DNS records pointing at the server, e.g. `naamdevsweets.com`, `admin.naamdevsweets.com`,
-  `partner.naamdevsweets.com`, `api.naamdevsweets.com`. Open ports 80 and 443 (TCP) and 443 (UDP).
-
-## 2. Configuration
-
-```bash
-git clone <your repository> && cd <repository>/naamdev-sweets
-cp .env.production.example .env
-openssl rand -base64 48   # → JWT_SECRET
-openssl rand -hex 32      # → ENCRYPTION_KEY  (keep a copy: it decrypts partner bank details)
-openssl rand -base64 32   # → POSTGRES_PASSWORD
+```
+ Customer / Rider / Staff (browser or Android app)
+        │ https://naamdevseets.web.app · naamdevseets-admin.web.app · naamdevseets-partner.web.app
+        ▼
+ Firebase Hosting ── /api/**, /static/** ──▶ Cloud Run: naamdev-api (Express) ──▶ Firestore · Firebase Auth · Storage · FCM
+        │                                         ▲
+        └── everything else ──▶ Cloud Run: naamdev-web / naamdev-admin / naamdev-partner (Next.js)
+                                                  │
+ Cloud Scheduler (every minute) ── POST /internal/jobs/tick (secret header)
+ Browsers ── Firestore listeners on "live" documents (order status, rider position, offers, new orders)
 ```
 
-Fill in the domains, `ACME_EMAIL`, `SEED_ADMIN_*`, and whichever providers you have
-([INTEGRATIONS.md](INTEGRATIONS.md)). `NEXT_PUBLIC_*` values are compiled into the front-end
-images, so rebuild (`docker compose build web admin delivery`) after changing them.
+## One-time setup
 
-The API refuses to start in production with `OTP_DEV_ECHO=true` or the example secrets.
+1. **Blaze plan** — Firebase console → ⚙ Usage and billing → keep the project on Blaze (Cloud Run,
+   Cloud Scheduler and Secret Manager need billing). Set a budget alert while you're there.
+2. **Service account key for GitHub** — Google Cloud console → IAM & Admin → Service accounts →
+   *Create service account* (e.g. `github-deploy`) → role **Owner** → Keys → *Add key* → JSON.
+   In GitHub: repository → Settings → Secrets and variables → Actions → *New repository secret*:
+   - `FIREBASE_SERVICE_ACCOUNT` — paste the whole JSON file.
+   - `NAAMDEV_ADMIN_EMAIL` — your email for the console (super admin).
+   - `NAAMDEV_ADMIN_PASSWORD` — at least 8 characters with a letter and a number.
 
-## 3. Start
+   Owner is the simplest choice because the workflow enables APIs, creates the Firestore database,
+   a runtime service account, secrets, Cloud Run services, Hosting sites and the scheduler. Delete the
+   key (or downgrade the account) whenever you like; deploys need it again only when you re-run them.
+3. **Run the deploy** — GitHub → Actions → **NAAMDEV deploy to Firebase** → *Run workflow*.
+   Leave *load the sample sweets catalogue* ticked on the first run if you want a ready-made menu to
+   edit; untick it to start with empty categories.
 
-```bash
-docker compose up -d --build
-docker compose exec api node dist/seed.js     # first deploy only
-docker compose ps                             # all services "running"/"healthy"
-curl https://api.<your-domain>/health
-```
+The run summary lists the live addresses. Sign in to the console with `NAAMDEV_ADMIN_EMAIL`, then:
 
-The seed is idempotent and safe to re-run. In production it creates roles and permissions, the
-catalogue, content pages, FAQs, default settings, sample coupons/banners and the super admin from
-`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PHONE` / `SEED_ADMIN_PASSWORD` — **no demo accounts** unless
-`SEED_DEMO_ACCOUNTS=true`. Then sign in to the console and:
+- **Settings → Store location**: your real shop address, phone, hours and map position.
+- **Settings → Delivery zones**: the PIN codes you deliver to (the sample seed adds Jaipur ones).
+- **Settings → UPI payments**: the shop UPI ID and payee name (defaults: `paytmqr6rgzn2@ptys`, RAKESH TAILOR).
+- **Staff & roles**: add your team (each gets an email + password login; give the people who can see
+  the shop's Paytm/UPI account the *Confirm direct UPI payments* permission — Store owner, Store
+  manager and Order manager roles have it).
+- **Products**: edit prices, photos and stock, or archive the sample products.
 
-1. change the super admin password (*Account menu → Change password*);
-2. set the store address and map location (*Settings → Store location*) — dispatch and delivery
-   fees use it — and review delivery zones/PIN codes;
-3. review *Settings* (checkout limits, COD, GST, loyalty, partner pay, business profile with GSTIN
-   and FSSAI licence), the catalogue prices and stock, and the seeded coupons and banners;
-4. create staff accounts with the narrowest role that fits;
-5. check *Settings → Integrations* and register the Razorpay webhook.
+### If a step asks for a click in the Firebase console
 
-## 4. Updates
+Two Firebase features are normally switched on in the console. The workflow tries to do it for you and
+stops with a clear message if it can't:
 
-```bash
-git pull
-docker compose up -d --build     # API applies pending migrations before it starts listening
-```
+- *Authentication → Get started → Sign-in method → Email/Password → Enable.*
+- *Storage → Get started → location asia-south1.*
 
-Migrations are forward-only (`prisma migrate deploy`); take a backup before upgrading.
-Create new migrations in development with `pnpm db:migrate` and commit them.
+Then re-run the workflow. Re-running is always safe: the seed never overwrites what you edited in the
+console (existing categories, products, settings and role permissions are left alone).
 
-## 5. Backups and restore
+### Site names
 
-* The `backup` service writes `backups/naamdev-YYYYmmdd-HHMMSS.sql.gz` every 24 h
-  (`BACKUP_INTERVAL_SECONDS`) and deletes files older than `BACKUP_RETENTION_DAYS` (14).
-* **Copy backups off the server** (e.g. `rclone` or `aws s3 sync ./backups s3://…` from cron).
-  A backup that only lives on the same disk is not a backup.
-* Uploaded media (when Cloudinary is not used) live in the `uploads` volume, including private
-  partner KYC documents. Back it up as well:
-  `docker run --rm -v naamdev_uploads:/data -v "$PWD/backups":/out alpine tar czf /out/uploads-$(date +%F).tgz -C /data .`
-* Restore into an empty database:
+Hosting site IDs are global. If `naamdevseets-admin` or `naamdevseets-partner` is taken, set repository
+**variables** `NAAMDEV_ADMIN_SITE` / `NAAMDEV_PARTNER_SITE` (and `NAAMDEV_CUSTOMER_URL` /
+`NAAMDEV_PARTNER_URL` for the Android build) to names that are free, then re-run.
+Custom domains (e.g. `naamdevsweets.com`) can be connected per site in Firebase console → Hosting →
+*Add custom domain*; add the new addresses as `APP_URL_*` and rebuild the Android apps with them.
 
-  ```bash
-  docker compose stop api
-  gunzip -c backups/naamdev-<timestamp>.sql.gz | docker compose exec -T postgres psql -U naamdev -d naamdev
-  docker compose start api
-  ```
+## Optional integrations
 
-  Practise a restore on a staging machine before you need it.
+Add these as repository **secrets** (S) or **variables** (V) and re-run the deploy:
 
-## 6. Logs and monitoring
+| Integration | Settings |
+|---|---|
+| Razorpay | S `RAZORPAY_KEY_ID`, S `RAZORPAY_KEY_SECRET`, S `RAZORPAY_WEBHOOK_SECRET`. Webhook URL in the Razorpay dashboard: `https://naamdevseets.web.app/api/v1/payments/razorpay/webhook` (events: payment.captured, payment.failed, refund.processed, refund.failed) |
+| Order emails (SMTP) | V `SMTP_HOST`, V `SMTP_PORT`, V `SMTP_USER`, S `SMTP_PASS`, V `EMAIL_FROM` |
+| Google Maps | V `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (restrict it to your sites' domains) |
+| Web push | V `NEXT_PUBLIC_FIREBASE_VAPID_KEY` (Firebase console → Project settings → Cloud Messaging → Web Push certificates), and set `PUSH_ENABLED=true` on the `naamdev-api` service |
 
-* All services log to stdout; the API logs structured JSON (pino) with request ids and redacts
-  secrets. `docker compose logs -f api`. Configure Docker's log rotation (`/etc/docker/daemon.json`:
-  `"log-driver": "local"`) or ship logs to your aggregator (Loki, CloudWatch, Datadog…).
-* Health: `GET /health` on the API (database connectivity + integration status) is used by the
-  container `HEALTHCHECK`; point an uptime monitor (UptimeRobot, Better Stack…) at
-  `https://api.<domain>/health` and at the storefront home page.
-* Business health lives in the console: dashboard, low-stock/expiry alerts, payment and refund
-  lists, the notification delivery log and the audit log.
-* Watch disk space for `pgdata`, `uploads` and `backups`.
+Sign-up verification and password-reset emails are sent by Firebase Authentication itself (customise
+the templates under Authentication → Templates). No SMTP is needed for those.
 
-## 7. Security checklist
+## What the workflow creates
 
-- [ ] `.env` is readable only by the deploy user (`chmod 600 .env`) and never committed.
-- [ ] `COOKIE_SECURE=true` (set by compose), `TRUST_PROXY=2` (Caddy → Next.js → API).
-- [ ] Razorpay in **live** mode only after test-mode checks pass; webhook secret set.
-- [ ] SMS sender id and templates DLT-registered; SPF/DKIM/DMARC for email.
-- [ ] Google Maps key restricted to your domains.
-- [ ] Postgres is not published to the internet (compose does not expose 5432).
-- [ ] Off-site backups and a tested restore.
-- [ ] Super admin password changed; staff use individual accounts.
+| Resource | Name |
+|---|---|
+| Firestore (native) | `(default)` in asia-south1, rules `firebase/firestore.rules`, indexes `firebase/firestore.indexes.json` |
+| Storage rules | `firebase/storage.rules` (deny all — the API serves uploads) |
+| Secret Manager | `naamdev-encryption-key` (partner bank details), `naamdev-jobs-secret` (scheduler), Razorpay/SMTP secrets when given |
+| Runtime service account | `naamdev-run@…` with Firestore user, Firebase Auth admin, Storage object admin, Secret accessor, FCM admin |
+| Artifact Registry | `naamdev` (Docker images, tagged with the commit) |
+| Cloud Run | `naamdev-api` (port 4000), `naamdev-web`, `naamdev-admin`, `naamdev-partner` (port 3000); 0–4 instances each |
+| Hosting | sites `naamdevseets`, `naamdevseets-admin`, `naamdevseets-partner` rewriting to Cloud Run |
+| Cloud Scheduler | `naamdev-jobs`, every minute → expires unpaid orders and delivery offers, retires expired stock batches, stock alerts, clean-up |
 
-## Scaling and alternatives
+## Costs (rough, small shop)
 
-* The API is stateless apart from Socket.IO rooms. To run several API replicas, put them behind a
-  load balancer with sticky sessions (or add the Socket.IO Redis adapter) — background jobs already
-  coordinate through Postgres advisory locks. Use Cloudinary (or shared storage) for uploads.
-* Managed PostgreSQL (RDS, Cloud SQL, Neon, Supabase…) works: set `DATABASE_URL`, make sure
-  `pg_trgm` is available, and drop the `postgres`/`backup` services in favour of the provider's
-  backups.
-* The Next.js apps can also be deployed to Vercel or similar with `API_INTERNAL_URL` pointing at the
-  public API URL; the API needs a long-running Node host because of Socket.IO and jobs.
+Cloud Run scales to zero and bills per request, Firestore/Hosting/Storage have free daily quotas, and the
+scheduler is 1 job (3 free per billing account). Expect a few hundred rupees a month at low traffic;
+the first request after a quiet period takes a few seconds while an instance starts. For instant
+responses set `--min-instances 1` on `naamdev-api` and `naamdev-web` (roughly ₹1,000 a month each at the minimum size).
 
-## Building images behind a TLS-intercepting proxy
+## Operations
 
-If your build network re-signs TLS, pass the proxy's CA as a BuildKit secret (it is not stored in
-the image):
+- **Logs** — Google Cloud console → Cloud Run → service → Logs (the API logs JSON with request IDs).
+- **Health** — `https://<api-url>/health` checks Firestore; the deploy smoke test calls each site.
+- **Backups** — Firestore → *Disaster recovery*: enable point-in-time recovery and/or scheduled backups
+  (`gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=14d`).
+- **Rollback** — Cloud Run → service → Revisions → route traffic to the previous revision.
+- **Rotate secrets** — add a new version in Secret Manager (`naamdev-jobs-secret` also needs the
+  scheduler job header updated — re-running the workflow does that).
+- **Background jobs** — the scheduler sends `POST /internal/jobs/tick` with the `x-jobs-secret` header;
+  each job holds a lease in `jobRuns/{name}` so overlapping ticks never run it twice.
 
-```bash
-DOCKER_BUILDKIT=1 docker build --secret id=extra_ca,src=/path/to/ca.pem \
-  -f infra/docker/api.Dockerfile -t naamdev/api .
-```
+## Android apps
+
+Run **NAAMDEV Android apps** in GitHub Actions after the first deploy. The APKs open
+`https://naamdevseets.web.app` (customer) and `https://naamdevseets-partner.web.app` (partner) directly —
+there is no address to enter. Details and Play Store signing: [mobile/android/README.md](../mobile/android/README.md).

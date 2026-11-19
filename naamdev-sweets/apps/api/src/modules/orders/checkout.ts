@@ -16,6 +16,7 @@ import { awardPoints } from "../loyalty/service";
 import { OutOfStockError, reserveStock } from "../inventory/service";
 import { razorpay } from "../payments/razorpay";
 import { applyTransition, cancelOrder, orderRef, runEffects, withOrderTx } from "./service";
+import { upiOption, upiPaymentData } from "./upi";
 
 async function addressAndZone(userId: string, addressId?: string) {
   if (!addressId) return { address: null, zone: null };
@@ -40,7 +41,9 @@ export async function quote(userId: string, input: { addressId?: string; couponC
   const serviceable = !address || !!zone?.isActive || !delivery.restrictToZones;
   if (address && !serviceable) blockers.push(`Sorry, we don't deliver to PIN code ${address.pincode} yet.`);
   const total = view.pricing.totalPaise;
+  const upi = await upiOption();
   const paymentOptions = {
+    upi,
     online: { available: integrations.razorpay && checkout.onlinePaymentsEnabled, reason: integrations.razorpay ? (checkout.onlinePaymentsEnabled ? null : "Online payments are temporarily disabled") : "Online payments are not configured" },
     cod: { available: checkout.codEnabled && total <= checkout.codMaxOrderPaise, reason: !checkout.codEnabled ? "Cash on delivery is currently unavailable" : total > checkout.codMaxOrderPaise ? `COD is available for orders up to ₹${checkout.codMaxOrderPaise / 100}` : null },
   };
@@ -57,7 +60,7 @@ async function onlinePayment(orderId: string) {
 
 export async function placeOrder(
   userId: string,
-  input: { addressId: string; paymentMethod: "ONLINE" | "COD"; idempotencyKey: string; couponCode?: string | null; redeemPoints?: number; customerNote?: string | null },
+  input: { addressId: string; paymentMethod: "ONLINE" | "UPI" | "COD"; idempotencyKey: string; couponCode?: string | null; redeemPoints?: number; customerNote?: string | null },
 ) {
   // Retries with the same key return the original order (no second order, no second charge).
   const known = (await orderKeyRef(userId, input.idempotencyKey).get()).data();
@@ -70,10 +73,10 @@ export async function placeOrder(
   if (!q.canCheckout) throw conflict(q.blockers[0] ?? "Your cart can't be checked out yet.", { blockers: q.blockers }, "CHECKOUT_BLOCKED");
   const ev = q.pricing.coupon?.evaluation;
   if (input.couponCode && ev && !ev.valid) throw badRequest(ev.message, { reason: ev.reason }, "COUPON_INVALID");
-  const pay = input.paymentMethod === "ONLINE" ? q.paymentOptions.online : q.paymentOptions.cod;
+  const pay = input.paymentMethod === "ONLINE" ? q.paymentOptions.online : input.paymentMethod === "UPI" ? q.paymentOptions.upi : q.paymentOptions.cod;
   if (!pay.available) throw badRequest(pay.reason ?? "This payment method is unavailable.", undefined, "PAYMENT_METHOD_UNAVAILABLE");
 
-  const [checkout, store] = await Promise.all([getSetting("checkout"), defaultStore()]);
+  const [checkout, store, upiSettings] = await Promise.all([getSetting("checkout"), defaultStore(), getSetting("upi")]);
   const address = q.address!;
   const couponCode = q.couponCode && ev?.valid ? q.couponCode.toUpperCase() : null;
   const pricing = q.pricing;
@@ -150,7 +153,10 @@ export async function placeOrder(
         customerNote: input.customerNote ?? null,
         deliveryOtp: numericCode(4),
         estimatedDeliveryAt: new Date(now.getTime() + q.etaMinutes * 60_000),
-        reservationExpiresAt: input.paymentMethod === "ONLINE" ? new Date(now.getTime() + checkout.reservationMinutes * 60_000) : null,
+        reservationExpiresAt:
+          input.paymentMethod === "ONLINE" ? new Date(now.getTime() + checkout.reservationMinutes * 60_000)
+          : input.paymentMethod === "UPI" ? new Date(now.getTime() + upiSettings.payWithinMinutes * 60_000)
+          : null,
         idempotencyKey: input.idempotencyKey,
         invoiceNumber: null,
         cancelReason: null,
@@ -194,6 +200,9 @@ export async function placeOrder(
           gatewayPaymentId: null, methodDetail: null, failureReason: null, raw: null, capturedAt: null, createdAt: now, updatedAt: now,
         } satisfies Payment);
         await applyTransition(ctx, order, "CONFIRMED", { type: "SYSTEM" }, "Cash on delivery order confirmed");
+      } else if (input.paymentMethod === "UPI") {
+        // Stays PENDING until staff confirm the money reached the shop's UPI account.
+        tx.set(db.collection(C.payments).doc(), upiPaymentData(order, id, now));
       }
       return { order, duplicate: false };
     });

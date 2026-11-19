@@ -6,7 +6,8 @@ const RIDER = process.env.E2E_DELIVERY_URL ?? "http://localhost:3002";
 const PASSWORD = "Naamdev@123";
 const STORE = { latitude: 26.913, longitude: 75.79 };
 
-const phone = `9${String(Date.now()).slice(-9)}`;
+const customerEmail = `e2e-${Date.now()}@test.naamdev.local`;
+const CUSTOMER_PASSWORD = "Sweets@2026";
 let orderId = "";
 let orderNumber = "";
 
@@ -19,18 +20,19 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     const ctx = await browser.newContext({ geolocation: STORE, permissions: ["geolocation"], viewport: { width: 390, height: 844 } });
     const p = await ctx.newPage();
     await p.goto(`${RIDER}/login`);
-    await p.getByLabel("Mobile number or email").fill("rider@naamdevsweets.local");
+    await p.getByLabel("Email").fill("rider@naamdevsweets.local");
     await p.getByLabel("Password").fill(PASSWORD);
     await p.getByRole("button", { name: "Log in" }).click();
     await expect(p.getByText("You're offline", { exact: true })).toBeVisible();
     await p.getByRole("switch", { name: "Online" }).click();
     await expect(p.getByText("You're online", { exact: true })).toBeVisible();
     await expect(p.getByText("Live location is being shared")).toBeVisible();
-    await ctx.storageState({ path: "/tmp/nd-rider.json" });
+    // Firebase keeps the sign-in in IndexedDB.
+    await ctx.storageState({ path: "/tmp/nd-rider.json", indexedDB: true });
     await ctx.close();
   });
 
-  test("customer discovers, signs up with OTP and places a COD order", async ({ browser }) => {
+  test("customer discovers, signs up with email and places a COD order", async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const p = await ctx.newPage();
     await noSplash(p);
@@ -40,7 +42,10 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     // Typo-tolerant search
     await p.goto(`${WEB}/search?q=kaju%20katri`);
     await expect(p.getByRole("heading", { name: /Results for/ })).toBeVisible();
+    // Wait for the client-side results before tapping a product.
+    await expect(p.getByText(/^\d+ items?$/)).toBeVisible();
     await p.getByRole("link", { name: "Kaju Katli" }).first().click();
+    await expect(p).toHaveURL(/\/product\/kaju-katli/);
     await expect(p.getByRole("heading", { level: 1, name: "Kaju Katli" })).toBeVisible();
 
     // Weight selection updates price
@@ -49,19 +54,19 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     await expect(price).toContainText("₹1,105");
     await p.getByRole("button", { name: "Buy now" }).first().click();
 
-    // Redirected to login for checkout → OTP sign-up (dev echo shows the code)
+    // Redirected to login for checkout → email + password sign-up (Firebase Auth)
     await expect(p).toHaveURL(/\/login/);
-    await p.getByLabel("Mobile number").fill(phone);
-    await p.getByRole("button", { name: "Send OTP" }).click();
-    const devText = await p.getByText(/your OTP is/).innerText();
-    const otp = devText.match(/(\d{6})/)![1]!;
-    for (const [i, d] of [...otp].entries()) await p.getByLabel(`Digit ${i + 1}`).fill(d);
-    await expect(p.getByRole("heading", { name: /Almost there/ })).toBeVisible();
+    await p.getByRole("button", { name: "Create account" }).click();
+    await expect(p.getByRole("heading", { name: "Create your account" })).toBeVisible();
     await p.getByLabel("Full name").fill("E2E Test Customer");
+    await p.getByLabel("Email address").fill(customerEmail);
+    await p.getByLabel("Password").fill(CUSTOMER_PASSWORD);
     await p.getByRole("button", { name: "Create account" }).click();
 
     // Checkout: add address, choose COD, place order
     await expect(p.getByRole("heading", { name: "Checkout" })).toBeVisible();
+    // Email sign-up skipped the optional mobile number, so the address form asks for it.
+    await p.getByLabel(/^Mobile number/).fill("9876543210");
     await p.getByLabel("Flat / House no. / Building").fill("Flat 7, Test Residency");
     await p.getByLabel("Area / Street / Sector").fill("C-Scheme");
     await p.getByLabel("PIN code").fill("302001");
@@ -76,7 +81,7 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     await p.getByRole("link", { name: "Track order" }).click();
     await expect(p).toHaveURL(/\/account\/orders\//);
     orderId = p.url().split("/").pop()!;
-    await ctx.storageState({ path: "/tmp/nd-customer.json" });
+    await ctx.storageState({ path: "/tmp/nd-customer.json", indexedDB: true });
     await ctx.close();
   });
 
@@ -84,7 +89,7 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const p = await ctx.newPage();
     await p.goto(`${ADMIN}/login`);
-    await p.getByLabel("Email or mobile").fill("orders@naamdevsweets.local");
+    await p.getByLabel("Work email").fill("orders@naamdevsweets.local");
     await p.getByLabel("Password").fill(PASSWORD);
     await p.getByRole("button", { name: "Sign in" }).click();
     await expect(p.getByRole("heading", { name: "Store overview" })).toBeVisible();
@@ -130,11 +135,55 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     await cctx.close();
   });
 
+  test("customer pays by UPI; the order waits until staff confirm the payment", async ({ browser }) => {
+    const cctx = await browser.newContext({ storageState: "/tmp/nd-customer.json", viewport: { width: 1280, height: 900 } });
+    const c = await cctx.newPage();
+    await noSplash(c);
+    await c.goto(`${WEB}/product/gulab-jamun`);
+    await c.getByRole("button", { name: "Buy now" }).first().click();
+    await expect(c.getByRole("heading", { name: "Checkout" })).toBeVisible();
+    await expect(c.getByText(/Estimated delivery/)).toBeVisible();
+    await c.getByRole("radio", { name: /Pay by UPI app/ }).click();
+    await c.getByRole("button", { name: /^Pay ₹/ }).last().click();
+
+    // Order page: QR code (desktop) and the shop's UPI details; nothing is confirmed yet.
+    await expect(c.getByText("Step 1 · Pay by UPI")).toBeVisible();
+    await expect(c.getByLabel("UPI QR code").locator("svg")).toBeVisible();
+    await expect(c.getByText("RAKESH TAILOR")).toBeVisible();
+    await expect(c.getByText("UPI ID: paytmqr6rgzn2@ptys")).toBeVisible();
+    const upiOrderId = c.url().split("/").pop()!;
+    const upiOrderNumber = (await c.locator("h1 span.font-mono").innerText()).trim();
+    await c.getByLabel("UPI reference number (UTR)").fill("412345678901");
+    await c.getByRole("button", { name: /I've paid/ }).click();
+    await expect(c.getByText("Checking your UPI payment")).toBeVisible();
+
+    // Staff with "payments.verify" check the shop's UPI account and confirm.
+    const actx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const a = await actx.newPage();
+    await a.goto(`${ADMIN}/login`);
+    await a.getByLabel("Work email").fill("orders@naamdevsweets.local");
+    await a.getByLabel("Password").fill(PASSWORD);
+    await a.getByRole("button", { name: "Sign in" }).click();
+    await expect(a.getByText(/UPI payments? to check/)).toBeVisible();
+    await a.goto(`${ADMIN}/orders/${upiOrderId}`);
+    await expect(a.getByRole("heading", { name: upiOrderNumber })).toBeVisible();
+    await expect(a.getByText("412345678901").first()).toBeVisible();
+    a.once("dialog", (d) => void d.accept());
+    await a.getByRole("button", { name: "Payment received" }).click();
+    await expect(a.getByText("Payment confirmed — order accepted")).toBeVisible();
+
+    // The customer's page updates live (Firestore) to the confirmed order.
+    await expect(c.getByText("Checking your UPI payment")).toHaveCount(0);
+    await expect(c.getByText("Paid").first()).toBeVisible();
+    await actx.close();
+    await cctx.close();
+  });
+
   test("role permissions shape the console", async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const p = await ctx.newPage();
     await p.goto(`${ADMIN}/login`);
-    await p.getByLabel("Email or mobile").fill("support@naamdevsweets.local");
+    await p.getByLabel("Work email").fill("support@naamdevsweets.local");
     await p.getByLabel("Password").fill(PASSWORD);
     await p.getByRole("button", { name: "Sign in" }).click();
     await expect(p.getByRole("link", { name: "Support tickets" })).toBeVisible();
@@ -151,7 +200,7 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     const p = await ctx.newPage();
     const signIn = async (password: string) => {
       await p.goto(`${ADMIN}/login`);
-      await p.getByLabel("Email or mobile").fill("packing@naamdevsweets.local");
+      await p.getByLabel("Work email").fill("packing@naamdevsweets.local");
       await p.getByLabel("Password").fill(password);
       await p.getByRole("button", { name: "Sign in" }).click();
     };
@@ -162,7 +211,7 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     await dialog.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
     await dialog.getByLabel("Confirm new password").fill(NEW_PASSWORD);
     await dialog.getByRole("button", { name: "Update password" }).click();
-    await expect(dialog.getByText("Incorrect password")).toBeVisible();
+    await expect(dialog.getByText(/incorrect/i)).toBeVisible();
     await dialog.getByLabel("Current password").fill(PASSWORD);
     await dialog.getByRole("button", { name: "Update password" }).click();
     await expect(p.getByText("Password changed")).toBeVisible();

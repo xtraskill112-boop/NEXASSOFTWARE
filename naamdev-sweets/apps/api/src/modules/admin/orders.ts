@@ -7,8 +7,7 @@ import {
 } from "@naamdev/db";
 import {
   ORDER_STATUSES, PROCESS_TRANSITIONS, hasPermission, nextStatuses, orderNoteSchema, orderStatusUpdateSchema, paginationSchema, refundCreateSchema,
-  type OrderStatus,
-} from "@naamdev/shared";
+  type OrderStatus, upiVerifySchema } from "@naamdev/shared";
 import { audit } from "../../lib/audit";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { body, pageOf, param, query } from "../../lib/http";
@@ -16,7 +15,8 @@ import { requireAnyPermission, requirePermission } from "../../middleware/auth";
 import { assignPartner, autoOfferDelivery } from "../delivery/service";
 import { notify } from "../notifications/service";
 import { customerOrder, loadOrderFull, trackingPayload } from "../orders/serializers";
-import { changeOrderStatus, createRefund, settleGatewayRefund } from "../orders/service";
+import { changeOrderStatus, completeManualRefund, createRefund, settleGatewayRefund } from "../orders/service";
+import { auditUpiDecision, pendingUpiVerifications, verifyUpiPayment } from "../orders/upi";
 import { razorpay } from "../payments/razorpay";
 
 export const adminOrdersRouter = Router();
@@ -28,7 +28,7 @@ const SCAN_LIMIT = 2000;
 const listQuery = paginationSchema.extend({
   status: z.string().optional(),
   q: z.string().trim().max(60).optional(),
-  payment: z.enum(["ONLINE", "COD"]).optional(),
+  payment: z.enum(["ONLINE", "UPI", "COD"]).optional(),
   paymentStatus: z.string().optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
@@ -91,6 +91,11 @@ async function adminOrder(id: string) {
   ]);
   return { full, user, orderCount, batches: new Map(batches.map((b) => [b.id, b])) };
 }
+
+/** Direct UPI payments waiting for a staff check in the shop's UPI account. */
+adminOrdersRouter.get("/upi/pending", requireAnyPermission("payments.verify", "orders.view"), async (_req, res) => {
+  res.json({ items: await pendingUpiVerifications() });
+});
 
 adminOrdersRouter.get("/:id", requirePermission("orders.view"), async (req, res) => {
   const { full: o, user, orderCount, batches } = await adminOrder(param(req, "id"));
@@ -165,6 +170,23 @@ adminOrdersRouter.post("/:id/refunds", requirePermission("refunds.manage"), asyn
   res.status(201).json({ refund });
 });
 
+/** Staff checked the shop's UPI account: the customer's payment is there (RECEIVED) or not (NOT_FOUND). */
+adminOrdersRouter.post("/:id/upi/verify", requirePermission("payments.verify"), async (req, res) => {
+  const { decision, note } = body(req, upiVerifySchema);
+  const a = actorOf(req);
+  const { order, payment } = await verifyUpiPayment(param(req, "id"), decision, { ...a, userId: req.auth!.user.id, name: req.auth!.user.name }, note);
+  await auditUpiDecision(req, order.id, decision, payment.gatewayPaymentId, note);
+  res.json({ order: { id: order.id, status: order.status, paymentStatus: order.paymentStatus } });
+});
+
+/** Records the UPI/bank reference of a refund staff sent by hand (direct-UPI and cash orders). */
+adminOrdersRouter.post("/refunds/:refundId/complete", requirePermission("refunds.manage"), async (req, res) => {
+  const { reference } = body(req, z.object({ reference: z.string().trim().min(4).max(120) }));
+  const refund = await completeManualRefund(param(req, "refundId"), reference, actorOf(req));
+  await audit(req, "refund.manual_sent", "Refund", refund.id, { reference, amountPaise: refund.amountPaise });
+  res.json({ refund });
+});
+
 adminOrdersRouter.post("/refunds/:refundId/sync", requirePermission("refunds.manage"), async (req, res) => {
   const refund = await getDoc<Refund>(db.collection(C.refunds).doc(param(req, "refundId")));
   if (!refund?.gatewayRefundId) throw badRequest("This refund has no gateway reference.");
@@ -187,7 +209,9 @@ adminOrdersRouter.post("/returns/:returnId/decision", requirePermission("refunds
     await createRefund(
       {
         orderId: rr.orderId, amountPaise: refundAmountPaise ?? order.totalPaise - order.refundedPaise, reason: `Return approved: ${rr.reason}`, returnRequestId: rr.id,
-        method: order.paymentMethod === "COD" ? "MANUAL" : "GATEWAY", reference: order.paymentMethod === "COD" ? note ?? "Manual refund — return approved" : undefined,
+        // Razorpay refunds go back through the gateway; cash and direct-UPI refunds are sent by staff
+        // and stay pending until the transfer reference is recorded.
+        method: order.paymentMethod === "ONLINE" ? "GATEWAY" : "MANUAL", pending: order.paymentMethod !== "ONLINE",
       },
       actorOf(req),
     );
@@ -205,14 +229,14 @@ async function orderRefs(ids: string[]) {
 }
 
 adminPaymentsRouter.get("/", requirePermission("payments.view"), async (req, res) => {
-  const q = query(req, paginationSchema.extend({ status: z.string().optional(), method: z.enum(["ONLINE", "COD"]).optional() }));
+  const q = query(req, paginationSchema.extend({ status: z.string().optional(), method: z.enum(["ONLINE", "UPI", "COD"]).optional() }));
   const recent = await getDocs<Payment>(db.collection(C.payments).orderBy("createdAt", "desc").limit(SCAN_LIMIT));
   const filtered = recent.filter((p) => (!q.status || p.status === q.status) && (!q.method || p.method === q.method));
   const pg = pageOf(filtered, q.page, q.pageSize);
   const ords = await orderRefs(pg.items.map((p) => p.orderId));
   const summary: { status: string; method: string; _sum: { amountPaise: number }; _count: number }[] = [];
   for (const status of ["CREATED", "AUTHORIZED", "CAPTURED", "FAILED", "REFUNDED"])
-    for (const method of ["ONLINE", "COD"]) {
+    for (const method of ["ONLINE", "UPI", "COD"]) {
       const agg = await db.collection(C.payments).where("status", "==", status).where("method", "==", method)
         .aggregate({ total: AggregateField.sum("amountPaise"), n: AggregateField.count() }).get();
       const d = agg.data();

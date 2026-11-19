@@ -1,6 +1,7 @@
 import { C, db, getDoc, getDocs, SUB, type DeviceToken, type NotificationChannel, type NotificationType, type User } from "@naamdev/db";
 import { formatINR, type OrderStatus } from "@naamdev/shared";
 import { env, isTest } from "../../config/env";
+import { settleBackground, track } from "../../lib/background";
 import { live } from "../../lib/live";
 import { logger } from "../../lib/logger";
 import { getRole } from "../../middleware/auth";
@@ -22,18 +23,14 @@ export interface NotifyInput {
   emailCta?: string;
 }
 
-const pending = new Set<Promise<unknown>>();
-
-/** Fire-and-forget dispatch so that a slow provider never blocks an API response. */
+/** Dispatches without blocking business logic; the request finishes it before responding (lib/background). */
 export function notify(input: NotifyInput) {
-  const p = deliver(input).catch((err) => logger.error({ err, template: input.template }, "notification failed"));
-  pending.add(p);
-  p.finally(() => pending.delete(p));
+  void track(deliver(input).catch((err) => logger.error({ err, template: input.template }, "notification failed")));
 }
 
-/** Await all in-flight notifications (used by tests and graceful shutdown). */
+/** Await all in-flight notifications and live updates (tests and graceful shutdown). */
 export async function drainNotifications() {
-  while (pending.size) await Promise.allSettled([...pending]);
+  await settleBackground();
 }
 
 async function logDelivery(userId: string | null, channel: NotificationChannel, template: string, recipient: string, r: SendResult) {

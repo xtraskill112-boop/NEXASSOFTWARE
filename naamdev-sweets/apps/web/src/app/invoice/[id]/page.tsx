@@ -3,7 +3,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Printer } from "lucide-react";
 import type { Order, PublicSettings } from "@naamdev/api-client";
-import { formatINR } from "@naamdev/shared";
+import { formatINR, PAYMENT_METHOD_LABELS } from "@naamdev/shared";
 import { BrandLoader, Button, Logo } from "@naamdev/ui";
 import { api } from "@/lib/api";
 
@@ -36,7 +36,7 @@ export default function InvoicePage() {
           <p className="mt-2">Invoice no: <b>{order.invoiceNumber ?? "—"}</b></p>
           <p>Order no: <b>{order.orderNumber}</b></p>
           <p>Date: {new Date(order.confirmedAt ?? order.placedAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</p>
-          <p>Payment: {order.paymentMethod === "COD" ? "Cash on delivery" : "Online (Razorpay)"}</p>
+          <p>Payment: {PAYMENT_METHOD_LABELS[order.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? order.paymentMethod}</p>
         </div>
       </div>
       <div className="mt-5">

@@ -1,97 +1,107 @@
 # Testing
 
 Three layers, all runnable locally and in CI (`.github/workflows/naamdev-ci.yml` at the repository
-root). Tests never touch your development database.
+root). Every test runs on the **Firebase emulators** (Auth, Firestore, Storage — project
+`demo-naamdev`); nothing touches the real `naamdevseets` project. Java 11+ is needed for the
+Firestore emulator.
 
 | Layer | Command | Tooling | Count |
 |---|---|---|---|
-| Unit | `pnpm test:unit` | Vitest | 34 tests — `packages/shared/test` |
-| API integration | `pnpm test:api` | Vitest + Supertest + local Razorpay mock + real PostgreSQL | 52 tests in 7 files — `apps/api/test` |
-| End-to-end | `pnpm test:e2e` | Playwright (Chromium) against production builds | 6 serial steps — `tests/e2e/ecosystem.spec.ts` |
-| Types | `pnpm typecheck` | `tsc --noEmit` in all 8 packages | — |
+| Unit | `pnpm test:unit` | Vitest | 37 tests — `packages/shared/test` |
+| API integration | `pnpm test:api` | Vitest + Supertest + Firebase emulators + local Razorpay mock | 66 tests in 8 files — `apps/api/test` |
+| End-to-end | `pnpm test:e2e` | Playwright (Chromium) against production builds on the emulators | 7 serial steps — `tests/e2e/ecosystem.spec.ts` |
+| Types | `pnpm typecheck` | `tsc --noEmit` in all workspace packages | — |
 
 ## Unit tests (`packages/shared`)
 
 Pricing (`priceCart`: subtotal and MRP savings, delivery fee, free-delivery threshold and zone
-overrides, inclusive and exclusive GST, percentage coupons with caps, category-scoped coupons
-allocated per line, free-delivery coupons, invalid coupons reported without applying, loyalty
-redemption limit, minimum order, empty cart), coupon validation and plain-language descriptions,
-proportional allocation that sums exactly, the order state machine (happy path, invalid jumps,
-refund flows), role permissions, rupee formatting, Indian phone normalisation, loyalty tiers,
-translations and haversine distance.
+overrides, inclusive and exclusive GST, percentage coupons with caps, category-scoped coupons,
+free-delivery coupons, invalid coupons reported without applying, loyalty redemption limit, minimum
+order, empty cart), coupon validation and descriptions, proportional allocation, the order state
+machine, role permissions, rupee formatting, phone normalisation, loyalty tiers, translations,
+haversine distance, and the **UPI payment link** (exact format with amount and order number, URL
+encoding, 12-digit reference validation).
 
 ## API integration tests (`apps/api/test`)
 
-* `global-setup.ts` creates a **fresh, uniquely named database** (`naamdev_test_<timestamp>_<hex>`)
-  on the Postgres server given by `TEST_DATABASE_SERVER_URL` (default
-  `postgresql://naamdev:naamdev_dev@localhost:5432`), applies migrations with
-  `prisma migrate deploy`, seeds it, starts a Razorpay mock on a local port and drops only that
-  database afterwards (`KEEP_TEST_DB=true` keeps it for debugging). The database user needs
-  `CREATEDB`.
-* `setup-env.ts` points the API at that database with `OTP_DEV_ECHO=true` and console providers
-  (`otp-delivery.test.ts` overrides this to model production without an SMS provider).
-* The Razorpay mock (`razorpay-mock.ts`) implements the orders, payments and refunds endpoints the
-  API calls; tests sign checkout responses and webhooks with the same HMAC-SHA256 scheme Razorpay
-  uses, so signature, amount, webhook and refund code paths run for real.
+`pnpm --filter @naamdev/api test` wraps Vitest in `firebase emulators:exec`. `global-setup.ts` wipes
+the emulators' Firestore and Auth data, runs the seed, and starts a Razorpay mock; test clients sign
+in through the Auth emulator's REST API (exactly what the browser SDK does) and call the API with the
+resulting bearer ID token.
 
-Covered: OTP registration/login/lockout, password login and argon2 storage, CSRF enforcement,
-password reset with session revocation, console/customer separation · guest cart merge, server-side
-totals, stock limits, coupons with reasons, minimum order, COD placement with FEFO reservation,
-idempotent checkout, non-serviceable PIN codes, customer cancellation restoring stock/coupon/points,
-loyalty redemption, reorder · typo-tolerant and ingredient search, filters/sorting, suggestions,
-product detail, home feed, delivery estimate · online payment: pending order + reservation window,
-forged signature rejected, genuine payment verified and idempotent, amount mismatch rejected,
-webhook-only confirmation with duplicate events ignored, invalid webhook signature rejected,
-automatic refund on cancellation settled by webhook, partial refunds and over-refund protection ·
-full delivery lifecycle with OTP, earnings and loyalty, pending partners can't go online, partner
-registration, verified-buyer reviews · admin RBAC per endpoint, dashboard money hidden without
-permission, CSV export, product/variant CRUD, inventory batches/damage/history, batch expiry at the
-sale cut-off, settings validation, support ticket loop · OTP honesty when SMS can't be delivered.
+Covered:
+
+* **Auth** — email/password sign-up creates the profile with signup bonus and custom claims; signed-in
+  accounts without a profile can't use the API; malformed/forged tokens rejected; the client can't
+  pick its role; console/customer separation; *sign out everywhere* invalidates earlier tokens;
+  suspension disables sign-in.
+* **Cart & checkout** — guest cart token and merge at sign-in, server-side totals, stock limits,
+  coupons with reasons, minimum order, COD placement with FEFO batch reservation, idempotent
+  checkout (concurrent duplicates → one order), oversell protection, non-serviceable PIN codes,
+  cancellation restoring stock/coupon/points, loyalty redemption, reorder.
+* **Catalogue** — typo-tolerant and ingredient search, filters/sorting, suggestions, product detail,
+  home feed, delivery estimate.
+* **Razorpay** — pending order + reservation window, forged signature rejected, genuine payment
+  verified and idempotent, amount mismatch rejected, webhook-only confirmation with duplicate events
+  ignored, invalid webhook signature rejected, automatic refund settled by webhook, partial refunds.
+* **Direct UPI** — the link carries the shop's UPI ID, payee, exact server total and `ORDER #…` note;
+  a submitted reference **never** confirms the order by itself; references can't be reused across
+  orders; only `payments.verify` staff can confirm (customers 403, packing staff 403); "not found"
+  gives the customer another window; expiry cancels unpaid UPI orders but keeps those being verified;
+  cancelling a paid UPI order creates a *pending* manual refund that is only marked refunded once staff
+  record the transfer reference; UPI settings validation.
+* **Delivery** — full lifecycle with OTP, earnings and loyalty; pending partners can't go online;
+  partner registration (a storefront account can't become a partner).
+* **Console** — RBAC per endpoint, dashboard money hidden without permission, CSV export, product CRUD,
+  inventory batches/damage/history, batch expiry, settings validation, support ticket loop, staff
+  accounts in Firebase Auth (claims, password reset revoking sessions, deactivation), custom roles,
+  customer anonymisation (Firebase login deleted, orders kept), delivery zones keyed by PIN code,
+  partner payout settlement.
+* **Firebase specifics** — Storage uploads (download-token URLs, non-images rejected, avatars must be
+  our own URLs), private KYC documents without download tokens and readable only by `partners.manage`,
+  live documents written for the customer and staff, the scheduler endpoint (secret required, each
+  job runs once per lease), unpaid-order expiry releasing stock.
 
 ## End-to-end (`tests/e2e`)
 
-`pnpm test:e2e` runs `scripts/e2e.sh`, which:
-
-1. refuses to start if ports 4000/3000/3001/3002 are busy;
-2. creates a fresh `naamdev_e2e_<timestamp>` database (dropping older E2E databases), migrates and
-   seeds it;
-3. starts the API, makes **production builds** of the three apps (set `E2E_SKIP_BUILD=1` to reuse
-   existing `.next` output) and serves them with `next start`;
-4. runs Playwright, then stops every server it started.
-
-The journey, in order, with three separate browser contexts:
+`pnpm test:e2e` runs `scripts/e2e.sh`: it starts the emulators, seeds them, starts the API, makes
+**production builds** of the three apps pointed at the emulators (`E2E_SKIP_BUILD=1` reuses them),
+serves them with `next start` and runs Playwright with separate browser contexts:
 
 1. **Rider** signs in to the partner app with geolocation granted and goes online.
-2. **Customer** searches with a typo ("kaju katri"), opens Kaju Katli, picks the 1 kg variant
-   (server price ₹1,105), *Buy now*, signs up with a mobile OTP, adds an address, pays by COD and
-   lands on the order-placed page.
-3. **Order manager** moves the order through Preparing → Packed in the console; the system offers
-   it to the online rider.
-4. **Rider** accepts, picks up, starts the trip and completes delivery with the 4-digit OTP shown
-   on the customer's tracking page; the customer sees *Delivered* and earned reward points.
-5. **Support agent** signs in and sees only what the support role allows.
-6. **Packing staff** changes their own console password (a wrong current password is rejected),
-   signs out, the old password no longer works and the new one does.
+2. **Customer** searches with a typo ("kaju katri"), opens Kaju Katli, picks 1 kg (server price
+   ₹1,105), *Buy now*, **signs up with email + password** (Firebase Auth), adds an address, pays by
+   COD and lands on the order-placed page.
+3. **Order manager** moves the order through Preparing → Packed; the system offers it to the rider.
+4. **Rider** accepts, picks up, starts the trip and completes delivery with the 4-digit OTP from the
+   customer's tracking page; the customer sees *Delivered* and earned points.
+5. **Customer pays by UPI**: sees the QR code, the shop's UPI ID and payee name, submits a reference
+   and sees "Checking your UPI payment"; the **order manager** sees it on the dashboard, confirms
+   *Payment received*; the customer's page updates live (Firestore listener) to *Paid*.
+6. **Support agent** sees only what the support role allows.
+7. **Packing staff** changes their password (a wrong current password is rejected), signs out; the old
+   password no longer works and the new one does.
 
-Logs of the servers go to `$E2E_LOG_DIR` (default `$TMPDIR` or `/tmp`), `nd-e2e-*.log`.
-
-To run Playwright against servers you started yourself: `pnpm test:e2e:only`.
+Server logs go to `$E2E_LOG_DIR` (default `$TMPDIR` or `/tmp`), `nd-e2e-*.log`.
 
 ## Not covered by automated tests
 
-* Real third-party providers (Razorpay live/test accounts, MSG91/Twilio, SMTP, FCM, Google Maps,
-  Cloudinary) — see the manual checklists in [INTEGRATIONS.md](INTEGRATIONS.md).
-* Online-payment UI with the real Razorpay Checkout widget (the API side is covered with the mock).
+* The real Firebase project (`naamdevseets`): deploys, production security-rule evaluation and
+  composite indexes (the emulator doesn't enforce indexes) are exercised by the deploy workflow's smoke
+  test, not by CI.
+* Real third-party providers (Razorpay accounts, SMTP, SMS, FCM, Google Maps) and actual UPI apps —
+  see the manual checklists in [INTEGRATIONS.md](INTEGRATIONS.md).
+* The Android apps on devices (the Java code is compiled in CI's Android workflow).
 * Visual regression, load testing and cross-browser runs (only Chromium is exercised).
 
 ## Latest recorded run
 
-Run on 2026-11-17 in this repository's development container (PostgreSQL 16, Node 22):
+Run on 2026-11-19 in this repository's development container (Node 22, Java 21, firebase-tools 15.34.2):
 
 | Suite | Result |
 |---|---|
-| `pnpm typecheck` | all 8 packages pass |
-| `pnpm test:unit` | 34 / 34 passed |
-| `pnpm test:api` | 52 / 52 passed (7 files) |
-| `pnpm test:e2e` | 6 / 6 passed (fresh database, fresh production builds) |
-| Docker images | API image builds, migrates, seeds and serves `/health`; storefront image serves home, product, sitemap and static assets |
+| `pnpm typecheck` | all packages pass |
+| `pnpm test:unit` | 37 / 37 passed |
+| `pnpm test:api` | 66 / 66 passed (8 files) |
+| `pnpm test:e2e` | 7 / 7 passed (emulators, production builds) |
+| Docker images | API image builds and, in production mode against the emulators, serves `/health`, the catalogue, static artwork and the secret-protected job tick; storefront image builds and serves the sign-in page |

@@ -8,8 +8,10 @@ export type { OrderStatus, PaymentMethod };
 export type UserStatus = "ACTIVE" | "SUSPENDED" | "DELETION_REQUESTED" | "DELETED";
 export type AddressType = "HOME" | "OFFICE" | "OTHER";
 export type FoodType = "VEG" | "EGG" | "NON_VEG";
-export type OrderPaymentStatus = "PENDING" | "PAID" | "FAILED" | "COD_PENDING" | "COD_COLLECTED" | "PARTIALLY_REFUNDED" | "REFUNDED";
-export type PaymentTxnStatus = "CREATED" | "AUTHORIZED" | "CAPTURED" | "FAILED" | "REFUNDED";
+/** VERIFYING = the customer submitted a direct-UPI reference that staff haven't checked yet. */
+export type OrderPaymentStatus = "PENDING" | "VERIFYING" | "PAID" | "FAILED" | "COD_PENDING" | "COD_COLLECTED" | "PARTIALLY_REFUNDED" | "REFUNDED";
+/** SUBMITTED = direct-UPI reference entered by the customer, awaiting staff verification. */
+export type PaymentTxnStatus = "CREATED" | "AUTHORIZED" | "SUBMITTED" | "CAPTURED" | "FAILED" | "REFUNDED";
 export type RefundStatus = "PENDING" | "PROCESSING" | "PROCESSED" | "FAILED";
 export type RefundMethod = "GATEWAY" | "MANUAL";
 export type ReturnStatus = "REQUESTED" | "APPROVED" | "REJECTED" | "COMPLETED";
@@ -455,8 +457,21 @@ export interface Payment {
   failureReason: string | null;
   raw: unknown;
   capturedAt: Date | null;
+  /** Direct UPI: when the customer submitted the reference, and who checked it. */
+  submittedAt?: Date | null;
+  verifiedById?: string | null;
+  verifiedByName?: string | null;
+  verifiedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** upiReferences/{utr} — one order per UPI transaction reference, so a reference can't be reused. */
+export interface UpiReference {
+  orderId: string;
+  paymentId: string;
+  userId: string;
+  createdAt: Date;
 }
 
 export interface Refund {

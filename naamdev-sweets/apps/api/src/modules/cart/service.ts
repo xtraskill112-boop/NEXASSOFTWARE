@@ -125,7 +125,7 @@ export async function couponForCode(code: string | null | undefined) {
 }
 
 /** Orders that count for "first order" rules: anything except cancelled and unpaid online orders. */
-export const countsAsOrder = (o: Pick<Order, "status" | "paymentMethod">) => o.status !== "CANCELLED" && !(o.status === "PENDING" && o.paymentMethod === "ONLINE");
+export const countsAsOrder = (o: Pick<Order, "status" | "paymentMethod">) => o.status !== "CANCELLED" && !(o.status === "PENDING" && o.paymentMethod !== "COD");
 
 export async function couponContextFor(userId: string | null, couponCode: string | null) {
   if (!userId) return { customerOrderCount: 0, customerUsageCount: 0, isAuthenticated: false };

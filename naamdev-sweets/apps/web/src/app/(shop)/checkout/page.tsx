@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Banknote, CheckCircle2, Clock, CreditCard, Lock, MapPin, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, Banknote, CheckCircle2, Clock, CreditCard, Lock, MapPin, Plus, Smartphone, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { Address, Order, PaymentSession, Quote } from "@naamdev/api-client";
 import { formatINR } from "@naamdev/shared";
@@ -26,7 +26,7 @@ export default function CheckoutPage() {
   const [addressId, setAddressId] = useState<string | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [usePoints, setUsePoints] = useState(false);
-  const [method, setMethod] = useState<"ONLINE" | "COD" | null>(null);
+  const [method, setMethod] = useState<"ONLINE" | "UPI" | "COD" | null>(null);
   const [note, setNote] = useState("");
   const [placing, setPlacing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -56,7 +56,7 @@ export default function CheckoutPage() {
     try {
       const r = await api.post<{ quote: Quote }>("/checkout/quote", { addressId: addressId ?? undefined, redeemPoints: usePoints ? user.loyaltyPoints : 0 });
       setQuote(r.quote);
-      setMethod((m) => m ?? (r.quote.paymentOptions.online.available ? "ONLINE" : r.quote.paymentOptions.cod.available ? "COD" : null));
+      setMethod((m) => m ?? (r.quote.paymentOptions.online.available ? "ONLINE" : r.quote.paymentOptions.upi?.available ? "UPI" : r.quote.paymentOptions.cod.available ? "COD" : null));
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -91,7 +91,11 @@ export default function CheckoutPage() {
         addressId, paymentMethod: method, idempotencyKey: idempotencyKey.current, redeemPoints: usePoints ? user?.loyaltyPoints ?? 0 : 0, customerNote: note || null,
       });
       if (r.payment) await pay(r.payment);
-      else finish(r.order.id);
+      else if (method === "UPI") {
+        // Pay the shop's UPI ID from the order page; staff confirm the payment before it's accepted.
+        void refresh();
+        router.replace(`/account/orders/${r.order.id}`);
+      } else finish(r.order.id);
     } catch (e) {
       setError(errorMessage(e));
       idempotencyKey.current = crypto.randomUUID();
@@ -168,6 +172,7 @@ export default function CheckoutPage() {
             <div role="radiogroup" className="space-y-3">
               {([
                 ["ONLINE", t("checkout.payOnline"), t("checkout.payOnlineHint"), CreditCard, quote?.paymentOptions.online],
+                ["UPI", t("checkout.payUpi"), t("checkout.payUpiHint"), Smartphone, quote?.paymentOptions.upi],
                 ["COD", t("checkout.cod"), t("checkout.codHint"), Banknote, quote?.paymentOptions.cod],
               ] as const).map(([value, label, hint, Icon, opt]) => (
                 <button key={value} type="button" role="radio" aria-checked={method === value} disabled={!opt?.available} onClick={() => setMethod(value)}
@@ -199,7 +204,7 @@ export default function CheckoutPage() {
           {quote?.blockers.map((b) => <InlineAlert key={b} tone="warning">{b}</InlineAlert>)}
           {error && <InlineAlert tone="danger">{error}</InlineAlert>}
           <Button size="xl" block className="hidden lg:inline-flex" loading={placing} disabled={!quote?.canCheckout || !method || !addressId} onClick={place}>
-            {method === "ONLINE" ? t("checkout.pay", { amount: formatINR(pricing?.totalPaise ?? 0) }) : `${t("checkout.placeOrder")} · ${formatINR(pricing?.totalPaise ?? 0)}`}
+            {method === "ONLINE" || method === "UPI" ? t("checkout.pay", { amount: formatINR(pricing?.totalPaise ?? 0) }) : `${t("checkout.placeOrder")} · ${formatINR(pricing?.totalPaise ?? 0)}`}
           </Button>
           <p className="text-center text-[11px] leading-relaxed text-muted">By placing this order you agree to our <Link href="/pages/terms" className="underline">terms</Link> and <Link href="/pages/refund-policy" className="underline">refund policy</Link>. Card details are handled by Razorpay and never stored by NAAMDEV.</p>
         </aside>
@@ -207,7 +212,7 @@ export default function CheckoutPage() {
 
       <div className="nd-glass fixed inset-x-0 bottom-0 z-50 border-t border-line-soft p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
         <Button size="xl" block loading={placing} disabled={!quote?.canCheckout || !method || !addressId} onClick={place}>
-          {method === "ONLINE" ? t("checkout.pay", { amount: formatINR(pricing?.totalPaise ?? 0) }) : `${t("checkout.placeOrder")} · ${formatINR(pricing?.totalPaise ?? 0)}`}
+          {method === "ONLINE" || method === "UPI" ? t("checkout.pay", { amount: formatINR(pricing?.totalPaise ?? 0) }) : `${t("checkout.placeOrder")} · ${formatINR(pricing?.totalPaise ?? 0)}`}
         </Button>
       </div>
 

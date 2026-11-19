@@ -61,13 +61,13 @@ export interface Address {
 
 export interface Quote extends CartView {
   address: Address | null; zone: { area: string; etaMinutes: number; deliveryFeePaise: number | null } | null; serviceable: boolean; etaMinutes: number;
-  paymentOptions: { online: { available: boolean; reason: string | null }; cod: { available: boolean; reason: string | null } };
+  paymentOptions: { online: { available: boolean; reason: string | null }; upi: { available: boolean; reason: string | null }; cod: { available: boolean; reason: string | null } };
 }
 
 export interface OrderItem { id: string; productId: string; productSlug: string; variantId: string; name: string; variantLabel: string; sku: string; imageUrl: string | null; unitMrpPaise: number; unitPricePaise: number; quantity: number; lineTotalPaise: number; discountPaise: number; gstRate: number; taxPaise: number }
 
 export interface Order {
-  id: string; orderNumber: string; invoiceNumber: string | null; status: OrderStatus; paymentMethod: "ONLINE" | "COD"; paymentStatus: string;
+  id: string; orderNumber: string; invoiceNumber: string | null; status: OrderStatus; paymentMethod: "ONLINE" | "UPI" | "COD"; paymentStatus: string;
   placedAt: string; confirmedAt: string | null; dispatchedAt: string | null; deliveredAt: string | null; cancelledAt: string | null; cancelReason: string | null;
   estimatedDeliveryAt: string | null; reservationExpiresAt: string | null; customerName: string; customerPhone: string; customerEmail: string | null;
   address: { type: string; label: string | null; fullName: string; phone: string; line1: string; line2: string | null; landmark: string | null; city: string; state: string; pincode: string };
@@ -115,3 +115,17 @@ export interface PublicSettings {
 }
 
 export interface Paged<T> { items: T[]; meta: { total: number; page: number; pageSize: number; totalPages: number } }
+
+/** Direct UPI payment to the shop's UPI ID; confirmed by staff, never automatically. */
+export interface UpiSession {
+  status: "AWAITING_PAYMENT" | "VERIFYING" | "PAID" | "CLOSED";
+  vpa: string;
+  payeeName: string;
+  amountPaise: number;
+  note: string;
+  link: string | null;
+  qrSvg: string | null;
+  expiresAt: string | null;
+  reference: string | null;
+  lastRejection: string | null;
+}

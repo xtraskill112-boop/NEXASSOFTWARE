@@ -31,14 +31,19 @@ To install on a phone, allow "Install unknown apps" for your browser or file man
 
 ### Which site the app opens
 
-- **Not set (default):** on first launch the app asks for the store address, for example
-  `https://naamdevsweets.com`, or `http://192.168.1.20:3000` to test against a computer on the same
-  Wi-Fi. It checks that the address really is the NAAMDEV storefront (or partner site) before
-  saving it. "Change store address" appears on the offline screen.
-- **Fixed (production):** run the workflow manually (*Run workflow*) and enter the storefront and
-  partner addresses, or save them once as repository variables `NAAMDEV_CUSTOMER_URL` and
-  `NAAMDEV_PARTNER_URL` (*Settings → Secrets and variables → Actions → Variables*). These builds
-  skip the setup screen and only allow HTTPS.
+- **GitHub Actions builds (default):** the customer app opens `https://naamdevseets.web.app` and the
+  partner app `https://naamdevseets-partner.web.app` — the Firebase Hosting sites created by the
+  deploy workflow. There is **no address to type**; the apps only allow HTTPS. Deploy the sites first
+  (docs/DEPLOYMENT.md), otherwise the app shows its offline screen.
+- **Different addresses** (custom domain, renamed Hosting site): run the workflow manually
+  (*Run workflow*) and enter them, or save repository variables `NAAMDEV_CUSTOMER_URL` and
+  `NAAMDEV_PARTNER_URL` (*Settings → Secrets and variables → Actions → Variables*).
+- **Local debug builds without an address:** the app asks for one on first launch (e.g.
+  `http://192.168.1.20:3000` for a computer on the same Wi-Fi) and checks it really is a NAAMDEV site.
+
+Sign-in inside the apps is the site's own email + password login (Firebase Authentication). For the
+partner app's background location, the page hands the rider's Firebase credentials to the location
+service, which keeps them in memory only and stops when the rider goes offline or signs out.
 
 ### Signing
 
@@ -66,8 +71,8 @@ Studio, or:
 ```bash
 cd naamdev-sweets/mobile/android
 ./gradlew assembleCustomerDebug assemblePartnerDebug          # debug builds (ask for the address)
-NAAMDEV_CUSTOMER_URL=https://naamdevsweets.com \
-NAAMDEV_PARTNER_URL=https://partner.naamdevsweets.com \
+NAAMDEV_CUSTOMER_URL=https://naamdevseets.web.app \
+NAAMDEV_PARTNER_URL=https://naamdevseets-partner.web.app \
 NAAMDEV_KEYSTORE_FILE=/path/naamdev-release.keystore NAAMDEV_KEYSTORE_PASSWORD=… \
 NAAMDEV_KEY_ALIAS=naamdev NAAMDEV_KEY_PASSWORD=… \
 ./gradlew assembleCustomerRelease assemblePartnerRelease

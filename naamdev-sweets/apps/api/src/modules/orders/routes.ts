@@ -3,7 +3,7 @@ import express from "express";
 import { z } from "zod";
 import { C, db, getDoc, getDocs, getMany, type Order, type Payment, type Review, type WebhookEvent } from "@naamdev/db";
 import {
-  CUSTOMER_CANCELLABLE, cancelOrderSchema, checkoutQuoteSchema, paginationSchema, placeOrderSchema, razorpayVerifySchema, returnRequestSchema,
+  CUSTOMER_CANCELLABLE, cancelOrderSchema, checkoutQuoteSchema, paginationSchema, placeOrderSchema, razorpayVerifySchema, returnRequestSchema, upiProofSchema,
 } from "@naamdev/shared";
 import { integrations } from "../../config/env";
 import { badRequest, notFound } from "../../lib/errors";
@@ -18,6 +18,7 @@ import { verifyPaymentSignature, verifyWebhookSignature, razorpay, type RzpPayme
 import { paymentSession, placeOrder, quote } from "./checkout";
 import { customerOrder, loadOrderFull, loadOrdersFull, trackingPayload } from "./serializers";
 import { cancelOrder, markOrderPaid, markPaymentFailed, settleGatewayRefund } from "./service";
+import { submitUpiReference, upiSession } from "./upi";
 
 export const checkoutRouter = Router();
 checkoutRouter.use(requireAuth);
@@ -35,6 +36,7 @@ checkoutRouter.post("/place-order", writeLimiter, async (req, res) => {
     order: await customerOrder(order),
     duplicate: r.duplicate,
     payment: order.status === "PENDING" && order.paymentMethod === "ONLINE" ? await paymentSession(req.auth!.user.id, order.id) : null,
+    upi: await upiSession(order),
   });
 });
 
@@ -66,6 +68,7 @@ ordersRouter.get("/:id", async (req, res) => {
   const reviewed = await getMany<Review>(C.reviews, o.items.map((i) => `${req.auth!.user.id}_${i.productId}`));
   res.json({
     order: await customerOrder(o),
+    upi: await upiSession(o),
     actions: {
       canCancel: CUSTOMER_CANCELLABLE.includes(o.status),
       canPay: o.status === "PENDING" && o.paymentMethod === "ONLINE" && o.paymentStatus !== "PAID" && integrations.razorpay,
@@ -82,6 +85,14 @@ ordersRouter.get("/:id/tracking", async (req, res) => {
 
 ordersRouter.get("/:id/payment-session", async (req, res) => {
   res.json({ payment: await paymentSession(req.auth!.user.id, param(req, "id")) });
+});
+
+/** Direct UPI: the customer reports the reference number of their payment for staff to check. */
+ordersRouter.post("/:id/upi-reference", writeLimiter, async (req, res) => {
+  const { utr } = body(req, upiProofSchema);
+  const order = await submitUpiReference(req.auth!.user.id, param(req, "id"), utr);
+  const full = await ownOrder(req.auth!.user.id, order.id);
+  res.json({ order: await customerOrder(full), upi: await upiSession(full) });
 });
 
 ordersRouter.post("/:id/cancel", writeLimiter, async (req, res) => {

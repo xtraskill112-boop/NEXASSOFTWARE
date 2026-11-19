@@ -43,7 +43,7 @@ export default function OrderPlacedPage() {
           <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-saffron-600" />{[order.address.line1, order.address.line2, order.address.city, order.address.pincode].filter(Boolean).join(", ")}</p>
         </div>
         <div className="mt-4 flex items-center justify-between border-t border-dashed border-line pt-4">
-          <span className="text-sm text-muted">{order.items.reduce((s, i) => s + i.quantity, 0)} items · {order.paymentMethod === "COD" ? "Cash on delivery" : "Paid online"}</span>
+          <span className="text-sm text-muted">{order.items.reduce((s, i) => s + i.quantity, 0)} items · {order.paymentMethod === "COD" ? "Cash on delivery" : order.paymentMethod === "UPI" ? (order.paymentStatus === "PAID" ? "Paid by UPI" : "UPI payment pending") : "Paid online"}</span>
           <span className="text-lg font-extrabold text-ink">{formatINR(order.totals.totalPaise)}</span>
         </div>
       </Card>

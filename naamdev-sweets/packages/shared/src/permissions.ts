@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   "orders.cancel": { group: "Orders", description: "Cancel orders" },
   "refunds.manage": { group: "Payments", description: "Initiate and manage refunds and returns" },
   "payments.view": { group: "Payments", description: "View payment transactions" },
+  "payments.verify": { group: "Payments", description: "Confirm direct UPI payments received in the shop's UPI account" },
   "products.view": { group: "Catalog", description: "View products" },
   "products.manage": { group: "Catalog", description: "Create, edit and archive products and variants" },
   "categories.manage": { group: "Catalog", description: "Manage categories and collections" },
@@ -73,7 +74,7 @@ export const SYSTEM_ROLES: { key: RoleKey; name: string; description: string; is
     isStaff: true,
     permissions: [
       "dashboard.view", "analytics.view", "reports.export", "orders.view", "orders.process", "orders.manage",
-      "orders.cancel", "refunds.manage", "payments.view", "products.view", "products.manage", "categories.manage",
+      "orders.cancel", "refunds.manage", "payments.view", "payments.verify", "products.view", "products.manage", "categories.manage",
       "inventory.view", "inventory.manage", "suppliers.manage", "coupons.manage", "customers.view",
       "reviews.moderate", "support.view", "support.manage", "delivery.manage", "content.manage",
     ],
@@ -84,7 +85,7 @@ export const SYSTEM_ROLES: { key: RoleKey; name: string; description: string; is
     description: "Handles incoming orders, cancellations and delivery assignment",
     isStaff: true,
     permissions: [
-      "dashboard.view", "orders.view", "orders.process", "orders.manage", "orders.cancel", "payments.view",
+      "dashboard.view", "orders.view", "orders.process", "orders.manage", "orders.cancel", "payments.view", "payments.verify",
       "customers.view", "delivery.manage", "support.view",
     ],
   },

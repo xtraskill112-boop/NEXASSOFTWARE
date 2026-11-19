@@ -1,0 +1,260 @@
+name: NAAMDEV deploy to Firebase
+
+# Deploys the whole system to the Firebase project (Blaze plan):
+#   Firestore (rules + indexes) · Firebase Auth (email/password) · Firebase Storage (rules)
+#   Cloud Run: naamdev-api, naamdev-web, naamdev-admin, naamdev-partner (asia-south1)
+#   Firebase Hosting: storefront, console and partner sites, rewriting to Cloud Run
+#   Cloud Scheduler: background jobs every minute
+# Run it from the Actions tab ("Run workflow"). Setup steps: naamdev-sweets/docs/DEPLOYMENT.md
+on:
+  workflow_dispatch:
+    inputs:
+      seed_sample_catalog:
+        description: "First deploy only: load the sample sweets catalogue (edit or archive it later in the console)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: naamdev-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID || 'naamdevseets' }}
+  REGION: asia-south1
+  WEB_SITE: ${{ vars.NAAMDEV_WEB_SITE || 'naamdevseets' }}
+  ADMIN_SITE: ${{ vars.NAAMDEV_ADMIN_SITE || 'naamdevseets-admin' }}
+  PARTNER_SITE: ${{ vars.NAAMDEV_PARTNER_SITE || 'naamdevseets-partner' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: naamdev-sweets
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the service account secret
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::error::Add the FIREBASE_SERVICE_ACCOUNT repository secret first (see naamdev-sweets/docs/DEPLOYMENT.md)."
+            exit 1
+          fi
+
+      - uses: google-github-actions/auth@v2
+        id: gauth
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: naamdev-sweets/package.json }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: naamdev-sweets/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      - name: Enable Google Cloud APIs
+        run: |
+          gcloud services enable run.googleapis.com artifactregistry.googleapis.com firestore.googleapis.com \
+            secretmanager.googleapis.com cloudscheduler.googleapis.com firebase.googleapis.com firebasehosting.googleapis.com \
+            identitytoolkit.googleapis.com firebasestorage.googleapis.com storage.googleapis.com iam.googleapis.com \
+            cloudresourcemanager.googleapis.com fcm.googleapis.com --project "$PROJECT_ID"
+
+      - name: Firestore database
+        run: |
+          if ! gcloud firestore databases describe --database='(default)' --project "$PROJECT_ID" >/dev/null 2>&1; then
+            gcloud firestore databases create --location="$REGION" --type=firestore-native --project "$PROJECT_ID"
+          fi
+
+      - name: Email/password sign-in (Firebase Authentication)
+        run: |
+          TOKEN="$(gcloud auth print-access-token)"
+          API="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT_ID/config"
+          H=(-H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT_ID" -H "Content-Type: application/json")
+          if curl -sf -X PATCH "$API?updateMask=signIn.email.enabled,signIn.email.passwordRequired" "${H[@]}" \
+               -d '{"signIn":{"email":{"enabled":true,"passwordRequired":true}}}' >/dev/null; then
+            echo "Email/password sign-in is enabled."
+          else
+            echo "::error::Couldn't enable Email/Password sign-in automatically. In the Firebase console open Authentication → Get started → Sign-in method → Email/Password → Enable, then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Firebase Storage bucket
+        run: |
+          BUCKET="$PROJECT_ID.firebasestorage.app"
+          if ! gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
+            TOKEN="$(gcloud auth print-access-token)"
+            curl -sf -X POST "https://firebasestorage.googleapis.com/v1alpha/projects/$PROJECT_ID/defaultBucket" \
+              -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT_ID" -H "Content-Type: application/json" \
+              -d "{\"location\":\"$REGION\"}" >/dev/null || true
+          fi
+          if ! gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
+            echo "::error::The default Storage bucket doesn't exist. In the Firebase console open Storage → Get started (location asia-south1), then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Runtime service account and secrets
+        run: |
+          SA="naamdev-run@$PROJECT_ID.iam.gserviceaccount.com"
+          gcloud iam service-accounts describe "$SA" --project "$PROJECT_ID" >/dev/null 2>&1 || \
+            gcloud iam service-accounts create naamdev-run --display-name="NAAMDEV Cloud Run runtime" --project "$PROJECT_ID"
+          for role in roles/datastore.user roles/firebaseauth.admin roles/storage.objectAdmin roles/secretmanager.secretAccessor roles/firebasecloudmessaging.admin; do
+            gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:$SA" --role="$role" --condition=None --quiet >/dev/null
+          done
+          ensure() { # name, value — created once, never overwritten
+            gcloud secrets describe "$1" --project "$PROJECT_ID" >/dev/null 2>&1 || \
+              printf %s "$2" | gcloud secrets create "$1" --data-file=- --replication-policy=automatic --project "$PROJECT_ID"
+          }
+          ensure naamdev-encryption-key "$(openssl rand -hex 32)"
+          ensure naamdev-jobs-secret "$(openssl rand -hex 24)"
+          echo "RUN_SA=$SA" >> "$GITHUB_ENV"
+
+      - name: Optional integration secrets (Razorpay, SMTP)
+        env:
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+          RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+        run: |
+          put() { # secret name, value — adds a new version when the value changed
+            [ -n "$2" ] || return 0
+            if ! gcloud secrets describe "$1" --project "$PROJECT_ID" >/dev/null 2>&1; then
+              printf %s "$2" | gcloud secrets create "$1" --data-file=- --replication-policy=automatic --project "$PROJECT_ID"
+            elif [ "$(gcloud secrets versions access latest --secret="$1" --project "$PROJECT_ID")" != "$2" ]; then
+              printf %s "$2" | gcloud secrets versions add "$1" --data-file=- --project "$PROJECT_ID"
+            fi
+          }
+          put naamdev-razorpay-key-secret "$RAZORPAY_KEY_SECRET"
+          put naamdev-razorpay-webhook-secret "$RAZORPAY_WEBHOOK_SECRET"
+          put naamdev-smtp-pass "$SMTP_PASS"
+          SECRETS="ENCRYPTION_KEY=naamdev-encryption-key:latest,JOBS_SECRET=naamdev-jobs-secret:latest"
+          if [ -n "$RAZORPAY_KEY_ID" ] && [ -n "$RAZORPAY_KEY_SECRET" ]; then SECRETS="$SECRETS,RAZORPAY_KEY_SECRET=naamdev-razorpay-key-secret:latest"; fi
+          if [ -n "$RAZORPAY_WEBHOOK_SECRET" ]; then SECRETS="$SECRETS,RAZORPAY_WEBHOOK_SECRET=naamdev-razorpay-webhook-secret:latest"; fi
+          if [ -n "$SMTP_PASS" ]; then SECRETS="$SECRETS,SMTP_PASS=naamdev-smtp-pass:latest"; fi
+          echo "API_SECRETS=$SECRETS" >> "$GITHUB_ENV"
+
+      - name: Container registry
+        run: |
+          gcloud artifacts repositories describe naamdev --location="$REGION" --project "$PROJECT_ID" >/dev/null 2>&1 || \
+            gcloud artifacts repositories create naamdev --repository-format=docker --location="$REGION" --project "$PROJECT_ID"
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          echo "IMAGES=$REGION-docker.pkg.dev/$PROJECT_ID/naamdev" >> "$GITHUB_ENV"
+          echo "TAG=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          echo "WEB_URL=https://$WEB_SITE.web.app" >> "$GITHUB_ENV"
+          echo "ADMIN_URL=https://$ADMIN_SITE.web.app" >> "$GITHUB_ENV"
+          echo "PARTNER_URL=https://$PARTNER_SITE.web.app" >> "$GITHUB_ENV"
+
+      - name: Deploy API (Cloud Run)
+        env:
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_USER: ${{ vars.SMTP_USER }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM || 'NAAMDEV SWEETS <no-reply@naamdevsweets.com>' }}
+        run: |
+          docker build -f infra/docker/api.Dockerfile -t "$IMAGES/api:$TAG" .
+          docker push "$IMAGES/api:$TAG"
+          EMAIL_PROVIDER=none
+          if [ -n "$SMTP_HOST" ]; then EMAIL_PROVIDER=smtp; fi
+          # "##" separates variables (values such as EMAIL_FROM contain commas, spaces and "@").
+          ENVS="NODE_ENV=production##FIREBASE_PROJECT_ID=$PROJECT_ID##APP_URL_WEB=$WEB_URL##APP_URL_ADMIN=$ADMIN_URL##APP_URL_DELIVERY=$PARTNER_URL##TRUST_PROXY=2##JOBS_ENABLED=false##SMS_PROVIDER=none##EMAIL_PROVIDER=$EMAIL_PROVIDER##EMAIL_FROM=$EMAIL_FROM"
+          if [ -n "$RAZORPAY_KEY_ID" ]; then ENVS="$ENVS##RAZORPAY_KEY_ID=$RAZORPAY_KEY_ID"; fi
+          if [ -n "$SMTP_HOST" ]; then ENVS="$ENVS##SMTP_HOST=$SMTP_HOST##SMTP_PORT=$SMTP_PORT##SMTP_USER=$SMTP_USER"; fi
+          gcloud run deploy naamdev-api --image "$IMAGES/api:$TAG" --region "$REGION" --project "$PROJECT_ID" \
+            --service-account "$RUN_SA" --allow-unauthenticated --port 4000 --cpu 1 --memory 512Mi \
+            --min-instances 0 --max-instances 4 --timeout 120 \
+            --set-env-vars "^##^$ENVS" --set-secrets "$API_SECRETS" --quiet
+          API_URL="$(gcloud run services describe naamdev-api --region "$REGION" --project "$PROJECT_ID" --format='value(status.url)')"
+          echo "API_URL=$API_URL" >> "$GITHUB_ENV"
+          curl -sf "$API_URL/health" && echo
+
+      - name: Deploy storefront, console and partner app (Cloud Run)
+        env:
+          MAPS_KEY: ${{ vars.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
+          VAPID_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_VAPID_KEY }}
+        run: |
+          deploy() { # app, service, site URL
+            docker build -f infra/docker/next.Dockerfile --build-arg APP="$1" --build-arg API_INTERNAL_URL="$API_URL" \
+              --build-arg NEXT_PUBLIC_SITE_URL="$3" --build-arg NEXT_PUBLIC_STOREFRONT_URL="$WEB_URL" \
+              --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="$PROJECT_ID" --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="$MAPS_KEY" \
+              --build-arg NEXT_PUBLIC_FIREBASE_VAPID_KEY="$VAPID_KEY" -t "$IMAGES/$1:$TAG" .
+            docker push "$IMAGES/$1:$TAG"
+            gcloud run deploy "$2" --image "$IMAGES/$1:$TAG" --region "$REGION" --project "$PROJECT_ID" \
+              --service-account "$RUN_SA" --allow-unauthenticated --port 3000 --cpu 1 --memory 512Mi \
+              --min-instances 0 --max-instances 4 --set-env-vars "API_INTERNAL_URL=$API_URL" --quiet
+          }
+          deploy web naamdev-web "$WEB_URL"
+          deploy admin naamdev-admin "$ADMIN_URL"
+          deploy delivery naamdev-partner "$PARTNER_URL"
+
+      - name: Seed data (idempotent)
+        env:
+          SEED_ADMIN_EMAIL: ${{ secrets.NAAMDEV_ADMIN_EMAIL }}
+          SEED_ADMIN_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
+          SEED_SAMPLE_CATALOG: ${{ inputs.seed_sample_catalog }}
+        run: |
+          if [ -z "$SEED_ADMIN_EMAIL" ] || [ -z "$SEED_ADMIN_PASSWORD" ]; then
+            echo "::error::Add NAAMDEV_ADMIN_EMAIL and NAAMDEV_ADMIN_PASSWORD secrets — they create your first console login."
+            exit 1
+          fi
+          NODE_ENV=production FIREBASE_PROJECT_ID="$PROJECT_ID" SEED_DEMO_ACCOUNTS=false \
+            GOOGLE_APPLICATION_CREDENTIALS="${{ steps.gauth.outputs.credentials_file_path }}" \
+            pnpm --filter @naamdev/db seed
+
+      - name: Firebase Hosting, Firestore rules & indexes, Storage rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.gauth.outputs.credentials_file_path }}
+        run: |
+          for site in "$ADMIN_SITE" "$PARTNER_SITE"; do
+            npx firebase hosting:sites:get "$site" --project "$PROJECT_ID" >/dev/null 2>&1 || \
+              npx firebase hosting:sites:create "$site" --project "$PROJECT_ID" --non-interactive
+          done
+          npx firebase target:clear hosting web --project "$PROJECT_ID" >/dev/null 2>&1 || true
+          npx firebase target:clear hosting admin --project "$PROJECT_ID" >/dev/null 2>&1 || true
+          npx firebase target:clear hosting partner --project "$PROJECT_ID" >/dev/null 2>&1 || true
+          npx firebase target:apply hosting web "$WEB_SITE" --project "$PROJECT_ID"
+          npx firebase target:apply hosting admin "$ADMIN_SITE" --project "$PROJECT_ID"
+          npx firebase target:apply hosting partner "$PARTNER_SITE" --project "$PROJECT_ID"
+          npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "$PROJECT_ID" --non-interactive --force
+
+      - name: Background jobs (Cloud Scheduler, every minute)
+        run: |
+          SECRET="$(gcloud secrets versions access latest --secret=naamdev-jobs-secret --project "$PROJECT_ID")"
+          echo "::add-mask::$SECRET"
+          ARGS=(--location="$REGION" --project "$PROJECT_ID" --schedule="* * * * *" --time-zone="Asia/Kolkata"
+                --uri="$API_URL/internal/jobs/tick" --http-method=POST --attempt-deadline=120s)
+          if gcloud scheduler jobs describe naamdev-jobs --location="$REGION" --project "$PROJECT_ID" >/dev/null 2>&1; then
+            gcloud scheduler jobs update http naamdev-jobs "${ARGS[@]}" --update-headers="x-jobs-secret=$SECRET" --quiet >/dev/null
+          else
+            gcloud scheduler jobs create http naamdev-jobs "${ARGS[@]}" --headers="x-jobs-secret=$SECRET" --quiet >/dev/null
+          fi
+
+      - name: Smoke test
+        run: |
+          for url in "$WEB_URL" "$WEB_URL/api/v1/public/settings" "$ADMIN_URL/login" "$PARTNER_URL/login"; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
+            echo "$code $url"
+            [ "$code" -lt 400 ] || { echo "::error::$url returned $code"; exit 1; }
+          done
+          {
+            echo "### NAAMDEV SWEETS is live"
+            echo ""
+            echo "| | Address |"
+            echo "|---|---|"
+            echo "| Storefront (customer app) | $WEB_URL |"
+            echo "| Staff console | $ADMIN_URL |"
+            echo "| Delivery partner app | $PARTNER_URL |"
+            echo ""
+            echo "Sign in to the console with NAAMDEV_ADMIN_EMAIL. Build the Android apps with the *NAAMDEV Android apps* workflow — they open these addresses automatically."
+          } >> "$GITHUB_STEP_SUMMARY"

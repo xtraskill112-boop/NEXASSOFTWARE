@@ -35,6 +35,13 @@ const SETTING_SCHEMAS: Record<SettingKey, z.ZodTypeAny> = {
   }),
   social: z.object({ instagram: z.string().url().optional().or(z.literal("")), facebook: z.string().url().optional().or(z.literal("")), youtube: z.string().url().optional().or(z.literal("")), x: z.string().url().optional().or(z.literal("")), whatsapp: z.string().max(40).optional() }),
   returns: z.object({ enabled: z.boolean(), windowHours: z.number().int().min(1).max(240) }),
+  upi: z.object({
+    enabled: z.boolean(),
+    vpa: z.string().trim().regex(/^[\w.-]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,63}$/, "Enter a valid UPI ID, e.g. shopname@paytm"),
+    payeeName: z.string().trim().min(2).max(60),
+    noteTemplate: z.string().trim().min(1).max(60),
+    payWithinMinutes: z.number().int().min(10).max(1440),
+  }),
   announcement: z.object({ active: z.boolean(), text: z.string().max(160), textHi: z.string().max(160).optional(), link: z.string().max(300).optional() }),
   notifications: z.object({ adminAlertEmails: z.array(z.string().email()).max(10), lowStockAlerts: z.boolean(), expiryAlertDays: z.number().int().min(0).max(30) }),
 };

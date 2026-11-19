@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Bike, ExternalLink, MapPin, Phone, Printer, RefreshCw, Send, Undo2 } from "lucide-react";
+import { ArrowLeft, Bike, CheckCircle2, ExternalLink, MapPin, Phone, Printer, RefreshCw, Send, Smartphone, Undo2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ORDER_STATUS_META, formatINR, googleMapsDirectionsUrl, type OrderStatus } from "@naamdev/shared";
 import { Badge, Button, Card, ErrorState, Field, Input, Modal, OrderStatusBadge, PaymentStatusBadge, Select, Skeleton, Textarea } from "@naamdev/ui";
@@ -22,7 +22,7 @@ interface AdminOrder {
   history: { id: string; from: string | null; to: OrderStatus; note: string | null; actorType: string; actor: string | null; at: string }[];
   allocations: { itemId: string; batches: { batchNumber: string; expiresAt: string; quantity: number; released: boolean }[] }[];
   assignments: { id: string; status: string; partnerId: string; partnerName: string; partnerPhone: string | null; distanceKm: number | null; earningPaise: number; offeredAt: string; pickedUpAt: string | null; deliveredAt: string | null; rejectionReason: string | null }[];
-  payments: { id: string; method: string; provider: string; status: string; amountPaise: number; gatewayOrderId: string | null; gatewayPaymentId: string | null; methodDetail: string | null; failureReason: string | null; createdAt: string }[];
+  payments: { id: string; method: string; provider: string; status: string; amountPaise: number; gatewayOrderId: string | null; gatewayPaymentId: string | null; methodDetail: string | null; failureReason: string | null; submittedAt?: string | null; verifiedByName?: string | null; verifiedAt?: string | null; createdAt: string }[];
   refunds: { id: string; amountPaise: number; status: string; method: string; reason: string; gatewayRefundId: string | null; reference: string | null; failureReason: string | null; createdAt: string }[];
   returnRequests: { id: string; reason: string; description: string | null; images: string[]; status: string; createdAt: string }[];
 }
@@ -66,6 +66,7 @@ export default function AdminOrderPage() {
           {data.allowedTransitions.map((s) => <Button key={s} size="sm" variant={s === "CANCELLED" ? "danger" : "primary"} loading={busy === `Moved to ${ORDER_STATUS_META[s].label}`} onClick={() => move(s)}>{ORDER_STATUS_META[s].label}</Button>)}
         </Card>
       )}
+      {o.paymentMethod === "UPI" && o.paymentStatus === "VERIFYING" && <UpiVerifyCard order={o} canVerify={can("payments.verify")} onDone={() => void reload()} />}
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           <Card className="p-5">
@@ -153,9 +154,12 @@ export default function AdminOrderPage() {
               <Can any={["refunds.manage"]}>{["PAID", "PARTIALLY_REFUNDED", "COD_COLLECTED"].includes(o.paymentStatus) && <Button size="sm" variant="outline" onClick={() => setRefundOpen(true)}><Undo2 className="h-4 w-4" />Refund</Button>}</Can>
             </div>
             <ul className="space-y-2 text-sm">
-              {o.payments.map((p) => <li key={p.id} className="rounded-xl bg-surface-2 p-3"><div className="flex justify-between"><b>{p.method === "COD" ? "Cash on delivery" : `Razorpay${p.methodDetail ? ` · ${p.methodDetail}` : ""}`}</b><span>{formatINR(p.amountPaise)}</span></div><p className="text-xs text-muted">{p.status.toLowerCase()} · {dt(p.createdAt)}{p.gatewayPaymentId ? ` · ${p.gatewayPaymentId}` : ""}</p>{p.failureReason && <p className="text-xs text-maroon-600">{p.failureReason}</p>}</li>)}
+              {o.payments.map((p) => <li key={p.id} className="rounded-xl bg-surface-2 p-3"><div className="flex justify-between"><b>{p.method === "COD" ? "Cash on delivery" : p.method === "UPI" ? "UPI (direct to shop)" : `Razorpay${p.methodDetail ? ` · ${p.methodDetail}` : ""}`}</b><span>{formatINR(p.amountPaise)}</span></div><p className="text-xs text-muted">{p.status.toLowerCase()} · {dt(p.createdAt)}{p.gatewayPaymentId ? ` · ${p.method === "UPI" ? "UTR " : ""}${p.gatewayPaymentId}` : ""}{p.verifiedByName ? ` · checked by ${p.verifiedByName}` : ""}</p>{p.failureReason && <p className="text-xs text-maroon-600">{p.failureReason}</p>}</li>)}
               {o.refunds.map((r) => (
                 <li key={r.id} className="rounded-xl border border-line-soft p-3"><div className="flex justify-between"><b>Refund · {r.method.toLowerCase()}</b><span>{formatINR(r.amountPaise)}</span></div><p className="text-xs text-muted">{r.status.toLowerCase()} · {r.reason}{r.reference ? ` · ref ${r.reference}` : ""}</p>{r.failureReason && <p className="text-xs text-maroon-600">{r.failureReason}</p>}
+                  {r.method === "MANUAL" && r.status === "PENDING" && can("refunds.manage") && (
+                    <button type="button" className="mt-1 text-xs font-bold text-saffron-700" onClick={() => { const ref = prompt(`After sending ${formatINR(r.amountPaise)} to the customer, enter the UPI / bank reference`); if (ref && ref.trim().length >= 4) void act("Refund recorded as sent", () => api.post(`/admin/orders/refunds/${r.id}/complete`, { reference: ref.trim() })); }}>Record refund sent…</button>
+                  )}
                   {r.gatewayRefundId && r.status === "PROCESSING" && <button type="button" className="mt-1 text-xs font-bold text-saffron-700" onClick={() => void act("Refund status synced", () => api.post(`/admin/orders/refunds/${r.id}/sync`))}>Sync status from Razorpay</button>}</li>
               ))}
             </ul>
@@ -189,6 +193,49 @@ export default function AdminOrderPage() {
       {assignOpen && <AssignModal orderId={id} onClose={() => setAssignOpen(false)} onDone={() => { setAssignOpen(false); void reload(); }} />}
       {refundOpen && <RefundModal order={o} onClose={() => setRefundOpen(false)} onDone={() => { setRefundOpen(false); void reload(); }} />}
     </Guard>
+  );
+}
+
+/** Direct UPI: staff look for the payment in the shop's UPI account before the order is accepted. */
+function UpiVerifyCard({ order, canVerify, onDone }: { order: AdminOrder; canVerify: boolean; onDone: () => void }) {
+  const p = order.payments.find((x) => x.method === "UPI" && x.status === "SUBMITTED");
+  const [busy, setBusy] = useState<string | null>(null);
+  const decide = async (decision: "RECEIVED" | "NOT_FOUND") => {
+    let note: string | undefined;
+    if (decision === "NOT_FOUND") {
+      const n = prompt("What did you find? (shared with the customer, e.g. 'No payment of this amount at that time')");
+      if (n === null) return;
+      note = n.trim() || undefined;
+    } else if (!confirmAction(`Confirm that ${formatINR(order.totals.totalPaise)} with UPI ref ${p?.gatewayPaymentId} has reached the shop's UPI account? The order will go to the kitchen.`)) return;
+    setBusy(decision);
+    try {
+      await api.post(`/admin/orders/${order.id}/upi/verify`, { decision, note });
+      toast.success(decision === "RECEIVED" ? "Payment confirmed — order accepted" : "Customer asked to re-check the payment");
+      onDone();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <Card className="mb-6 border-2 border-saffron-300 p-5 dark:border-saffron-500/40">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink"><Smartphone className="h-5 w-5 text-saffron-600" />Check this UPI payment</h2>
+          <p className="mt-1 text-sm text-ink-soft">
+            Open the shop&apos;s UPI account (e.g. Paytm for Business) and look for <b>{formatINR(order.totals.totalPaise)}</b> with UPI reference <b className="font-mono">{p?.gatewayPaymentId ?? "—"}</b>
+            {p?.submittedAt ? <> (customer submitted it {dt(p.submittedAt)})</> : null}. The order stays on hold until you confirm.
+          </p>
+        </div>
+        {canVerify ? (
+          <div className="flex gap-2">
+            <Button loading={busy === "RECEIVED"} disabled={!!busy} onClick={() => void decide("RECEIVED")}><CheckCircle2 className="h-4 w-4" />Payment received</Button>
+            <Button variant="outline" loading={busy === "NOT_FOUND"} disabled={!!busy} onClick={() => void decide("NOT_FOUND")}><XCircle className="h-4 w-4" />Not found</Button>
+          </div>
+        ) : <p className="text-xs text-muted">Only staff with “Confirm direct UPI payments” can do this.</p>}
+      </div>
+    </Card>
   );
 }
 

@@ -101,7 +101,7 @@ adminAnalyticsRouter.get("/dashboard", requirePermission("dashboard.view"), asyn
     const dayOrders = monthOrders.filter((o) => istDate(o.createdAt) === d);
     series.push({ date: d, revenuePaise: dayOrders.filter(isRevenue).reduce((s, o) => s + net(o), 0), orders: dayOrders.filter((o) => o.status !== "CANCELLED").length });
   }
-  const paymentSplit = (["COD", "ONLINE"] as const)
+  const paymentSplit = (["COD", "UPI", "ONLINE"] as const)
     .map((method) => {
       const rows = live.filter((o) => o.paymentMethod === method);
       return { method, orders: rows.length, amountPaise: rows.reduce((s, o) => s + o.totalPaise, 0) };

@@ -1,4 +1,5 @@
 import { C, db, FieldValue } from "@naamdev/db";
+import { track } from "./background";
 import { logger } from "./logger";
 
 /**
@@ -7,10 +8,12 @@ import { logger } from "./logger";
  * Each write bumps `version`, so a listener can simply re-fetch the data it shows.
  */
 function write(path: string, id: string, data: Record<string, unknown>) {
-  db.collection(path)
-    .doc(id)
-    .set({ ...data, version: FieldValue.increment(1), updatedAt: new Date() }, { merge: true })
-    .catch((err) => logger.warn({ err, path, id }, "live update failed"));
+  void track(
+    db.collection(path)
+      .doc(id)
+      .set({ ...data, version: FieldValue.increment(1), updatedAt: new Date() }, { merge: true })
+      .catch((err) => logger.warn({ err, path, id }, "live update failed")),
+  );
 }
 
 export const live = {

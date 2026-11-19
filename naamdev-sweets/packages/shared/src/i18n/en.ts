@@ -109,6 +109,8 @@ export const en = {
     deliveryAddress: "Delivery address",
     addAddress: "Add new address",
     payment: "Payment method",
+    payUpi: "Pay by UPI app",
+    payUpiHint: "Paytm, PhonePe, Google Pay or any UPI app — confirmed by our team",
     payOnline: "Pay online",
     payOnlineHint: "UPI, cards, net banking via Razorpay",
     cod: "Cash on delivery",

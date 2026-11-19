@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { AlertTriangle, BadgeIndianRupee, CalendarClock, ClipboardList, Clock, Package, ShoppingBag, Star, Truck, Users } from "lucide-react";
+import { AlertTriangle, BadgeIndianRupee, CalendarClock, ClipboardList, Clock, Package, ShoppingBag, Smartphone, Star, Truck, Users } from "lucide-react";
 import { ORDER_STATUS_META, formatINR, type OrderStatus } from "@naamdev/shared";
 import { Badge, Card, ErrorState, Skeleton, StatCard } from "@naamdev/ui";
 import { CategoryBars, OrdersBars, RevenueArea } from "@/components/charts";
 import { Guard, PageHeader } from "@/components/kit";
+import { useAdmin } from "@/lib/auth";
 import { useAdminRealtime } from "@/lib/realtime";
 import { useResource } from "@/lib/use-resource";
 import { dt } from "@/lib/api";
@@ -23,6 +24,10 @@ interface Dash {
 export default function Dashboard() {
   const { tick } = useAdminRealtime();
   const { data: d, error } = useResource<Dash>("/admin/dashboard", { t: tick });
+  const { canAny } = useAdmin();
+  const upi = useResource<{ items: { orderId: string; orderNumber: string; totalPaise: number; customerName: string | null; reference: string | null; submittedAt: string | null }[] }>(
+    canAny("payments.verify", "orders.view") ? "/admin/orders/upi/pending" : null, { t: tick },
+  );
   return (
     <Guard any={["dashboard.view"]}>
       <PageHeader title="Store overview" subtitle={`Live as of ${dt(new Date())}`} />
@@ -43,6 +48,18 @@ export default function Dashboard() {
             <Link href="/customers"><StatCard label="Customers" value={d.customers.total} icon={<Users className="h-5 w-5" />} hint={`${d.customers.newLast30Days} new in 30 days`} /></Link>
           </div>
 
+          {!!upi.data?.items.length && (
+            <Card className="border-2 border-saffron-300 p-5 dark:border-saffron-500/40">
+              <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink"><Smartphone className="h-5 w-5 text-saffron-600" />{upi.data.items.length} UPI payment{upi.data.items.length > 1 ? "s" : ""} to check</h2>
+              <p className="mb-3 text-sm text-muted">These orders are on hold until someone confirms the money reached the shop&apos;s UPI account.</p>
+              <ul className="divide-y divide-line-soft text-sm">
+                {upi.data.items.slice(0, 8).map((u) => (
+                  <li key={u.orderId}><Link href={`/orders/${u.orderId}`} className="flex items-center justify-between gap-3 py-2 hover:text-saffron-700"><span className="font-mono font-bold">{u.orderNumber}</span><span className="truncate text-muted">{u.customerName}</span><span className="font-mono text-xs">UTR {u.reference}</span><span className="font-semibold tabular-nums">{formatINR(u.totalPaise)}</span></Link></li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
           {(d.attention.openTickets > 0 || d.attention.pendingReviews > 0 || d.attention.pendingPartners > 0 || d.orders.unassigned > 0) && (
             <div className="flex flex-wrap gap-2">
               {d.orders.unassigned > 0 && <Link href="/orders?view=unassigned"><Badge tone="warning">{d.orders.unassigned} packed order{d.orders.unassigned > 1 ? "s" : ""} need{d.orders.unassigned > 1 ? "" : "s"} a rider</Badge></Link>}
@@ -62,10 +79,10 @@ export default function Dashboard() {
               <Card className="p-5">
                 <h2 className="mb-4 font-display text-lg font-semibold text-ink">Sales by category</h2>
                 {d.charts.categoryShare.length ? <CategoryBars data={d.charts.categoryShare} /> : <p className="text-sm text-muted">No sales in the last 30 days yet.</p>}
-                <div className="mt-6 grid grid-cols-2 gap-3 border-t border-line-soft pt-4">
-                  {(["ONLINE", "COD"] as const).map((m) => {
+                <div className="mt-6 grid grid-cols-3 gap-3 border-t border-line-soft pt-4">
+                  {(["ONLINE", "UPI", "COD"] as const).map((m) => {
                     const p = d.charts!.paymentSplit.find((x) => x.method === m);
-                    return <div key={m} className="rounded-2xl bg-surface-2 p-3"><p className="text-[11px] font-bold uppercase tracking-wider text-muted">{m === "ONLINE" ? "Paid online" : "Cash on delivery"}</p><p className="mt-1 font-bold tabular-nums text-ink">{formatINR(p?.amountPaise ?? 0)}</p><p className="text-xs text-muted">{p?.orders ?? 0} orders</p></div>;
+                    return <div key={m} className="rounded-2xl bg-surface-2 p-3"><p className="text-[11px] font-bold uppercase tracking-wider text-muted">{m === "ONLINE" ? "Razorpay" : m === "UPI" ? "UPI (direct)" : "Cash on delivery"}</p><p className="mt-1 font-bold tabular-nums text-ink">{formatINR(p?.amountPaise ?? 0)}</p><p className="text-xs text-muted">{p?.orders ?? 0} orders</p></div>;
                   })}
                 </div>
               </Card>

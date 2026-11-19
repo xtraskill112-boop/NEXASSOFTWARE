@@ -1,79 +1,91 @@
 # NAAMDEV SWEETS
 
-A complete Indian sweets & food-delivery platform: a customer storefront (English + हिन्दी, INR),
-a store/staff console, a delivery-partner app and one backend API with live order tracking.
+A complete Indian sweets & food-delivery platform on **Firebase**: a customer storefront (English +
+हिन्दी, INR), a store/staff console, a delivery-partner app, one backend API, live order tracking and
+Android apps for customers and riders.
 
-| App | Path | Dev URL | Who uses it |
+| App | Path | Live address (after deploy) | Who uses it |
 |---|---|---|---|
-| Storefront (Next.js, PWA-ready) | `apps/web` | http://localhost:3000 | Customers: browse, search, cart, checkout, track, account, support |
-| Console (Next.js) | `apps/admin` | http://localhost:3001 | Super admin, store owner, managers, packing staff, support agents (permission-based) |
-| Partner app (Next.js PWA) | `apps/delivery` | http://localhost:3002 | Delivery partners: go online, accept offers, pickup, OTP delivery, earnings |
-| API (Express + Socket.IO) | `apps/api` | http://localhost:4000 | Everything above |
+| Storefront (Next.js, PWA-ready) | `apps/web` | https://naamdevseets.web.app | Customers: browse, search, cart, checkout, track, account, support |
+| Console (Next.js) | `apps/admin` | https://naamdevseets-admin.web.app | Super admin, store owner, managers, packing staff, support agents (permission-based) |
+| Partner app (Next.js PWA) | `apps/delivery` | https://naamdevseets-partner.web.app | Delivery partners: go online, accept offers, pickup, OTP delivery, earnings |
+| API (Express on Cloud Run) | `apps/api` | served under `/api` on each site | Everything above |
 
-Android apps (`mobile/android`): **NAAMDEV SWEETS** for customers and **NAAMDEV Partner** for
-riders. They are native shells around the storefront and partner site, with camera uploads, UPI
-hand-off and background rider location. APKs are built by GitHub Actions; see
-[mobile/android/README.md](mobile/android/README.md).
+**Firebase services used:** Cloud Firestore (all data), Firebase Authentication (**email + password
+only**), Firebase Storage (product images, avatars, private rider documents), Firebase Hosting (the three
+sites), Cloud Run (API + the three Next.js apps), Cloud Scheduler (background jobs), and Firestore
+listeners for real-time updates (order status, rider location, new orders, delivery offers).
 
-Shared packages: `packages/db` (Prisma schema, migrations, seed), `packages/shared` (money, pricing,
+Android apps (`mobile/android`): **NAAMDEV SWEETS** for customers and **NAAMDEV Partner** for riders.
+They open the live sites above directly — nobody has to type a shop address. APKs are built by GitHub
+Actions; see [mobile/android/README.md](mobile/android/README.md).
+
+Shared packages: `packages/db` (Firestore access, types, seed), `packages/shared` (money, pricing,
 coupons, order state machine, permissions, validation, i18n), `packages/ui` (design system),
-`packages/api-client` (typed fetch client + realtime).
+`packages/api-client` (typed fetch client, Firebase Auth and live-update helpers).
 
-## What works today, and what needs your credentials
+## Payments
 
-Everything below is implemented and exercised by the test suites. Third-party services are
-**off until you add their keys** — the apps say so rather than pretending:
+| Method | How it's confirmed |
+|---|---|
+| **UPI (direct to the shop)** — default `paytmqr6rgzn2@ptys` (RAKESH TAILOR), editable in Console → Settings → UPI payments | The customer pays from any UPI app (button on phones, QR code on computers) and enters the 12-digit UPI reference. The order stays **on hold** until a staff member with *Confirm direct UPI payments* finds the money in the shop's UPI account and clicks **Payment received**. A reference number alone never confirms an order. |
+| Razorpay (cards, UPI, netbanking, wallets) | Off until you add Razorpay keys. Then: server-side signature and amount checks, webhooks, automatic refunds. |
+| Cash on delivery | Rider collects cash and confirms on delivery. |
+
+Refunds for UPI and cash orders are sent by staff (UPI/bank transfer) and recorded with the transfer
+reference; they are never marked as refunded before that.
+
+## What works without extra setup, and what needs credentials
 
 | Integration | Without credentials | With credentials |
 |---|---|---|
-| Razorpay (UPI, cards, netbanking, wallets) | Checkout offers **Cash on Delivery only** and explains why | Online payments; server-side signature + amount verification, webhooks, refunds |
-| SMS OTP (MSG91 or Twilio) | Dev: OTP printed in the API log (and echoed on screen when `OTP_DEV_ECHO=true`). Prod: OTP login returns "couldn't send" — password login still works | Real OTP SMS (Indian templates must be DLT-registered) |
-| Email (SMTP) | Dev: printed to the API log. Prod: skipped and recorded as skipped | Order/OTP/reset emails |
-| Push (Firebase Cloud Messaging) | In-app + realtime (Socket.IO) notifications only | Browser push notifications on the storefront |
-| Google Maps | Address form with an optional GPS pin; live tracking draws a schematic route (store → partner → you) with ETA | Draggable map pin, "use my current location" PIN lookup, live Google map |
-| Cloudinary | Uploads stored on local disk (`UPLOAD_DIR`), served by the API | Images/videos on Cloudinary |
+| Firebase (data, sign-in, storage, hosting) | Required — the deploy workflow sets it up in your project | — |
+| UPI direct payments | Works (staff-verified, see above) | — |
+| Razorpay | Checkout offers UPI (direct) and cash on delivery | Online payments with gateway verification |
+| Order emails (SMTP) | Skipped and recorded as skipped. Sign-up verification and password-reset emails are sent by Firebase Auth regardless | Order confirmation / status emails |
+| SMS | Off | MSG91 or Twilio (Indian templates must be DLT-registered) |
+| Push (FCM) | In-app + live notifications only | Browser push on the storefront (needs a web push VAPID key) |
+| Google Maps | Address form with optional GPS pin; schematic live-tracking route | Draggable map pin and live Google map |
 
 The console's **Settings → Integrations** tab shows the live status of each one and the delivery log
-of every notification. Setup steps for every provider: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+of every notification. Setup steps: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
-Product imagery is original, procedurally generated SVG artwork (`pnpm assets`), not stock photos —
-replace it with real photography from the console's product editor whenever you have it.
+## Going live (Firebase project `naamdevseets`)
 
-## Quick start (local development)
+1. Firebase console: keep the project on the **Blaze** plan.
+2. Google Cloud console → IAM → Service accounts: create a key for a service account with the
+   **Owner** role and add it to this GitHub repository as the secret `FIREBASE_SERVICE_ACCOUNT`.
+3. Add secrets `NAAMDEV_ADMIN_EMAIL` and `NAAMDEV_ADMIN_PASSWORD` (your first console login).
+4. GitHub → Actions → **NAAMDEV deploy to Firebase** → Run workflow.
 
-Requirements: Node.js ≥ 20.11, pnpm 10 (`corepack enable`), PostgreSQL 14+.
+The workflow creates the Firestore database, turns on email/password sign-in, deploys the API and
+apps to Cloud Run, the three Hosting sites, security rules, indexes and the job scheduler, then prints
+the live addresses. Full guide and troubleshooting: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Local development
+
+Requirements: Node.js ≥ 20.11, pnpm 10 (`corepack enable`), Java 11+ (for the Firestore emulator).
+Development runs entirely on the Firebase emulators — no real project, no keys.
 
 ```bash
 cd naamdev-sweets
 pnpm install
-
-# 1. Database (any local Postgres; this user/db matches the example env)
-createuser -P naamdev            # password: naamdev_dev
-createdb -O naamdev naamdev
-psql -d naamdev -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm'   # needs superuser once
-
-# 2. Environment
 cp apps/api/.env.example apps/api/.env
-cp apps/api/.env.example packages/db/.env       # only DATABASE_URL is read here
 cp apps/web/.env.example apps/web/.env.local
 cp apps/admin/.env.example apps/admin/.env.local
 cp apps/delivery/.env.example apps/delivery/.env.local
 
-# 3. Schema + catalogue + demo accounts
-pnpm db:generate
-pnpm db:deploy
-pnpm db:seed
-
-# 4. Run everything (API + three apps, hot reload)
-pnpm dev
+pnpm emulators          # terminal 1: Auth, Firestore and Storage emulators
+pnpm db:seed:local      # terminal 2: catalogue, settings, demo accounts (idempotent)
+pnpm dev                # API + storefront + console + partner app with hot reload
 ```
 
 ### Demo accounts (development seed only)
 
-The seed creates these when `NODE_ENV` is not `production` (or `SEED_DEMO_ACCOUNTS=true`).
-Password for all: `Naamdev@123`. They are fictional; no real customer data is included.
+Created only when not in production (or with `SEED_DEMO_ACCOUNTS=true`). Password for all:
+`Naamdev@123`. They are fictional; no real customer data is included.
 
-| Role | Login | App |
+| Role | Email | App |
 |---|---|---|
 | Super admin | `admin@naamdevsweets.local` | Console |
 | Store owner | `owner@naamdevsweets.local` | Console |
@@ -84,47 +96,31 @@ Password for all: `Naamdev@123`. They are fictional; no real customer data is in
 | Support agent | `support@naamdevsweets.local` | Console |
 | Delivery partner (approved) | `rider@naamdevsweets.local` | Partner app |
 | Delivery partner (pending documents) | `rider2@naamdevsweets.local` | Partner app |
-| Customer | `customer@naamdevsweets.local` or mobile `9000000100` | Storefront |
-
-Customers normally sign in with a mobile OTP. In development the OTP appears in the API terminal
-(and on screen while `OTP_DEV_ECHO=true`).
+| Customer | `customer@naamdevsweets.local` | Storefront |
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `pnpm dev` | API + storefront + console + partner app with hot reload |
+| `pnpm emulators` | Firebase Auth, Firestore and Storage emulators for development |
+| `pnpm db:seed:local` | Seed the running emulators |
 | `pnpm build` | Production build of every package and app |
-| `pnpm typecheck` | TypeScript across all 8 workspace packages |
+| `pnpm typecheck` | TypeScript across all workspace packages |
 | `pnpm test` | Unit tests + API integration tests |
-| `pnpm test:unit` | Pricing, coupons, loyalty, permissions, order state machine (Vitest) |
-| `pnpm test:api` | API integration tests against a throw-away Postgres database (Vitest + Supertest + Razorpay mock) |
-| `pnpm test:e2e` | Fresh database → API → production builds → Playwright journey across all three apps |
-| `pnpm db:deploy` / `db:seed` / `db:migrate` | Apply migrations / seed (idempotent) / create a new migration |
+| `pnpm test:unit` | Pricing, coupons, loyalty, permissions, order state machine, UPI links (Vitest) |
+| `pnpm test:api` | API integration tests on the Firebase emulators (Vitest + Supertest + Razorpay mock) |
+| `pnpm test:e2e` | Emulators → seed → API → production builds → Playwright journeys across all three apps |
 | `pnpm assets` | Regenerate the catalogue artwork, emblem and app icons |
 
 Test details and the latest recorded results: [docs/TESTING.md](docs/TESTING.md).
 
-## Production
-
-Docker Compose runs PostgreSQL, the API, the three apps, Caddy (automatic HTTPS for four domains)
-and a daily backup job:
-
-```bash
-cp .env.production.example .env      # fill in domains, secrets, provider keys
-docker compose up -d --build
-docker compose exec api node dist/seed.js   # first deploy only: roles, catalogue, settings, super admin
-```
-
-Full guide — DNS, secrets, migrations, Razorpay webhook URL, backups & restore, logs and
-monitoring, scaling notes: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
 ## Documentation
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, data model, order lifecycle, inventory, delivery dispatch, realtime
-- [docs/API.md](docs/API.md) — REST endpoints and Socket.IO events
-- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — Razorpay, SMS, email, push, maps, Cloudinary
-- [docs/SECURITY.md](docs/SECURITY.md) — auth, sessions, CSRF, RBAC, payments, uploads, audit, data protection
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Firebase setup, the deploy workflow, costs, operations
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, data model, order lifecycle, inventory, dispatch, realtime
+- [docs/API.md](docs/API.md) — REST endpoints and live documents
+- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — UPI, Razorpay, email, SMS, push, maps
+- [docs/SECURITY.md](docs/SECURITY.md) — authentication, RBAC, payments, uploads, audit, data protection
 - [docs/TESTING.md](docs/TESTING.md) — test suites and how to run them
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Docker, HTTPS, backups, monitoring
 - [docs/PROGRESS.md](docs/PROGRESS.md) — feature checklist and known limitations

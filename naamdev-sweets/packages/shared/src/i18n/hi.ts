@@ -111,6 +111,8 @@ export const hi: Dictionary = {
     deliveryAddress: "डिलीवरी पता",
     addAddress: "नया पता जोड़ें",
     payment: "भुगतान का तरीका",
+    payUpi: "UPI ऐप से भुगतान",
+    payUpiHint: "Paytm, PhonePe, Google Pay या कोई भी UPI ऐप — हमारी टीम पुष्टि करेगी",
     payOnline: "ऑनलाइन भुगतान",
     payOnlineHint: "UPI, कार्ड, नेट बैंकिंग (Razorpay)",
     cod: "कैश ऑन डिलीवरी",

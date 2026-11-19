@@ -13,20 +13,7 @@ defaults:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: naamdev
-          POSTGRES_PASSWORD: naamdev_dev
-          POSTGRES_DB: naamdev
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U naamdev" --health-interval 5s --health-timeout 5s --health-retries 20
-    env:
-      DATABASE_URL: postgresql://naamdev:naamdev_dev@localhost:5432/naamdev?schema=public
-      TEST_DATABASE_SERVER_URL: postgresql://naamdev:naamdev_dev@localhost:5432
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -37,20 +24,22 @@ jobs:
           cache: pnpm
           cache-dependency-path: naamdev-sweets/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm db:generate
+      # The Firestore emulator runs on Java.
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('naamdev-sweets/pnpm-lock.yaml') }}
       - name: Typecheck all packages
         run: pnpm -r typecheck
       - name: Unit tests (pricing, coupons, permissions, state machine)
         run: pnpm test:unit
-      - name: API integration tests (ephemeral Postgres database per run)
+      - name: API integration tests (Firebase Auth/Firestore/Storage emulators)
         run: pnpm test:api
-      - name: Production builds
-        run: |
-          pnpm --filter @naamdev/api build
-          pnpm --filter @naamdev/web build
-          pnpm --filter @naamdev/admin build
-          pnpm --filter @naamdev/delivery build
-      - name: End-to-end (customer → console → rider)
+      - name: API production build
+        run: pnpm --filter @naamdev/api build
+      - name: End-to-end on the emulators (production builds of all apps; customer → console → rider, UPI)
         run: |
           npx playwright install --with-deps chromium
-          E2E_SKIP_BUILD=1 ./scripts/e2e.sh
+          ./scripts/e2e.sh

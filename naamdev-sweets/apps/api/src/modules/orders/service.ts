@@ -175,7 +175,7 @@ export async function runEffects(effects: Effect[]) {
       else if (e.kind === "run") e.fn();
       else if (e.kind === "newOrder") {
         live.staff("new-order", { orderId: e.order.id, orderNumber: e.order.orderNumber, totalPaise: e.order.totalPaise });
-        notifyStaff("orders.manage", { type: "ORDER", title: `New order ${e.order.orderNumber}`, body: `₹${(e.order.totalPaise / 100).toLocaleString("en-IN")} · ${e.order.paymentMethod === "COD" ? "Cash on delivery" : "Paid online"}`, link: `/orders/${e.order.id}`, template: "admin.new_order" });
+        notifyStaff("orders.manage", { type: "ORDER", title: `New order ${e.order.orderNumber}`, body: `₹${(e.order.totalPaise / 100).toLocaleString("en-IN")} · ${e.order.paymentMethod === "COD" ? "Cash on delivery" : e.order.paymentMethod === "UPI" ? "UPI (verified)" : "Paid online"}`, link: `/orders/${e.order.id}`, template: "admin.new_order" });
       } else if (e.kind === "autoAssign") await autoOfferDelivery(e.orderId);
       else if (e.kind === "partnerCancelled") {
         live.partner(e.partnerId, "withdrawn", { assignmentId: e.assignmentId });
@@ -183,7 +183,14 @@ export async function runEffects(effects: Effect[]) {
       } else if (e.kind === "autoRefund") {
         const order = await getDoc<Order>(orderRef(e.orderId));
         const due = order ? order.totalPaise - order.refundedPaise : 0;
-        if (due > 0) await createRefund({ orderId: e.orderId, amountPaise: due, reason: e.reason, method: "GATEWAY" }, { type: "SYSTEM" });
+        if (due > 0 && order) {
+          if (order.paymentMethod === "ONLINE") await createRefund({ orderId: e.orderId, amountPaise: due, reason: e.reason, method: "GATEWAY" }, { type: "SYSTEM" });
+          else {
+            // Direct UPI: no gateway can send the money back — staff transfer it and record the reference.
+            await createRefund({ orderId: e.orderId, amountPaise: due, reason: e.reason, method: "MANUAL", pending: true }, { type: "SYSTEM" });
+            notifyStaff("refunds.manage", { type: "PAYMENT", title: `Refund to send · ${order.orderNumber}`, body: `Send ₹${(due / 100).toFixed(2)} back to the customer by UPI, then record the reference on the order.`, link: `/orders/${order.id}`, template: "admin.manual_refund" });
+          }
+        }
       }
     } catch (err) {
       logger.error({ err, effect: e.kind }, "order effect failed");
@@ -258,7 +265,7 @@ export async function markPaymentFailed(gatewayOrderId: string, _gatewayPaymentI
 const refundsCol = () => db.collection(C.refunds);
 
 export async function createRefund(
-  input: { orderId: string; amountPaise: number; reason: string; method?: "GATEWAY" | "MANUAL"; reference?: string; returnRequestId?: string },
+  input: { orderId: string; amountPaise: number; reason: string; method?: "GATEWAY" | "MANUAL"; reference?: string; returnRequestId?: string; pending?: boolean },
   actor: Actor,
 ): Promise<WithId<Refund>> {
   const { result: prep, effects } = await withOrderTx(async (ctx) => {
@@ -274,18 +281,21 @@ export async function createRefund(
     const payment = payments.filter((p) => p.method === "ONLINE" && p.status === "CAPTURED").sort((a, b) => +b.createdAt - +a.createdAt)[0] ?? null;
     const method = input.method ?? (payment ? "GATEWAY" : "MANUAL");
     if (method === "GATEWAY" && !payment?.gatewayPaymentId) throw badRequest("No captured online payment found — record a manual refund instead.");
-    if (method === "MANUAL" && !input.reference && actor.type !== "SYSTEM") throw badRequest("Add the UPI/bank transfer reference for a manual refund.");
+    // A manual refund is either recorded after the money was sent (with its reference) or created as
+    // "pending" — to be completed with the reference once staff have actually sent it.
+    const pendingManual = method === "MANUAL" && (input.pending || !input.reference);
+    if (method === "MANUAL" && !input.reference && !input.pending && actor.type !== "SYSTEM") throw badRequest("Add the UPI/bank transfer reference for a manual refund.");
     const now = new Date();
     const ref = refundsCol().doc();
     const refund: Refund = {
-      orderId: order.id, paymentId: payment?.id ?? null, amountPaise: input.amountPaise, reason: input.reason, method, status: method === "MANUAL" ? "PROCESSED" : "PENDING",
+      orderId: order.id, paymentId: payment?.id ?? null, amountPaise: input.amountPaise, reason: input.reason, method, status: method === "MANUAL" && !pendingManual ? "PROCESSED" : "PENDING",
       gatewayRefundId: null, reference: input.reference ?? null, failureReason: null, initiatedById: actor.userId ?? null,
-      processedAt: method === "MANUAL" ? now : null, returnRequestId: input.returnRequestId ?? null, createdAt: now, updatedAt: now,
+      processedAt: method === "MANUAL" && !pendingManual ? now : null, returnRequestId: input.returnRequestId ?? null, createdAt: now, updatedAt: now,
     };
     ctx.tx.set(ref, refund);
     if (input.returnRequestId) ctx.tx.update(db.collection(C.returns).doc(input.returnRequestId), { refundId: ref.id, status: "APPROVED", updatedAt: now });
     if (order.status === "CANCELLED" || order.status === "DELIVERED") await applyTransition(ctx, order, "REFUND_INITIATED", actor, input.reason);
-    if (method === "MANUAL") await applyRefundProcessed(ctx, order, { ...refund, id: ref.id }, payments);
+    if (method === "MANUAL" && !pendingManual) await applyRefundProcessed(ctx, order, { ...refund, id: ref.id }, payments);
     return { refund: { ...refund, id: ref.id }, payment };
   });
   await runEffects(effects);
@@ -302,6 +312,24 @@ export async function createRefund(
     }
   }
   return (await getDoc<Refund>(refundsCol().doc(prep.refund.id)))!;
+}
+
+/** Records that staff sent a pending manual refund (UPI/bank transfer) and its reference. */
+export async function completeManualRefund(refundId: string, reference: string, actor: Actor) {
+  const lookup = await getDoc<Refund>(refundsCol().doc(refundId));
+  if (!lookup) throw notFound("Refund");
+  const { result, effects } = await withOrderTx(async (ctx) => {
+    const order = await ctx.lock(lookup.orderId);
+    const refund = await getDoc<Refund>(refundsCol().doc(refundId), ctx.tx);
+    if (!refund || refund.method !== "MANUAL" || refund.status !== "PENDING") throw badRequest("This refund isn't waiting to be sent.");
+    const now = new Date();
+    const done = { ...refund, status: "PROCESSED" as const, reference, processedAt: now, updatedAt: now };
+    ctx.tx.update(refundsCol().doc(refundId), { status: "PROCESSED", reference, processedAt: now, initiatedById: refund.initiatedById ?? actor.userId ?? null, updatedAt: now });
+    await applyRefundProcessed(ctx, order, done);
+    return done;
+  });
+  await runEffects(effects);
+  return result;
 }
 
 async function applyRefundProcessed(ctx: OrderTx, order: WithId<Order>, refund: WithId<Refund>, payments?: WithId<Payment>[]) {
@@ -347,7 +375,8 @@ export async function settleGatewayRefund(gatewayRefundId: string, status: "proc
 export async function expireUnpaidOrders() {
   const now = new Date();
   const due = (await getDocs<Order>(db.collection(C.orders).where("status", "==", "PENDING").limit(200)))
-    .filter((o) => o.paymentMethod === "ONLINE" && o.reservationExpiresAt && o.reservationExpiresAt < now)
+    // Online (Razorpay) and direct-UPI orders; UPI orders whose reference staff are checking are kept.
+    .filter((o) => o.paymentMethod !== "COD" && o.paymentStatus !== "VERIFYING" && o.reservationExpiresAt && o.reservationExpiresAt < now)
     .slice(0, 50);
   let cancelled = 0;
   for (const o of due) {

@@ -1,98 +1,97 @@
 # Integrations
 
-All credentials are **server environment variables** (`apps/api/.env` locally, `.env` for Docker
-Compose). None are stored in the database or editable from the console, and only the values that
-are public by design (`NEXT_PUBLIC_*`, the Razorpay *key id*) ever reach a browser. After changing
-them restart the API; *Console → Settings → Integrations* shows what the running server detected.
+Server credentials are **Cloud Run environment variables / Secret Manager secrets**, set by the deploy
+workflow from GitHub repository secrets and variables (see [DEPLOYMENT.md](DEPLOYMENT.md#optional-integrations));
+locally they live in `apps/api/.env`. None are stored in Firestore or editable from the console, and only
+values that are public by design (`NEXT_PUBLIC_*`, the Firebase web config, the Razorpay *key id*) ever
+reach a browser. *Console → Settings → Integrations* shows what the running server detected.
 
-Status today: **none of these services has been connected or tested against the real provider in
-this repository.** Razorpay is exercised end-to-end against a local mock that implements the same
-REST endpoints and signatures; the other providers are verified only up to "not configured →
-behaves honestly". Before launch, run each checklist below in the provider's test mode.
+Status: the code paths below are covered by the automated tests against the Firebase emulators and a
+local Razorpay mock. **None has been tested against the live `naamdevseets` project or a real provider
+from this repository yet** — run each checklist after the first deploy.
 
-## Razorpay (online payments)
+## Firebase (required)
 
-1. In the Razorpay dashboard create API keys (**Test mode** first): *Account & Settings → API Keys*.
-2. Set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`.
-3. Add a webhook: *Account & Settings → Webhooks →* URL
-   `https://<API_DOMAIN>/api/v1/payments/razorpay/webhook`, a strong secret →
-   `RAZORPAY_WEBHOOK_SECRET`, events **payment.captured, payment.failed, order.paid,
+Firestore, Authentication (email/password), Storage, Hosting, Cloud Run and Cloud Scheduler are set up
+by the deploy workflow. The web config in `packages/api-client/src/firebase.ts` is the `naamdevseets`
+web app's public config; override it with `NEXT_PUBLIC_FIREBASE_*` build variables if you move projects.
+
+Checklist after deploy: sign up on the storefront → verification email arrives; *Forgot password* →
+reset email arrives and the new password works; sign in to the console with `NAAMDEV_ADMIN_EMAIL`;
+upload a product photo; place a COD order and watch the console's new-order chime.
+
+Customise the sign-in emails (sender name, wording, Hindi) in Firebase console → Authentication →
+Templates.
+
+## UPI — direct to the shop's UPI ID (built in)
+
+*Console → Settings → UPI payments*: UPI ID (default `paytmqr6rgzn2@ptys`), payee name (default
+RAKESH TAILOR), note (`ORDER #{ORDER_NUMBER}`) and the time a customer has to pay (30 minutes).
+
+The storefront builds the standard UPI link for each order, e.g.
+`upi://pay?pa=paytmqr6rgzn2%40ptys&pn=RAKESH%20TAILOR&am=450.50&cu=INR&tn=ORDER%20%23ND261119-0042` —
+the amount is always the server-calculated order total. On phones the button opens the customer's
+UPI app (the Android app hands the link to installed UPI apps); on computers a QR code is shown.
+
+**No UPI app or bank tells the server that a payment arrived**, so confirmation is manual and the order
+waits: after paying, the customer enters the 12-digit UPI reference (UTR); staff with *Confirm direct
+UPI payments* find that payment in the shop's account (e.g. Paytm for Business → payment history) and
+click **Payment received** (the order goes to the kitchen) or **Not found** (the customer is asked to
+re-check or pay again). The console dashboard lists every payment waiting to be checked. Refunds for
+UPI orders are sent back by staff and recorded with the transfer reference.
+
+Want automatic confirmation instead? Use Razorpay (below), which can also accept UPI.
+
+Checklist: pay a small test order from a real UPI app → the amount and note are pre-filled → enter the
+UTR → find it in Paytm for Business → *Payment received* → customer sees *Paid*.
+
+## Razorpay (optional online payments)
+
+1. Razorpay dashboard → *Account & Settings → API Keys* (**Test mode** first).
+2. GitHub secrets `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`; re-run the deploy.
+3. *Webhooks* → URL `https://naamdevseets.web.app/api/v1/payments/razorpay/webhook`, a strong secret →
+   GitHub secret `RAZORPAY_WEBHOOK_SECRET`, events **payment.captured, payment.failed, order.paid,
    refund.processed, refund.failed**.
-4. Nothing to configure for capture: orders are created with `payment_capture: 1`, so Razorpay
-   captures successful payments automatically.
 
-How it works:
+How it works: `place-order` computes the total on the server, reserves stock and creates a Razorpay
+order for exactly that amount; Razorpay Checkout collects card/UPI details (never our servers);
+`/payments/razorpay/verify` checks the HMAC signature and fetches the payment from Razorpay before
+confirming; the webhook (HMAC verified, de-duplicated) is the safety net; late payments for cancelled
+orders are refunded automatically.
 
-* `place-order` computes the total on the server, reserves stock and creates a Razorpay **order**
-  for exactly that amount. The browser opens Razorpay Checkout with the order id; card/UPI details
-  go straight to Razorpay and never touch our servers.
-* `POST /payments/razorpay/verify` checks the HMAC signature, then **fetches the payment from
-  Razorpay** and requires matching order id and a `captured`/`authorized` status before confirming.
-* The webhook (raw body, HMAC verified, de-duplicated by event id) is the safety net when the
-  customer closes the tab after paying. Processing failures return 500 so Razorpay retries.
-* Payment after the reservation expired or the order was cancelled → automatic full refund.
-* Refunds from the console call the Razorpay Refunds API; `refund.processed`/`failed` webhooks (or
-  *Sync* in the console) settle them. COD refunds are recorded as manual (UPI/bank transfer).
+Checklist (test mode): successful payment → *Confirmed*; failed payment → stays *Pending* with retry;
+close the tab after paying → webhook confirms; full and partial refunds; replayed webhook ignored.
 
-Test checklist (test mode): successful UPI/card payment → order *Confirmed*; failed payment →
-order stays *Pending* with retry; close the tab after paying → webhook confirms it; full and
-partial refund from the console; replay a webhook from the dashboard → ignored as duplicate.
+## Order emails — SMTP (optional)
 
-## SMS / OTP — MSG91 (recommended in India) or Twilio
+Repository variables `SMTP_HOST`, `SMTP_PORT` (587 STARTTLS), `SMTP_USER`, `EMAIL_FROM` and secret
+`SMTP_PASS`. Works with Amazon SES, SendGrid, Zoho, Google Workspace relay, etc. Configure SPF, DKIM and
+DMARC. Used for order confirmations/status updates and staff alerts. Sign-in emails don't need it.
 
-Indian regulations (TRAI DLT) require a registered sender id and registered templates.
+## SMS (optional)
 
-* **MSG91**: `SMS_PROVIDER=msg91`, `MSG91_AUTH_KEY`, `MSG91_OTP_TEMPLATE_ID` (an OTP template with
-  an `##OTP##` variable, used for every login/verification code) and `MSG91_FLOW_TEMPLATE_ID`
-  (a Flow template with a `message` variable, for order updates). Without the flow template,
-  transactional SMS are recorded as *skipped*; OTPs still work.
-* **Twilio**: `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`.
-* **console** (development only): messages are written to the API log.
+Order-update SMS through MSG91 (`SMS_PROVIDER=msg91`, `MSG91_AUTH_KEY`, `MSG91_FLOW_TEMPLATE_ID` — a DLT
+registered Flow template with a `message` variable) or Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+`TWILIO_FROM`), set on the `naamdev-api` Cloud Run service. Sign-in never uses SMS.
 
-If the provider is missing or rejects the message, the OTP request fails with *"We couldn't send
-an OTP…"* (HTTP 503) instead of pretending it was sent. Customers with a password can still sign in.
+## Push notifications — Firebase Cloud Messaging (optional)
 
-## Email — SMTP
+1. Firebase console → Project settings → Cloud Messaging → *Web Push certificates* → generate →
+   repository variable `NEXT_PUBLIC_FIREBASE_VAPID_KEY`.
+2. Set `PUSH_ENABLED=true` on the `naamdev-api` Cloud Run service (it sends with the runtime service
+   account; no key file needed). Re-run the deploy.
 
-`EMAIL_PROVIDER=smtp`, `SMTP_HOST`, `SMTP_PORT` (587 STARTTLS or 465 with `SMTP_SECURE=true`),
-`SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`. Works with Amazon SES, SendGrid, Zoho, Google Workspace
-relay, etc. Configure SPF, DKIM and DMARC for the sending domain. Used for order confirmations and
-status updates, password reset and email verification codes, staff alerts (*Alert emails* in
-Console → Settings → Alerts).
-
-## Push notifications — Firebase Cloud Messaging
-
-1. Create a Firebase project → add a **Web app**; copy its config to the storefront build variables
-   `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`,
-   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`.
-2. *Project settings → Cloud Messaging → Web Push certificates* → generate a key pair →
-   `NEXT_PUBLIC_FIREBASE_VAPID_KEY`.
-3. *Project settings → Service accounts* → generate a private key; base64-encode the JSON
-   (`base64 -w0 service-account.json`) → `FIREBASE_SERVICE_ACCOUNT_BASE64` on the API.
-
-Customers opt in from *Account → Notifications*; tokens are stored per device and removed when FCM
-reports them invalid. Push is implemented on the storefront; the console and partner app use
-realtime Socket.IO alerts while open.
+Customers opt in from *Account → Notifications*. The console and partner app get live in-app alerts
+through Firestore listeners while open.
 
 ## Google Maps (optional)
 
-Create a browser key restricted by HTTP referrer to your domains with **Maps JavaScript API** and
-**Geocoding API** enabled → `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (storefront and console builds).
-It enables the draggable address pin, "use my current location" and the live tracking map. Without
-it, addresses are entered by form (with an optional GPS pin) and tracking shows a schematic route.
-
-Distances for delivery fees, serviceability and partner dispatch are computed on the server with
-the haversine formula from stored coordinates, so they do not depend on Google.
-
-## Cloudinary (optional media storage)
-
-`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, optional
-`CLOUDINARY_FOLDER`. Without it uploads are stored in `UPLOAD_DIR` and served by the API from
-`/uploads` (keep that directory on a persistent volume and back it up). Partner KYC documents are
-always stored privately and are only downloadable by staff with `partners.manage`.
+A browser key restricted to your sites with **Maps JavaScript API** and **Geocoding API** → repository
+variable `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. It enables the draggable address pin and the live tracking
+map. Distances for fees, serviceability and dispatch are computed on the server, independent of Google.
 
 ## Notification delivery log
 
-Every email/SMS/push attempt is recorded (`NotificationDelivery`) with the provider and result —
-`SENT`, `FAILED` (with the provider's error) or `SKIPPED` (provider not configured or customer
-opted out). Review it under *Console → Settings → Integrations*.
+Every email/SMS/push attempt is recorded (`notificationDeliveries`) with provider and result — `SENT`,
+`FAILED` (with the provider's error) or `SKIPPED` (not configured or opted out) — under
+*Console → Settings → Integrations*.

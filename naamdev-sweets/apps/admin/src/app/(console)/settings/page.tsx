@@ -8,7 +8,7 @@ import { ApiError, api, dt, errorMessage } from "@/lib/api";
 import { useResource } from "@/lib/use-resource";
 
 type Val = string | number | boolean | string[] | undefined;
-const TABS = [["checkout", "Checkout & payments"], ["delivery", "Delivery & partners"], ["loyalty", "Rewards"], ["storeProfile", "Business profile"], ["returns", "Returns"], ["announcement", "Announcement bar"], ["social", "Social links"], ["notifications", "Alerts"]] as const;
+const TABS = [["checkout", "Checkout & payments"], ["upi", "UPI payments"], ["delivery", "Delivery & partners"], ["loyalty", "Rewards"], ["storeProfile", "Business profile"], ["returns", "Returns"], ["announcement", "Announcement bar"], ["social", "Social links"], ["notifications", "Alerts"]] as const;
 const LABELS: Record<string, string> = {
   minOrderPaise: "Minimum order value (₹)", freeDeliveryThresholdPaise: "Free delivery above (₹)", baseDeliveryFeePaise: "Standard delivery fee (₹)", codEnabled: "Cash on delivery enabled",
   codMaxOrderPaise: "COD allowed up to (₹)", onlinePaymentsEnabled: "Online payments enabled", pricesIncludeTax: "Prices include GST", defaultGstRate: "Default GST rate (%)",
@@ -19,6 +19,7 @@ const LABELS: Record<string, string> = {
   signupBonus: "Signup bonus (points)", referrerBonus: "Referrer reward (points)", refereeBonus: "New customer referral reward (points)",
   name: "Brand name", legalName: "Legal entity name", gstin: "GSTIN", fssaiLicense: "FSSAI licence no.", phone: "Support phone", whatsapp: "WhatsApp number", email: "Support email", supportHours: "Support hours", address: "Registered address",
   windowHours: "Return window (hours after delivery)", active: "Show announcement", text: "Announcement text", textHi: "Announcement (Hindi)", link: "Announcement link",
+  vpa: "Shop UPI ID (receives the money)", payeeName: "Payee name shown in UPI apps", noteTemplate: "Payment note ({ORDER_NUMBER} = order number)", payWithinMinutes: "Time to pay by UPI (minutes)",
   instagram: "Instagram URL", facebook: "Facebook URL", youtube: "YouTube URL", x: "X (Twitter) URL", adminAlertEmails: "Alert emails (comma separated)", lowStockAlerts: "Low-stock alerts", expiryAlertDays: "Expiry alert window (days)",
 };
 const SOCIAL_KEYS = ["instagram", "facebook", "youtube", "x", "whatsapp"];

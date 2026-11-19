@@ -18,7 +18,9 @@ const seedDemo = process.env.SEED_DEMO_ACCOUNTS ? process.env.SEED_DEMO_ACCOUNTS
 const demoPassword = process.env.SEED_DEMO_PASSWORD || "Naamdev@123";
 const adminPassword = process.env.SEED_ADMIN_PASSWORD || (isProd ? "" : "Naamdev@123");
 const adminEmail = (process.env.SEED_ADMIN_EMAIL || "admin@naamdevsweets.local").toLowerCase();
-const adminPhone = process.env.SEED_ADMIN_PHONE || "+919000000001";
+const adminPhone = process.env.SEED_ADMIN_PHONE || (isProd ? null : "+919000000001");
+// The sample sweets catalogue (products, stock, sample suppliers): always in development, opt-in in production.
+const sampleCatalog = isProd ? process.env.SEED_SAMPLE_CATALOG === "true" : process.env.SEED_SAMPLE_CATALOG !== "false";
 const rupees = (r: number) => Math.round(r * 100);
 const day = 86_400_000;
 const now = () => new Date();
@@ -31,14 +33,25 @@ async function commitInChunks(writes: ((b: FirebaseFirestore.WriteBatch) => void
   }
 }
 
+/**
+ * System roles. Re-running the seed (every deploy) never undoes an owner's edits: existing roles only
+ * gain permissions that are new in the code since the last seed (tracked in `seededPermissions`).
+ */
 async function seedRoles() {
-  const writes = SYSTEM_ROLES.map((role) => (b: FirebaseFirestore.WriteBatch) =>
-    b.set(
-      db.collection(C.roles).doc(role.key),
-      { key: role.key, name: role.name, description: role.description, isSystem: true, isStaff: role.isStaff, permissions: [...role.permissions], updatedAt: now(), createdAt: now() },
-      { merge: true },
-    ),
-  );
+  const existing = new Map((await db.collection(C.roles).get()).docs.map((d) => [d.id, d.data() as { permissions?: string[]; seededPermissions?: string[] }]));
+  const writes = SYSTEM_ROLES.map((role) => (b: FirebaseFirestore.WriteBatch) => {
+    const ref = db.collection(C.roles).doc(role.key);
+    const cur = existing.get(role.key);
+    const code = [...role.permissions] as string[];
+    if (!cur) {
+      b.set(ref, { key: role.key, name: role.name, description: role.description, isSystem: true, isStaff: role.isStaff, permissions: code, seededPermissions: code, updatedAt: now(), createdAt: now() });
+      return;
+    }
+    const known = new Set(cur.seededPermissions ?? cur.permissions ?? []);
+    const added = code.filter((p) => !known.has(p));
+    const permissions = role.key === "SUPER_ADMIN" ? code : [...new Set([...(cur.permissions ?? []), ...added])];
+    b.set(ref, { isSystem: true, isStaff: role.isStaff, permissions, seededPermissions: code, updatedAt: now() }, { merge: true });
+  });
   await commitInChunks(writes);
   console.log(`✓ ${SYSTEM_ROLES.length} roles`);
 }
@@ -76,14 +89,22 @@ async function seedCatalog() {
   const catIds = new Map<string, string>();
   const existingCats = new Map((await db.collection(C.categories).get()).docs.map((d) => [d.data().slug as string, d.id]));
   for (const [i, c] of CATEGORIES.entries()) {
-    const id = existingCats.get(c.slug) ?? newId();
+    const known = existingCats.get(c.slug);
+    if (known) {
+      catIds.set(c.slug, known); // never overwrite categories edited in the console
+      continue;
+    }
+    const id = newId();
     const data: Partial<Category> = {
       slug: c.slug, name: c.name, nameHi: c.nameHi, description: c.description, accentColor: c.accent, gstRate: c.gst, sortOrder: i, updatedAt: now(),
+      imageUrl: `/static/catalog/category-${c.slug}.svg`, parentId: null, isActive: true, createdAt: now(),
     };
-    if (!existingCats.has(c.slug))
-      Object.assign(data, { imageUrl: `/static/catalog/category-${c.slug}.svg`, parentId: null, isActive: true, createdAt: now() });
-    await db.collection(C.categories).doc(id).set(data, { merge: true });
+    await db.collection(C.categories).doc(id).set(data);
     catIds.set(c.slug, id);
+  }
+  if (!sampleCatalog) {
+    console.log(`✓ ${CATEGORIES.length} categories (sample products skipped — add your own in the console)`);
+    return;
   }
 
   const supplierDefs = [
@@ -293,7 +314,7 @@ async function seedContent() {
   console.log(`✓ ${CONTENT_PAGES.length} content pages, ${FAQS.length} FAQs, settings`);
 }
 
-async function upsertAccount(opts: { name: string; email: string; phone: string; password: string; role: string; staff?: { designation: string; code: string } }) {
+async function upsertAccount(opts: { name: string; email: string; phone: string | null; password: string; role: string; staff?: { designation: string; code: string } }) {
   const uid = await ensureAuthUser(opts.email, opts.password, opts.name, { resetPassword: false });
   const role = (await db.collection(C.roles).doc(opts.role).get()).data()!;
   const userRef = db.collection(C.users).doc(uid);

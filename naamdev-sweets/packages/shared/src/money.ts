@@ -39,3 +39,16 @@ export function allocateProportionally(total: number, weights: number[]): number
   }
   return floored;
 }
+
+/**
+ * Builds a UPI payment link (NPCI "upi://pay" deep link) for a fixed amount. Values are
+ * percent-encoded (spaces as %20, not "+", which some UPI apps show literally).
+ */
+export function buildUpiLink(input: { vpa: string; payeeName: string; amountPaise: number; note: string }): string {
+  const enc = (v: string) => encodeURIComponent(v).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  const amount = (input.amountPaise / 100).toFixed(2);
+  return `upi://pay?pa=${enc(input.vpa)}&pn=${enc(input.payeeName)}&am=${amount}&cu=INR&tn=${enc(input.note)}`;
+}
+
+/** UPI transaction reference (UTR / RRN) as shown in UPI apps: 12 digits. */
+export const UPI_REFERENCE_PATTERN = /^\d{12}$/;

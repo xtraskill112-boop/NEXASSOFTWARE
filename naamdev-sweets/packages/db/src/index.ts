@@ -27,6 +27,7 @@ export const C = {
   payments: "payments",
   refunds: "refunds",
   returns: "returns",
+  upiReferences: "upiReferences",
   webhookEvents: "webhookEvents",
   coupons: "coupons",
   couponUsages: "couponUsages",

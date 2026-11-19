@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       customer_url:
-        description: "Storefront address for the customer app, e.g. https://naamdevsweets.com (empty = ask on first launch)"
+        description: "Storefront address for the customer app (empty = https://naamdevseets.web.app)"
         required: false
         default: ""
       partner_url:
-        description: "Partner site address for the partner app, e.g. https://partner.naamdevsweets.com (empty = ask on first launch)"
+        description: "Partner site address for the partner app (empty = https://naamdevseets-partner.web.app)"
         required: false
         default: ""
 
@@ -29,9 +29,10 @@ jobs:
       run:
         working-directory: naamdev-sweets/mobile/android
     env:
-      # Addresses can also be stored once as repository variables (Settings → Secrets and variables → Actions → Variables).
-      NAAMDEV_CUSTOMER_URL: ${{ inputs.customer_url || vars.NAAMDEV_CUSTOMER_URL }}
-      NAAMDEV_PARTNER_URL: ${{ inputs.partner_url || vars.NAAMDEV_PARTNER_URL }}
+      # The Firebase Hosting addresses are built in, so the apps open the shop straight away.
+      # Override them with repository variables (Settings → Secrets and variables → Actions → Variables).
+      NAAMDEV_CUSTOMER_URL: ${{ inputs.customer_url || vars.NAAMDEV_CUSTOMER_URL || 'https://naamdevseets.web.app' }}
+      NAAMDEV_PARTNER_URL: ${{ inputs.partner_url || vars.NAAMDEV_PARTNER_URL || 'https://naamdevseets-partner.web.app' }}
       NAAMDEV_VERSION_CODE: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4

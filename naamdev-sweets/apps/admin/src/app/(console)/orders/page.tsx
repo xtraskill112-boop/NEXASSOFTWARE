@@ -19,7 +19,9 @@ function OrdersInner() {
   const [payment, setPayment] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const { data, loading, error } = useResource<{ items: Row[]; meta: { totalPages: number; total: number }; statusCounts: Record<string, number> }>("/admin/orders", { view, status: status || undefined, payment: payment || undefined, q: q || undefined, page, pageSize: 25, t: tick });
+  // "UPI_VERIFY" is a shortcut for UPI orders whose payment reference staff still need to check.
+  const paymentFilter = payment === "UPI_VERIFY" ? { payment: "UPI", paymentStatus: "VERIFYING" } : { payment: payment || undefined };
+  const { data, loading, error } = useResource<{ items: Row[]; meta: { totalPages: number; total: number }; statusCounts: Record<string, number> }>("/admin/orders", { view, status: status || undefined, ...paymentFilter, q: q || undefined, page, pageSize: 25, t: tick });
   return (
     <Guard any={["orders.view"]}>
       <PageHeader title="Orders" subtitle={data ? `${data.meta.total} orders` : undefined} />
@@ -29,7 +31,7 @@ function OrdersInner() {
           <option value="">Any status</option>
           {ORDER_STATUSES.map((s) => <option key={s} value={s}>{ORDER_STATUS_META[s].label} ({data?.statusCounts[s] ?? 0})</option>)}
         </Select>
-        <Select value={payment} onChange={(e) => setPayment(e.target.value)} className="h-10 w-40" aria-label="Payment"><option value="">Any payment</option><option value="ONLINE">Online</option><option value="COD">COD</option></Select>
+        <Select value={payment} onChange={(e) => setPayment(e.target.value)} className="h-10 w-40" aria-label="Payment"><option value="">Any payment</option><option value="ONLINE">Online (Razorpay)</option><option value="UPI">UPI (direct)</option><option value="UPI_VERIFY">UPI — to verify</option><option value="COD">COD</option></Select>
         <SearchInput value={q} onChange={(v) => { setQ(v); setPage(1); }} placeholder="Order #, name or phone" className="sm:ml-auto" />
       </Toolbar>
       <DataTable<Row> loading={loading} error={error} rows={data?.items} onRowClick={(r) => router.push(`/orders/${r.id}`)} columns={[

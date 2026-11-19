@@ -2,9 +2,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { connectRealtime, type Me, type Socket } from "@naamdev/api-client";
-import { SOCKET_EVENTS } from "@naamdev/shared";
-import { SOCKET_URL, api, errorMessage } from "./api";
+import type { Me } from "@naamdev/api-client";
+import { nativeAuthHandoff, onFirebaseUser, signOutFirebase, watchLive } from "@naamdev/api-client/firebase";
+import { api, errorMessage } from "./api";
 import type { Assignment, Earnings, Partner } from "./types";
 
 interface Ctx {
@@ -42,11 +42,20 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   const [gps, setGps] = useState<Ctx["gps"]>("off");
   const watchId = useRef<number | null>(null);
   const lastSent = useRef<{ t: number; lat: number; lng: number } | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const uidRef = useRef<string | null | undefined>(undefined);
 
-  useEffect(() => {
-    api.get<{ user: Me | null }>("/auth/me").then((r) => setMe(r.user && r.user.role.key === "DELIVERY_PARTNER" ? r.user : null)).catch(() => setMe(null));
-  }, []);
+  // Firebase restores the rider's sign-in on launch; the API decides whether it's a partner account.
+  useEffect(
+    () =>
+      onFirebaseUser((fb) => {
+        const uid = fb?.uid ?? null;
+        if (uid === uidRef.current) return;
+        uidRef.current = uid;
+        if (!uid) return setMe(null);
+        api.get<{ user: Me | null }>("/auth/me").then((r) => setMe(r.user && r.user.role.key === "DELIVERY_PARTNER" ? r.user : null)).catch(() => setMe(null));
+      }),
+    [],
+  );
   useEffect(() => {
     if (me === null && !PUBLIC.some((p) => pathname.startsWith(p))) router.replace("/login");
   }, [me, pathname, router]);
@@ -70,17 +79,26 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!me) return;
     void refresh();
-    let cancelled = false;
-    connectRealtime(api, SOCKET_URL).then((s) => {
-      if (cancelled) return s.disconnect();
-      socketRef.current = s;
-      s.on(SOCKET_EVENTS.deliveryOffer, () => { buzz(); toast("New delivery request 🛵", { duration: 8000 }); void refresh(); });
-      s.on(SOCKET_EVENTS.deliveryOfferWithdrawn, () => void refresh());
-      s.on(SOCKET_EVENTS.deliveryAssignmentUpdated, () => { buzz(); void refresh(); });
-      s.on(SOCKET_EVENTS.notification, (n: { title: string; body: string }) => toast(n.title, { description: n.body }));
+    // Offers and assignment changes arrive through the rider's Firestore live document.
+    let seenPartner: number | null = null;
+    let seenUser: number | null = null;
+    const stopPartner = watchLive("livePartners", me.id, (d) => {
+      const v = Number(d?.version ?? 0);
+      if (seenPartner !== null && v > seenPartner) {
+        if (d?.event === "offer") { buzz(); toast("New delivery request 🛵", { duration: 8000 }); }
+        else if (d?.event === "assignment") buzz();
+        void refresh();
+      }
+      seenPartner = v;
+    });
+    const stopUser = watchLive("liveUsers", me.id, (d) => {
+      const v = Number(d?.version ?? 0);
+      const last = d?.last as { title?: string; body?: string } | undefined;
+      if (seenUser !== null && v > seenUser && last?.title) toast(last.title, { description: last.body });
+      seenUser = v;
     });
     const poll = setInterval(() => void refresh(), 30000);
-    return () => { cancelled = true; clearInterval(poll); socketRef.current?.disconnect(); };
+    return () => { clearInterval(poll); stopPartner(); stopUser(); };
   }, [me?.id, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stream GPS while online. Positions are throttled (≥10s or ≥30m) to save battery and data.
@@ -95,8 +113,20 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
         setGps("off");
         return;
       }
+      const handoff = nativeAuthHandoff();
+      if (handoff) shell.setAuth?.(handoff);
       shell.startTracking();
-      const read = () => setGps(NATIVE_GPS[shell.trackingState()] ?? "waiting");
+      let lastRestart = 0;
+      const read = () => {
+        const st = shell.trackingState();
+        // The service stops if its credentials expired (e.g. password changed); restart with fresh ones.
+        if (st === "signed_out" && Date.now() - lastRestart > 30_000) {
+          lastRestart = Date.now();
+          const h = nativeAuthHandoff();
+          if (h && shell.setAuth?.(h)) shell.startTracking();
+        }
+        setGps(NATIVE_GPS[st] ?? "waiting");
+      };
       read();
       const t = setInterval(read, 3000);
       return () => clearInterval(t);
@@ -135,9 +165,12 @@ export function PartnerProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
-    nativeShell()?.stopTracking();
+    const shell = nativeShell();
+    if (shell?.signedOut) shell.signedOut();
+    else shell?.stopTracking();
     if (partner?.isOnline) await api.post("/delivery/status", { online: false }).catch(() => undefined);
     await api.post("/auth/logout").catch(() => undefined);
+    await signOutFirebase().catch(() => undefined);
     setMe(null);
     router.replace("/login");
   }, [partner?.isOnline, router]);
@@ -151,6 +184,9 @@ interface NativeShell {
   startTracking(): void;
   stopTracking(): void;
   trackingState(): string;
+  /** Newer app versions: hand over Firebase credentials for background location posting. */
+  setAuth?(json: string): boolean;
+  signedOut?(): void;
 }
 
 function nativeShell(): NativeShell | null {

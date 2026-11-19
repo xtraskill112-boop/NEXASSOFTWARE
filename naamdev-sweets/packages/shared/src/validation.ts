@@ -2,8 +2,8 @@ import { z } from "zod";
 import { normalizeIndianPhone } from "./text";
 import {
   ADDRESS_TYPES, BANNER_THEMES, COUPON_SCOPES, COUPON_TYPES, DOCUMENT_TYPES, FOOD_TYPES, HOME_SECTION_TYPES,
-  ORDER_STATUSES, STOCK_ADJUST_TYPES, TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES, VEHICLE_TYPES,
-} from "./constants";
+  ORDER_STATUSES, STOCK_ADJUST_TYPES, TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES, VEHICLE_TYPES, PAYMENT_METHODS } from "./constants";
+import { UPI_REFERENCE_PATTERN } from "./money";
 
 const trimmed = (min = 1, max = 200) => z.string().trim().min(min).max(max);
 
@@ -100,9 +100,24 @@ export const checkoutQuoteSchema = z.object({
 
 export const placeOrderSchema = checkoutQuoteSchema.extend({
   addressId: idSchema,
-  paymentMethod: z.enum(["ONLINE", "COD"]),
+  paymentMethod: z.enum(PAYMENT_METHODS),
   idempotencyKey: z.string().min(8).max(80),
   customerNote: z.string().trim().max(300).optional().nullable(),
+});
+
+/** The customer's UPI transaction reference (UTR) after paying the shop's UPI ID directly. */
+export const upiProofSchema = z.object({
+  utr: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/\s+/g, ""))
+    .pipe(z.string().regex(UPI_REFERENCE_PATTERN, "Enter the 12-digit UPI reference number (UTR) from your UPI app")),
+});
+
+/** Staff decision after checking the shop's UPI account for the customer's payment. */
+export const upiVerifySchema = z.object({
+  decision: z.enum(["RECEIVED", "NOT_FOUND"]),
+  note: z.string().trim().max(300).optional(),
 });
 
 export const razorpayVerifySchema = z.object({

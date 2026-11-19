@@ -50,17 +50,25 @@ export const TRACKING_MILESTONES: { key: string; label: string; statuses: OrderS
   { key: "delivered", label: "Delivered", statuses: ["DELIVERED"] },
 ];
 
-export const PAYMENT_METHODS = ["ONLINE", "COD"] as const;
+/** ONLINE = Razorpay (verified by signature/webhook) · UPI = direct to the shop's UPI ID (verified by staff) · COD = cash. */
+export const PAYMENT_METHODS = ["ONLINE", "UPI", "COD"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const ORDER_PAYMENT_STATUS_META: Record<string, { label: string; tone: Tone }> = {
   PENDING: { label: "Awaiting payment", tone: "warning" },
+  VERIFYING: { label: "Verifying UPI payment", tone: "info" },
   PAID: { label: "Paid", tone: "success" },
   FAILED: { label: "Payment failed", tone: "danger" },
   COD_PENDING: { label: "Cash on delivery", tone: "info" },
   COD_COLLECTED: { label: "Cash collected", tone: "success" },
   PARTIALLY_REFUNDED: { label: "Partially refunded", tone: "warning" },
   REFUNDED: { label: "Refunded", tone: "neutral" },
+};
+
+export const PAYMENT_METHOD_LABELS: Record<(typeof PAYMENT_METHODS)[number], string> = {
+  ONLINE: "Online (Razorpay)",
+  UPI: "UPI (direct)",
+  COD: "Cash on delivery",
 };
 
 export const ADDRESS_TYPES = ["HOME", "OFFICE", "OTHER"] as const;

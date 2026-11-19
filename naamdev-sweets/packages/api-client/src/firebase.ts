@@ -163,3 +163,17 @@ export function watchLive(collection: "liveOrders" | "liveUsers" | "livePartners
 }
 
 export type { User as FirebaseUser };
+
+/**
+ * Credentials for the NAAMDEV Partner Android app's background GPS service: the Firebase refresh
+ * token lets it mint fresh ID tokens while the rider navigates in another app. Null when signed out.
+ */
+export function nativeAuthHandoff(): string | null {
+  const user = typeof window === "undefined" ? null : firebaseAuth().currentUser;
+  if (!user) return null;
+  return JSON.stringify({
+    apiKey: firebaseConfig.apiKey,
+    refreshToken: user.refreshToken,
+    tokenUrl: AUTH_EMULATOR ? `http://${AUTH_EMULATOR}/securetoken.googleapis.com/v1/token` : "https://securetoken.googleapis.com/v1/token",
+  });
+}

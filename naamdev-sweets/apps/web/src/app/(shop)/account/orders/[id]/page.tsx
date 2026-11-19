@@ -4,12 +4,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Clock, FileText, HelpCircle, MapPin, PackageX, RotateCcw, Star, Undo2, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import type { Order, OrderActions, Tracking } from "@naamdev/api-client";
+import type { Order, OrderActions, Tracking, UpiSession } from "@naamdev/api-client";
 import { CANCELLATION_REASONS, ORDER_STATUS_META, RETURN_REASONS, formatINR, type OrderStatus } from "@naamdev/shared";
 import { BrandLoader, Button, Card, ErrorState, Field, InlineAlert, Modal, OrderStatusBadge, PaymentStatusBadge, Select, Stars, Textarea, buttonStyles } from "@naamdev/ui";
 import { ProductImage } from "@/components/common/product-image";
 import { payWithRazorpay } from "@/components/checkout/razorpay";
 import { TrackingCard } from "@/components/orders/tracking";
+import { UpiPayPanel } from "@/components/checkout/upi-pay";
 import { api, errorMessage } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
@@ -23,15 +24,17 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [actions, setActions] = useState<OrderActions | null>(null);
   const [tracking, setTracking] = useState<Tracking | null>(null);
+  const [upi, setUpi] = useState<UpiSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<null | "cancel" | "return" | { review: { productId: string; name: string } }>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const r = await api.get<{ order: Order; actions: OrderActions }>(`/orders/${id}`);
+      const r = await api.get<{ order: Order; actions: OrderActions; upi: UpiSession | null }>(`/orders/${id}`);
       setOrder(r.order);
       setActions(r.actions);
+      setUpi(r.upi);
       if (!["PENDING", "CANCELLED", "REFUNDED", "REFUND_INITIATED"].includes(r.order.status))
         api.get<{ tracking: Tracking }>(`/orders/${id}/tracking`).then((x) => setTracking(x.tracking)).catch(() => undefined);
     } catch (e) {
@@ -99,7 +102,8 @@ export default function OrderDetailPage() {
           <Button size="sm" loading={busy} onClick={completePayment}><Wallet className="h-4 w-4" />{t("order.retryPayment")} · {formatINR(T.totalPaise)}</Button>
         </InlineAlert>
       )}
-      {order.status === "CANCELLED" && <InlineAlert tone="danger" className="mb-5">Cancelled{order.cancelReason ? `: ${order.cancelReason}` : ""}. {order.paymentStatus === "PAID" || order.refunds.length ? "Your refund is being processed to the original payment method." : ""}</InlineAlert>}
+      {order.status === "CANCELLED" && <InlineAlert tone="danger" className="mb-5">Cancelled{order.cancelReason ? `: ${order.cancelReason}` : ""}. {order.paymentStatus === "PAID" || order.refunds.length ? (order.paymentMethod === "UPI" ? "We'll send the refund to the UPI account you paid from." : "Your refund is being processed to the original payment method.") : ""}</InlineAlert>}
+      {upi && order.status === "PENDING" && <div className="mb-6"><UpiPayPanel orderId={order.id} upi={upi} onUpdated={(r) => { setOrder(r.order); setUpi(r.upi); }} /></div>}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
@@ -157,7 +161,7 @@ export default function OrderDetailPage() {
             <p className="text-ink-soft">{order.address.fullName} · {order.address.phone}</p>
             <p className="text-muted">{[order.address.line1, order.address.line2, order.address.landmark, order.address.city, order.address.pincode].filter(Boolean).join(", ")}</p>
             <h3 className="mb-1 mt-4 font-semibold text-ink">Payment</h3>
-            <p className="text-muted">{order.paymentMethod === "COD" ? "Cash on delivery" : `Online${order.payments[0]?.methodDetail ? ` · ${order.payments[0].methodDetail.toUpperCase()}` : ""}`}</p>
+            <p className="text-muted">{order.paymentMethod === "COD" ? "Cash on delivery" : order.paymentMethod === "UPI" ? `UPI (direct)${upi?.reference ? ` · ref ${upi.reference}` : ""}` : `Online${order.payments[0]?.methodDetail ? ` · ${order.payments[0].methodDetail.toUpperCase()}` : ""}`}</p>
             {order.refunds.map((r) => <p key={r.id} className="mt-1 text-xs text-muted">Refund {formatINR(r.amountPaise)} · {r.status.toLowerCase()}</p>)}
           </Card>
           <div className="grid gap-2">

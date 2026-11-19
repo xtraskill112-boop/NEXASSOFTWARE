@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import { C, db } from "@naamdev/db";
 import { allowedOrigins, env, integrations, isTest } from "./config/env";
 import { tick } from "./jobs/scheduler";
+import { finishBackgroundWork } from "./lib/background";
 import { safeEqual } from "./lib/crypto";
 import { logger } from "./lib/logger";
 import { loadSession, resolveClientApp } from "./middleware/auth";
@@ -38,6 +39,9 @@ export function createApp() {
   app.use(cors({ origin: allowedOrigins, exposedHeaders: [CART_TOKEN_HEADER], maxAge: 600 }));
   if (!isTest) app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/health" || req.url?.startsWith("/static") === true } }));
 
+  // Responses wait for notifications/live updates the request started (CPU is throttled after a response on Cloud Run).
+  app.use(finishBackgroundWork());
+
   // Seeded catalogue artwork (served through Firebase Hosting's /static/** rewrite).
   app.use("/static", express.static(path.resolve(process.cwd(), "public"), { maxAge: "7d", immutable: false }));
 
@@ -50,11 +54,12 @@ export function createApp() {
     }
   });
 
-  // Cloud Scheduler calls this once a minute with the shared secret header.
+  // Cloud Scheduler calls this once a minute with the shared secret header (?sweepSeconds=45 keeps
+  // expiring delivery offers every 15 s for most of the minute, at the cost of a longer request).
   app.post("/internal/jobs/tick", async (req, res) => {
     const secret = req.get("x-jobs-secret") ?? "";
     if (!env.JOBS_SECRET || !safeEqual(secret, env.JOBS_SECRET)) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Not found" } });
-    const sweep = Math.min(Math.max(Number(req.query.sweepSeconds ?? 45), 0), 50) * 1000;
+    const sweep = Math.min(Math.max(Number(req.query.sweepSeconds ?? 0), 0), 50) * 1000;
     res.json({ results: await tick(sweep) });
   });
 
