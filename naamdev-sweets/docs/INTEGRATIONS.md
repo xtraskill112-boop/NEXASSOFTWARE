@@ -1,6 +1,6 @@
 # Integrations
 
-Server credentials are **Cloud Run environment variables / Secret Manager secrets**, set by the deploy
+Server credentials are **environment variables on the Render API service**, set by the deploy
 workflow from GitHub repository secrets and variables (see [DEPLOYMENT.md](DEPLOYMENT.md#optional-integrations));
 locally they live in `apps/api/.env`. None are stored in Firestore or editable from the console, and only
 values that are public by design (`NEXT_PUBLIC_*`, the Firebase web config, the Razorpay *key id*) ever
@@ -12,8 +12,8 @@ from this repository yet** — run each checklist after the first deploy.
 
 ## Firebase (required)
 
-Firestore, Authentication (email/password), Storage, Hosting, Cloud Run and Cloud Scheduler are set up
-by the deploy workflow. The web config in `packages/api-client/src/firebase.ts` is the `naamdevseets`
+Firestore, Authentication (email/password) and Hosting are set up by the deploy workflow (free Spark plan);
+the API runs on Render's free plan. The web config in `packages/api-client/src/firebase.ts` is the `naamdevseets`
 web app's public config; override it with `NEXT_PUBLIC_FIREBASE_*` build variables if you move projects.
 
 Checklist after deploy: sign up on the storefront → verification email arrives; *Forgot password* →
@@ -49,7 +49,8 @@ UTR → find it in Paytm for Business → *Payment received* → customer sees *
 
 1. Razorpay dashboard → *Account & Settings → API Keys* (**Test mode** first).
 2. GitHub secrets `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`; re-run the deploy.
-3. *Webhooks* → URL `https://naamdevseets.web.app/api/v1/payments/razorpay/webhook`, a strong secret →
+3. *Webhooks* → URL `<API address>/api/v1/payments/razorpay/webhook` (the Render address shown in the
+   deploy summary), a strong secret →
    GitHub secret `RAZORPAY_WEBHOOK_SECRET`, events **payment.captured, payment.failed, order.paid,
    refund.processed, refund.failed**.
 
@@ -72,13 +73,13 @@ DMARC. Used for order confirmations/status updates and staff alerts. Sign-in ema
 
 Order-update SMS through MSG91 (`SMS_PROVIDER=msg91`, `MSG91_AUTH_KEY`, `MSG91_FLOW_TEMPLATE_ID` — a DLT
 registered Flow template with a `message` variable) or Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
-`TWILIO_FROM`), set on the `naamdev-api` Cloud Run service. Sign-in never uses SMS.
+`TWILIO_FROM`), set on the `naamdev-api` Render service. Sign-in never uses SMS.
 
 ## Push notifications — Firebase Cloud Messaging (optional)
 
 1. Firebase console → Project settings → Cloud Messaging → *Web Push certificates* → generate →
    repository variable `NEXT_PUBLIC_FIREBASE_VAPID_KEY`.
-2. Set `PUSH_ENABLED=true` on the `naamdev-api` Cloud Run service (it sends with the runtime service
+2. Set `PUSH_ENABLED=true` on the `naamdev-api` Render service (it sends with the API's service
    account; no key file needed). Re-run the deploy.
 
 Customers opt in from *Account → Notifications*. The console and partner app get live in-app alerts

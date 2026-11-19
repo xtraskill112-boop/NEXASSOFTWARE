@@ -42,8 +42,9 @@ To install on a phone, allow "Install unknown apps" for your browser or file man
   `http://192.168.1.20:3000` for a computer on the same Wi-Fi) and checks it really is a NAAMDEV site.
 
 Sign-in inside the apps is the site's own email + password login (Firebase Authentication). For the
-partner app's background location, the page hands the rider's Firebase credentials to the location
-service, which keeps them in memory only and stops when the rider goes offline or signs out.
+partner app's background location, the page hands the rider's Firebase credentials and the API address
+to the location service, which keeps them in memory only and stops when the rider goes offline or signs
+out. (The API address must be `https`; debug builds also accept a local `http` address.)
 
 ### Signing
 

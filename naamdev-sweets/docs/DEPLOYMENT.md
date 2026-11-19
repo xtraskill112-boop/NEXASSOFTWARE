@@ -1,131 +1,106 @@
-# Deployment (Firebase)
+# Deployment (free plans)
 
-Everything runs in the Firebase project **`naamdevseets`** (Blaze plan), region **asia-south1 (Mumbai)**.
-A GitHub Actions workflow does the whole deploy; you only add three secrets and press *Run workflow*.
+Everything runs on **free plans — no billing account, no card**:
+
+| Part | Where | Free plan |
+|---|---|---|
+| Data, live updates | Cloud Firestore (Firebase project **`naamdevseets`**, Spark plan) | 1 GiB stored, 50,000 reads / 20,000 writes per day |
+| Sign-in (email + password) | Firebase Authentication (Spark) | free |
+| Storefront, console, partner app | Firebase Hosting (Spark), 3 sites of static files | 10 GB stored, 360 MB/day transfer |
+| API (orders, payments, stock, uploads) | **Render** free web service (`naamdev-api`, Singapore) | 750 hours/month, 512 MB, sleeps after 15 min idle |
 
 ```
  Customer / Rider / Staff (browser or Android app)
-        │ https://naamdevseets.web.app · naamdevseets-admin.web.app · naamdevseets-partner.web.app
-        ▼
- Firebase Hosting ── /api/**, /static/** ──▶ Cloud Run: naamdev-api (Express) ──▶ Firestore · Firebase Auth · Storage · FCM
-        │                                         ▲
-        └── everything else ──▶ Cloud Run: naamdev-web / naamdev-admin / naamdev-partner (Next.js)
-                                                  │
- Cloud Scheduler (every minute) ── POST /internal/jobs/tick (secret header)
- Browsers ── Firestore listeners on "live" documents (order status, rider position, offers, new orders)
+      │ https://naamdevseets.web.app · naamdevseets-admin.web.app · naamdevseets-partner.web.app
+      ▼
+ Firebase Hosting (static pages) ──► the browser calls the API ──► Render: naamdev-api (Express) ──► Firestore · Firebase Auth
+                                     and listens to Firestore live documents for real-time updates
+ GitHub Actions "NAAMDEV keep-alive" ── pings the API every 10 minutes so it doesn't fall asleep
 ```
 
 ## One-time setup
 
-1. **Blaze plan** — Firebase console → ⚙ Usage and billing → keep the project on Blaze (Cloud Run,
-   Cloud Scheduler and Secret Manager need billing). Set a budget alert while you're there.
-2. **Service account key for GitHub** — Google Cloud console → IAM & Admin → Service accounts →
-   *Create service account* (e.g. `github-deploy`) → role **Owner** → Keys → *Add key* → JSON.
-   In GitHub: repository → Settings → Secrets and variables → Actions → *New repository secret*:
-   - `FIREBASE_SERVICE_ACCOUNT` — paste the whole JSON file.
-   - `NAAMDEV_ADMIN_EMAIL` — your email for the console (super admin). On the first deploy Firebase
-     emails you a link to set your password (or use *Forgot password?* on the console login page).
-   - Optional `NAAMDEV_ADMIN_PASSWORD` — set the password directly instead (8+ characters, letters and numbers).
+1. **Firebase** — Authentication → *Get started* → enable **Email/Password**. (The workflow also tries.)
+2. **Let GitHub deploy to Firebase without a key** — open
+   [Cloud Shell](https://console.cloud.google.com/?cloudshell=true&project=naamdevseets), paste the contents of
+   `scripts/setup-keyless-deploy.sh`, press Enter (click *Authorize* if asked). It allows only this repository.
+3. **Render (free)** — sign up at https://dashboard.render.com/register with **GitHub**. Then *Account
+   settings → API keys → Create API key*, and add it to GitHub (repository → Settings → Secrets and
+   variables → Actions → *New repository secret*) as **`RENDER_API_KEY`**.
+4. **Your console login** — GitHub secrets **`NAAMDEV_ADMIN_EMAIL`** (your email) and, optionally,
+   **`NAAMDEV_ADMIN_PASSWORD`** (otherwise Firebase emails you a link to set the password).
+5. **Deploy** — GitHub → Actions → **NAAMDEV deploy (free plans)** → *Run workflow*.
 
-   Owner is the simplest choice because the workflow enables APIs, creates the Firestore database,
-   a runtime service account, secrets, Cloud Run services, Hosting sites and the scheduler. Delete the
-   key (or downgrade the account) whenever you like; deploys need it again only when you re-run them.
-   **No key file? (easier on a phone)** Skip the key and allow GitHub to deploy keylessly instead: open
-   [Cloud Shell](https://console.cloud.google.com/?cloudshell=true&project=naamdevseets), paste the
-   contents of `scripts/setup-keyless-deploy.sh` and press Enter (click *Authorize* if asked). The
-   workflow uses a key only when `FIREBASE_SERVICE_ACCOUNT` holds a real key file; otherwise it signs in
-   keylessly (Workload Identity Federation).
-3. **Run the deploy** — GitHub → Actions → **NAAMDEV deploy to Firebase** → *Run workflow*.
-   Leave *load the sample sweets catalogue* ticked on the first run if you want a ready-made menu to
-   edit; untick it to start with empty categories.
+The workflow enables the free Firebase APIs, creates the Firestore database, turns on email sign-in,
+creates the API server on Render (or updates it), seeds the data, builds the three apps as static files,
+deploys them to Firebase Hosting with the security rules and indexes, and prints the live addresses.
+The first Render build takes 5–15 minutes.
 
-The run summary lists the live addresses. Set your password from the email, sign in to the console
-with `NAAMDEV_ADMIN_EMAIL`, then:
-
-- **Settings → Store location**: your real shop address, phone, hours and map position.
-- **Settings → Delivery zones**: the PIN codes you deliver to (the sample seed adds Jaipur ones).
-- **Settings → UPI payments**: the shop UPI ID and payee name (defaults: `paytmqr6rgzn2@ptys`, RAKESH TAILOR).
-- **Staff & roles**: add your team (each gets an email + password login; give the people who can see
-  the shop's Paytm/UPI account the *Confirm direct UPI payments* permission — Store owner, Store
-  manager and Order manager roles have it).
-- **Products**: edit prices, photos and stock, or archive the sample products.
+After it's live, sign in to the console and set your shop address (Settings → Store location), delivery
+PIN codes, UPI ID (Settings → UPI payments, default `paytmqr6rgzn2@ptys`) and staff logins.
 
 ### Demo logins for testing
 
-Tick **Create demo logins** when running the workflow to try every role on the live shop:
-`owner@`, `manager@`, `orders@`, `inventory@`, `packing@`, `support@` (console), `rider@` (partner app,
-approved), `rider2@` (partner app, pending) and `customer@` (storefront) — all `@naamdevsweets.local`.
-They use **your `NAAMDEV_ADMIN_PASSWORD` secret** (the development password in the code is public, so it
-is never used on a live shop). When you've finished testing, run the workflow again with
-**Remove demo logins** ticked: the logins are deleted; orders they placed stay for your records.
+Tick **Create demo logins** when running the workflow: `owner@`, `manager@`, `orders@`, `inventory@`,
+`packing@`, `support@` (console), `rider@` / `rider2@` (partner app) and `customer@` (storefront), all
+`@naamdevsweets.local`, using **your `NAAMDEV_ADMIN_PASSWORD`** (the development demo password is public
+in the code and is never used on a live shop). Run again with **Remove demo logins** ticked when done.
 
-### If a step asks for a click in the Firebase console
+### Keep-alive
 
-Two Firebase features are normally switched on in the console. The workflow tries to do it for you and
-stops with a clear message if it can't:
+Render's free server sleeps after 15 minutes without visitors; the next visit then waits about a minute.
+The **NAAMDEV keep-alive** workflow pings it every 10 minutes (one always-on service fits in the 750 free
+hours a month). Scheduled workflows only run from the `main` branch, and GitHub pauses them after 60 days
+without repository activity — re-enable it under Actions if that happens.
 
-- *Authentication → Get started → Sign-in method → Email/Password → Enable.*
-- *Storage → Get started → location asia-south1.*
+## Free-plan limits to know
 
-Then re-run the workflow. Re-running is always safe: the seed never overwrites what you edited in the
-console (existing categories, products, settings and role permissions are left alone).
-
-### Site names
-
-Hosting site IDs are global. If `naamdevseets-admin` or `naamdevseets-partner` is taken, set repository
-**variables** `NAAMDEV_ADMIN_SITE` / `NAAMDEV_PARTNER_SITE` (and `NAAMDEV_CUSTOMER_URL` /
-`NAAMDEV_PARTNER_URL` for the Android build) to names that are free, then re-run.
-Custom domains (e.g. `naamdevsweets.com`) can be connected per site in Firebase console → Hosting →
-*Add custom domain*; add the new addresses as `APP_URL_*` and rebuild the Android apps with them.
+* **Firestore: 50,000 reads and 20,000 writes per day.** The API is tuned for this (catalogue cached in
+  memory and refreshed incrementally, background jobs once a minute without lease writes). A small shop
+  stays well inside; if the quota runs out, the shop stops working until midnight Pacific time.
+* **No Cloud Storage on Firebase's free plan**, so uploaded photos are re-encoded and stored in Firestore
+  (under 900 KB each) and served by the API from `/media/…`; private rider documents likewise.
+  **Product videos can't be uploaded** on the free plan.
+* **Render free server**: 512 MB memory and a small shared CPU; it sleeps when idle (the keep-alive
+  prevents that). Use a paid plan for heavy traffic.
+* **Sitemap** is built at deploy time: products added later appear in it after the next deploy.
 
 ## Optional integrations
 
-Add these as repository **secrets** (S) or **variables** (V) and re-run the deploy:
+Add as repository **secrets** (S) or **variables** (V) and re-run the deploy:
 
 | Integration | Settings |
 |---|---|
-| Razorpay | S `RAZORPAY_KEY_ID`, S `RAZORPAY_KEY_SECRET`, S `RAZORPAY_WEBHOOK_SECRET`. Webhook URL in the Razorpay dashboard: `https://naamdevseets.web.app/api/v1/payments/razorpay/webhook` (events: payment.captured, payment.failed, refund.processed, refund.failed) |
+| Razorpay | S `RAZORPAY_KEY_ID`, S `RAZORPAY_KEY_SECRET`, S `RAZORPAY_WEBHOOK_SECRET`. Webhook URL: `<API address>/api/v1/payments/razorpay/webhook` (shown in the deploy summary) |
 | Order emails (SMTP) | V `SMTP_HOST`, V `SMTP_PORT`, V `SMTP_USER`, S `SMTP_PASS`, V `EMAIL_FROM` |
 | Google Maps | V `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (restrict it to your sites' domains) |
-| Web push | V `NEXT_PUBLIC_FIREBASE_VAPID_KEY` (Firebase console → Project settings → Cloud Messaging → Web Push certificates), and set `PUSH_ENABLED=true` on the `naamdev-api` service |
 
-Sign-up verification and password-reset emails are sent by Firebase Authentication itself (customise
-the templates under Authentication → Templates). No SMTP is needed for those.
+Sign-up verification and password-reset emails are sent by Firebase Authentication (free).
 
 ## What the workflow creates
 
 | Resource | Name |
 |---|---|
 | Firestore (native) | `(default)` in asia-south1, rules `firebase/firestore.rules`, indexes `firebase/firestore.indexes.json` |
-| Storage rules | `firebase/storage.rules` (deny all — the API serves uploads) |
-| Secret Manager | `naamdev-encryption-key` (partner bank details), `naamdev-jobs-secret` (scheduler), Razorpay/SMTP secrets when given |
-| Runtime service account | `naamdev-run@…` with Firestore user, Firebase Auth admin, Storage object admin, Secret accessor, FCM admin |
-| Artifact Registry | `naamdev` (Docker images, tagged with the commit) |
-| Cloud Run | `naamdev-api` (port 4000), `naamdev-web`, `naamdev-admin`, `naamdev-partner` (port 3000); 0–4 instances each |
-| Hosting | sites `naamdevseets`, `naamdevseets-admin`, `naamdevseets-partner` rewriting to Cloud Run |
-| Cloud Scheduler | `naamdev-jobs`, every minute → expires unpaid orders and delivery offers, retires expired stock batches, stock alerts, clean-up |
-
-## Costs (rough, small shop)
-
-Cloud Run scales to zero and bills per request, Firestore/Hosting/Storage have free daily quotas, and the
-scheduler is 1 job (3 free per billing account). Expect a few hundred rupees a month at low traffic;
-the first request after a quiet period takes a few seconds while an instance starts. For instant
-responses set `--min-instances 1` on `naamdev-api` and `naamdev-web` (roughly ₹1,000 a month each at the minimum size).
+| Firebase Hosting | sites `naamdevseets`, `naamdevseets-admin`, `naamdevseets-partner` with the rewrites/headers in `firebase.json` (regenerate with `node scripts/hosting-config.mjs` after adding a dynamic page) |
+| Service account | `naamdev-run@…` (Firestore user, Firebase Auth admin); its key is rotated on every deploy and stored only as a Render environment variable |
+| Render | web service `naamdev-api` (Docker, `infra/docker/api.Dockerfile`, free plan, health check `/healthz`); environment variables include `ENCRYPTION_KEY` and `JOBS_SECRET`, generated once and kept across deploys |
 
 ## Operations
 
-- **Logs** — Google Cloud console → Cloud Run → service → Logs (the API logs JSON with request IDs).
-- **Health** — `https://<api-url>/health` checks Firestore; the deploy smoke test calls each site.
-- **Backups** — Firestore → *Disaster recovery*: enable point-in-time recovery and/or scheduled backups
-  (`gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=14d`).
-- **Rollback** — Cloud Run → service → Revisions → route traffic to the previous revision.
-- **Rotate secrets** — add a new version in Secret Manager (`naamdev-jobs-secret` also needs the
-  scheduler job header updated — re-running the workflow does that).
-- **Background jobs** — the scheduler sends `POST /internal/jobs/tick` with the `x-jobs-secret` header;
-  each job holds a lease in `jobRuns/{name}` so overlapping ticks never run it twice.
+* **Logs** — Render dashboard → `naamdev-api` → Logs.
+* **Health** — `<API address>/health` (checks Firestore) and `/healthz` (no database read).
+* **Usage** — Firebase console → Firestore → Usage, to watch the daily reads/writes.
+* **Backups** — export Firestore from the console when needed (scheduled backups need the paid plan).
+* **Rollback** — Render → Events → *Rollback* to a previous deploy; Firebase Hosting → release history.
+
+## Moving to paid plans later
+
+Nothing is locked in: with Firebase's Blaze plan you can set `STORAGE_DRIVER=firebase` on the API for
+Cloud Storage uploads (videos), and run the API anywhere that runs a Docker image.
 
 ## Android apps
 
-Run **NAAMDEV Android apps** in GitHub Actions after the first deploy. The APKs open
-`https://naamdevseets.web.app` (customer) and `https://naamdevseets-partner.web.app` (partner) directly —
-there is no address to enter. Details and Play Store signing: [mobile/android/README.md](../mobile/android/README.md).
+Run **NAAMDEV Android apps** after the first deploy. The APKs open `https://naamdevseets.web.app`
+(customer) and `https://naamdevseets-partner.web.app` (partner) directly; the partner app's background
+location goes to the API address handed over by the partner site.

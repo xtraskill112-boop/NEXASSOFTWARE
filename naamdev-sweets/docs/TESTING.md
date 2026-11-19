@@ -8,8 +8,8 @@ Firestore emulator.
 | Layer | Command | Tooling | Count |
 |---|---|---|---|
 | Unit | `pnpm test:unit` | Vitest | 37 tests — `packages/shared/test` |
-| API integration | `pnpm test:api` | Vitest + Supertest + Firebase emulators + local Razorpay mock | 66 tests in 8 files — `apps/api/test` |
-| End-to-end | `pnpm test:e2e` | Playwright (Chromium) against production builds on the emulators | 7 serial steps — `tests/e2e/ecosystem.spec.ts` |
+| API integration | `pnpm test:api` | Vitest + Supertest + Firebase emulators + local Razorpay mock | 68 tests in 8 files — `apps/api/test` |
+| End-to-end | `pnpm test:e2e` | Playwright (Chromium) against the static production builds on the emulators | 7 serial steps — `tests/e2e/ecosystem.spec.ts` |
 | Types | `pnpm typecheck` | `tsc --noEmit` in all workspace packages | — |
 
 ## Unit tests (`packages/shared`)
@@ -57,16 +57,19 @@ Covered:
   accounts in Firebase Auth (claims, password reset revoking sessions, deactivation), custom roles,
   customer anonymisation (Firebase login deleted, orders kept), delivery zones keyed by PIN code,
   partner payout settlement.
-* **Firebase specifics** — Storage uploads (download-token URLs, non-images rejected, avatars must be
-  our own URLs), private KYC documents without download tokens and readable only by `partners.manage`,
+* **Firebase specifics** — free-plan uploads stored in Firestore and served from `/media/…` (non-images
+  and videos rejected, avatars must be our own URLs), Cloud Storage uploads (paid plan, download-token
+  URLs), private KYC documents without public addresses and readable only by `partners.manage`,
   live documents written for the customer and staff, the scheduler endpoint (secret required, each
   job runs once per lease), unpaid-order expiry releasing stock.
 
 ## End-to-end (`tests/e2e`)
 
 `pnpm test:e2e` runs `scripts/e2e.sh`: it starts the emulators, seeds them, starts the API, makes
-**production builds** of the three apps pointed at the emulators (`E2E_SKIP_BUILD=1` reuses them),
-serves them with `next start` and runs Playwright with separate browser contexts:
+**static production builds** of the three apps pointed at the emulators (`E2E_SKIP_BUILD=1` reuses
+them), serves them with `scripts/serve-static.mjs` — which applies the same rewrites and
+Content-Security-Policy as Firebase Hosting (`firebase.json`) — and runs Playwright with separate
+browser contexts:
 
 1. **Rider** signs in to the partner app with geolocation granted and goes online.
 2. **Customer** searches with a typo ("kaju katri"), opens Kaju Katli, picks 1 kg (server price
@@ -102,6 +105,7 @@ Run on 2026-11-19 in this repository's development container (Node 22, Java 21, 
 |---|---|
 | `pnpm typecheck` | all packages pass |
 | `pnpm test:unit` | 37 / 37 passed |
-| `pnpm test:api` | 66 / 66 passed (8 files) |
-| `pnpm test:e2e` | 7 / 7 passed (emulators, production builds) |
-| Docker images | API image builds and, in production mode against the emulators, serves `/health`, the catalogue, static artwork and the secret-protected job tick; storefront image builds and serves the sign-in page |
+| `pnpm test:api` | 68 / 68 passed (8 files) |
+| `pnpm test:e2e` | 7 / 7 passed (emulators, static builds served with the Hosting rules) |
+| API Docker image | Builds and, run the way Render runs it (production mode, `PORT`, against the emulators), serves `/healthz`, `/health`, the catalogue and static artwork, allows CORS only for the three sites, and runs the in-process jobs |
+| Deploy workflow, Render step | Exercised against a local stand-in for the Render API (create, then update keeping `ENCRYPTION_KEY`/`JOBS_SECRET`); **not yet run against real Render or Firebase** |

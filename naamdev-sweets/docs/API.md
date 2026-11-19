@@ -1,7 +1,8 @@
 # API reference
 
-Base URL: `/api/v1` on each site (Firebase Hosting forwards it to the `naamdev-api` Cloud Run service;
-locally the Next.js dev servers proxy it to `http://localhost:4000`). JSON in, JSON out.
+Base URL: `<API address>/api/v1` — the Render web service in production (`NEXT_PUBLIC_API_URL` in the
+apps), `http://localhost:4000/api/v1` locally. The apps call it cross-origin (CORS allows only the three
+sites). JSON in, JSON out.
 Source: `apps/api/src/modules/**/routes.ts`.
 
 ## Conventions
@@ -14,9 +15,10 @@ Source: `apps/api/src/modules/**/routes.ts`.
 | Money | Integers in paise (`totalPaise: 110500` = ₹1,105.00). |
 | Pagination | `?page=1&pageSize=20` → `{ items, meta: { page, pageSize, total, totalPages } }`. |
 | Errors | `{ error: { code, message, details? } }`. Validation failures are 400 `VALIDATION_ERROR` with `details.fields` (field → message). Others: 401, 403, 404, 409, 429 (rate limit), 503 `SERVICE_UNAVAILABLE`. |
-| Rate limits | Global 600/min per IP; auth 30/10 min; writes 120/min; uploads 60/10 min (per Cloud Run instance). |
+| Rate limits | Global 600/min per IP; auth 30/10 min; writes 120/min; uploads 60/10 min (per server instance). |
 | Health | `GET /health` (outside `/api/v1`) → Firestore status and which integrations are configured. |
-| Jobs | `POST /internal/jobs/tick` with header `x-jobs-secret` (Cloud Scheduler). 404 without the secret. |
+| Jobs | Run in-process on the server; `POST /internal/jobs/tick` with header `x-jobs-secret` triggers them on demand. 404 without the secret. |
+| Media | `GET /media/<id>.webp` — uploaded photos stored in Firestore on the free plan (immutable, long cache). |
 
 ## Customer & public
 

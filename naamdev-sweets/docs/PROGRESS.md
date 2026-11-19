@@ -52,13 +52,13 @@ Status of every area in the original brief. ✅ built and covered by automated t
 
 ## Backend & platform
 
-- ✅ Express 5 API on Cloud Run, Cloud Firestore data layer, Firebase Auth (email/password), Firebase Storage, real-time updates through Firestore live documents, Cloud Scheduler jobs with Firestore leases
+- ✅ Runs on free plans: Express 5 API on Render (Docker), static apps on Firebase Hosting, Cloud Firestore data layer (photos stored in Firestore), Firebase Auth (email/password), real-time updates through Firestore live documents, in-process background jobs (Firestore leases when running several servers)
 - ✅ Server-side pricing, idempotent checkout, FEFO stock reservation, order state machine
 - ✅ Razorpay: signature + server-side payment fetch, webhooks, duplicate protection, automatic refunds for late payments
 - ✅ Security: Firebase ID-token verification, revocation, RBAC with custom claims, deny-by-default Firestore/Storage rules, rate limits, secure uploads, encryption at rest, audit log, production startup guards
 - ⏳ SMS (MSG91/Twilio), order emails (SMTP), web push (FCM VAPID key) — implemented, need credentials
 - ✅ Tests: 37 unit, 66 API integration on the Firebase emulators, 7-step Playwright journey across all three apps (see [TESTING.md](TESTING.md))
-- ☑️ One-click deploy to Firebase (`.github/workflows/naamdev-deploy.yml`): Firestore, Auth, Storage, Cloud Run ×4, Hosting ×3, Scheduler — written and its parts checked locally (images build and run), **not yet run against the real project**
+- ☑️ One-click free deploy (`.github/workflows/naamdev-deploy.yml`): Firestore, Auth, Hosting ×3 on Firebase Spark + the API on Render free, with a keep-alive — parts tested locally (static builds, Docker image, Render API calls against a stand-in), **not yet run against the real accounts**
 - ✅ CI workflow (typecheck, unit, API and end-to-end tests on emulators)
 - ✅ Documentation (this folder)
 
@@ -79,7 +79,8 @@ Status of every area in the original brief. ✅ built and covered by automated t
 - **Single store**: the schema has a `Store` model and orders reference a store, but checkout,
   dispatch and the console assume one default store.
 - **Hindi** covers the storefront UI and catalogue; the console and partner app are English.
-- Rate limits are per Cloud Run instance (in memory), not global.
+- Rate limits are per server instance (in memory), not global.
+- **Free-plan limits**: Firestore 50k reads / 20k writes per day; no product videos (no Cloud Storage); the Render server needs the keep-alive to avoid a one-minute wake-up.
 - GST e-invoicing (IRN) and accounting exports beyond CSV reports are not integrated.
 - Legal pages (privacy, terms, refund, shipping) are sensible starting drafts — have them reviewed
   for your business before going live.

@@ -1,20 +1,20 @@
 # NAAMDEV SWEETS
 
-A complete Indian sweets & food-delivery platform on **Firebase**: a customer storefront (English +
-हिन्दी, INR), a store/staff console, a delivery-partner app, one backend API, live order tracking and
-Android apps for customers and riders.
+A complete Indian sweets & food-delivery platform that runs on **free plans**: Firebase (Spark) for data,
+sign-in and hosting, and a free Render server for the API. A customer storefront (English + हिन्दी, INR),
+a store/staff console, a delivery-partner app, live order tracking and Android apps for customers and riders.
 
 | App | Path | Live address (after deploy) | Who uses it |
 |---|---|---|---|
 | Storefront (Next.js, PWA-ready) | `apps/web` | https://naamdevseets.web.app | Customers: browse, search, cart, checkout, track, account, support |
 | Console (Next.js) | `apps/admin` | https://naamdevseets-admin.web.app | Super admin, store owner, managers, packing staff, support agents (permission-based) |
 | Partner app (Next.js PWA) | `apps/delivery` | https://naamdevseets-partner.web.app | Delivery partners: go online, accept offers, pickup, OTP delivery, earnings |
-| API (Express on Cloud Run) | `apps/api` | served under `/api` on each site | Everything above |
+| API (Express, Docker on Render free) | `apps/api` | `https://naamdev-api….onrender.com` | Everything above |
 
-**Firebase services used:** Cloud Firestore (all data), Firebase Authentication (**email + password
-only**), Firebase Storage (product images, avatars, private rider documents), Firebase Hosting (the three
-sites), Cloud Run (API + the three Next.js apps), Cloud Scheduler (background jobs), and Firestore
-listeners for real-time updates (order status, rider location, new orders, delivery offers).
+**Services used (all free):** Cloud Firestore (all data, plus uploaded photos on the free plan), Firebase
+Authentication (**email + password only**), Firebase Hosting (the three apps as static sites), a Render
+free web service (the API, with in-process background jobs), Firestore listeners for real-time updates
+(order status, rider location, new orders, delivery offers) and a GitHub Actions keep-alive.
 
 Android apps (`mobile/android`): **NAAMDEV SWEETS** for customers and **NAAMDEV Partner** for riders.
 They open the live sites above directly — nobody has to type a shop address. APKs are built by GitHub
@@ -50,17 +50,16 @@ reference; they are never marked as refunded before that.
 The console's **Settings → Integrations** tab shows the live status of each one and the delivery log
 of every notification. Setup steps: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
-## Going live (Firebase project `naamdevseets`)
+## Going live (free)
 
-1. Firebase console: keep the project on the **Blaze** plan.
-2. Google Cloud console → IAM → Service accounts: create a key for a service account with the
-   **Owner** role and add it to this GitHub repository as the secret `FIREBASE_SERVICE_ACCOUNT`.
-3. Add the secret `NAAMDEV_ADMIN_EMAIL` (your console login; Firebase emails you a link to set the password).
-4. GitHub → Actions → **NAAMDEV deploy to Firebase** → Run workflow.
+1. Firebase console: Authentication → enable **Email/Password**.
+2. Run `scripts/setup-keyless-deploy.sh` once in Google Cloud Shell (lets GitHub deploy without a key file).
+3. Create a free Render account (sign in with GitHub), create an API key and add it as the GitHub secret
+   `RENDER_API_KEY`.
+4. Add the secret `NAAMDEV_ADMIN_EMAIL` (your console login).
+5. GitHub → Actions → **NAAMDEV deploy (free plans)** → Run workflow.
 
-The workflow creates the Firestore database, turns on email/password sign-in, deploys the API and
-apps to Cloud Run, the three Hosting sites, security rules, indexes and the job scheduler, then prints
-the live addresses. Full guide and troubleshooting: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Full guide, free-plan limits and troubleshooting: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Local development
 
@@ -110,14 +109,14 @@ Created only when not in production (or with `SEED_DEMO_ACCOUNTS=true`). Passwor
 | `pnpm test` | Unit tests + API integration tests |
 | `pnpm test:unit` | Pricing, coupons, loyalty, permissions, order state machine, UPI links (Vitest) |
 | `pnpm test:api` | API integration tests on the Firebase emulators (Vitest + Supertest + Razorpay mock) |
-| `pnpm test:e2e` | Emulators → seed → API → production builds → Playwright journeys across all three apps |
+| `pnpm test:e2e` | Emulators → seed → API → static production builds served with the Hosting rules → Playwright journeys |
 | `pnpm assets` | Regenerate the catalogue artwork, emblem and app icons |
 
 Test details and the latest recorded results: [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Firebase setup, the deploy workflow, costs, operations
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — free-plan setup (Firebase + Render), the deploy workflow, limits, operations
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, data model, order lifecycle, inventory, dispatch, realtime
 - [docs/API.md](docs/API.md) — REST endpoints and live documents
 - [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — UPI, Razorpay, email, SMS, push, maps

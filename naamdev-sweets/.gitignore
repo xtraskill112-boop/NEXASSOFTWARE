@@ -18,3 +18,4 @@ next-env.d.ts
 backups/*.sql.gz
 apps/api/uploads-test
 apps/*/public/static/
+apps/*/out/

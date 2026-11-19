@@ -26,9 +26,9 @@ const schema = z.object({
     ? z.string().regex(/^[0-9a-f]{64}$/i, "ENCRYPTION_KEY must be 32 bytes hex")
     : z.string().default("0".repeat(63) + "1"),
   LOG_LEVEL: z.string().default(isProd ? "info" : "debug"),
-  // In-process background jobs for local development. In production Cloud Scheduler calls /internal/jobs/tick.
+  // In-process background jobs (default on in development; the deploy turns them on for the Render server).
   JOBS_ENABLED: bool(!isProd),
-  // Shared secret Cloud Scheduler sends in the x-jobs-secret header when calling /internal/jobs/tick.
+  // Shared secret for the x-jobs-secret header on /internal/jobs/tick (an optional external trigger).
   JOBS_SECRET: isProd ? z.string().min(24, "JOBS_SECRET must be at least 24 characters") : z.string().optional(),
 
   RAZORPAY_KEY_ID: z.string().optional(),

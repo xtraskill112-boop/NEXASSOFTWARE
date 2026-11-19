@@ -1,10 +1,8 @@
-name: NAAMDEV deploy to Firebase
+name: NAAMDEV deploy (free plans)
 
-# Deploys the whole system to the Firebase project (Blaze plan):
-#   Firestore (rules + indexes) · Firebase Auth (email/password) · Firebase Storage (rules)
-#   Cloud Run: naamdev-api, naamdev-web, naamdev-admin, naamdev-partner (asia-south1)
-#   Firebase Hosting: storefront, console and partner sites, rewriting to Cloud Run
-#   Cloud Scheduler: background jobs every minute
+# Deploys the whole system on free plans only — no billing account, no card:
+#   Firebase Spark: Firestore (data + live updates), Authentication (email/password), Hosting (3 static sites)
+#   Render free web service: the API (orders, payments, stock, uploads)
 # Run it from the Actions tab ("Run workflow"). Setup steps: naamdev-sweets/docs/DEPLOYMENT.md
 on:
   workflow_dispatch:
@@ -38,6 +36,8 @@ env:
   WEB_SITE: ${{ vars.NAAMDEV_WEB_SITE || 'naamdevseets' }}
   ADMIN_SITE: ${{ vars.NAAMDEV_ADMIN_SITE || 'naamdevseets-admin' }}
   PARTNER_SITE: ${{ vars.NAAMDEV_PARTNER_SITE || 'naamdevseets-partner' }}
+  RENDER_SERVICE: ${{ vars.NAAMDEV_RENDER_SERVICE || 'naamdev-api' }}
+  RENDER_REGION: singapore # closest free Render region to India
 
 jobs:
   deploy:
@@ -49,9 +49,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check the Render API key
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ]; then
+            echo "::error::Add the RENDER_API_KEY secret (Render → Account settings → API keys). See naamdev-sweets/docs/DEPLOYMENT.md."
+            exit 1
+          fi
+
       # Sign in to Google Cloud: with a service-account key file (FIREBASE_SERVICE_ACCOUNT) when one is
-      # stored, otherwise keyless through Workload Identity Federation (one-time Cloud Shell setup in
-      # docs/DEPLOYMENT.md) — no long-lived key at all.
+      # stored, otherwise keyless through Workload Identity Federation (one-time Cloud Shell setup).
       - name: Choose how to sign in to Google Cloud
         id: cred
         env:
@@ -71,7 +79,6 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
 
       - uses: google-github-actions/auth@v2
-        id: keyless
         if: steps.cred.outputs.mode == 'keyless'
         with:
           project_id: ${{ env.PROJECT_ID }}
@@ -81,7 +88,7 @@ jobs:
       - name: Explain keyless sign-in setup
         if: failure() && steps.cred.outputs.mode == 'keyless'
         run: |
-          echo "::error::Keyless sign-in isn't set up yet. Run the one-time Cloud Shell command in naamdev-sweets/docs/DEPLOYMENT.md, wait 2 minutes, then run this workflow again."
+          echo "::error::Keyless sign-in isn't set up yet. Run scripts/setup-keyless-deploy.sh once in Cloud Shell (docs/DEPLOYMENT.md), then run this workflow again."
           exit 1
 
       - uses: google-github-actions/setup-gcloud@v2
@@ -95,139 +102,130 @@ jobs:
           cache-dependency-path: naamdev-sweets/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
 
-      - name: Enable Google Cloud APIs
+      - name: Enable the (free) Google APIs Firebase needs
         run: |
-          gcloud services enable run.googleapis.com artifactregistry.googleapis.com firestore.googleapis.com \
-            secretmanager.googleapis.com cloudscheduler.googleapis.com firebase.googleapis.com firebasehosting.googleapis.com \
-            identitytoolkit.googleapis.com firebasestorage.googleapis.com storage.googleapis.com iam.googleapis.com \
-            cloudresourcemanager.googleapis.com fcm.googleapis.com --project "$PROJECT_ID"
+          gcloud services enable firestore.googleapis.com identitytoolkit.googleapis.com firebase.googleapis.com \
+            firebasehosting.googleapis.com firebaserules.googleapis.com iam.googleapis.com iamcredentials.googleapis.com \
+            cloudresourcemanager.googleapis.com serviceusage.googleapis.com --project "$PROJECT_ID"
 
       - name: Firestore database
         run: |
           if ! gcloud firestore databases describe --database='(default)' --project "$PROJECT_ID" >/dev/null 2>&1; then
-            gcloud firestore databases create --location="$REGION" --type=firestore-native --project "$PROJECT_ID"
+            gcloud firestore databases create --location="$REGION" --type=firestore-native --project "$PROJECT_ID" || {
+              echo "::error::Couldn't create the database. In the Firebase console open Firestore Database → Create database (location asia-south1, production mode), then re-run."
+              exit 1
+            }
           fi
 
       - name: Email/password sign-in (Firebase Authentication)
         run: |
           TOKEN="$(gcloud auth print-access-token)"
           API="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT_ID/config"
-          H=(-H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT_ID" -H "Content-Type: application/json")
-          if curl -sf -X PATCH "$API?updateMask=signIn.email.enabled,signIn.email.passwordRequired" "${H[@]}" \
+          if curl -sf -X PATCH "$API?updateMask=signIn.email.enabled,signIn.email.passwordRequired" \
+               -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT_ID" -H "Content-Type: application/json" \
                -d '{"signIn":{"email":{"enabled":true,"passwordRequired":true}}}' >/dev/null; then
             echo "Email/password sign-in is enabled."
           else
-            echo "::error::Couldn't enable Email/Password sign-in automatically. In the Firebase console open Authentication → Get started → Sign-in method → Email/Password → Enable, then re-run this workflow."
+            echo "::error::Couldn't enable Email/Password sign-in. In the Firebase console open Authentication → Get started → Email/Password → Enable, then re-run."
             exit 1
           fi
 
-      - name: Firebase Storage bucket
-        run: |
-          BUCKET="$PROJECT_ID.firebasestorage.app"
-          if ! gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
-            TOKEN="$(gcloud auth print-access-token)"
-            curl -sf -X POST "https://firebasestorage.googleapis.com/v1alpha/projects/$PROJECT_ID/defaultBucket" \
-              -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT_ID" -H "Content-Type: application/json" \
-              -d "{\"location\":\"$REGION\"}" >/dev/null || true
-          fi
-          if ! gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
-            echo "::error::The default Storage bucket doesn't exist. In the Firebase console open Storage → Get started (location asia-south1), then re-run this workflow."
-            exit 1
-          fi
-
-      - name: Runtime service account and secrets
+      - name: Key for the API server (rotated on every deploy)
         run: |
           SA="naamdev-run@$PROJECT_ID.iam.gserviceaccount.com"
           gcloud iam service-accounts describe "$SA" --project "$PROJECT_ID" >/dev/null 2>&1 || \
-            gcloud iam service-accounts create naamdev-run --display-name="NAAMDEV Cloud Run runtime" --project "$PROJECT_ID"
-          for role in roles/datastore.user roles/firebaseauth.admin roles/storage.objectAdmin roles/secretmanager.secretAccessor roles/firebasecloudmessaging.admin; do
+            gcloud iam service-accounts create naamdev-run --display-name="NAAMDEV API server" --project "$PROJECT_ID"
+          for role in roles/datastore.user roles/firebaseauth.admin; do
             gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:$SA" --role="$role" --condition=None --quiet >/dev/null
           done
-          ensure() { # name, value — created once, never overwritten
-            gcloud secrets describe "$1" --project "$PROJECT_ID" >/dev/null 2>&1 || \
-              printf %s "$2" | gcloud secrets create "$1" --data-file=- --replication-policy=automatic --project "$PROJECT_ID"
-          }
-          ensure naamdev-encryption-key "$(openssl rand -hex 32)"
-          ensure naamdev-jobs-secret "$(openssl rand -hex 24)"
-          echo "RUN_SA=$SA" >> "$GITHUB_ENV"
-
-      - name: Optional integration secrets (Razorpay, SMTP)
-        env:
-          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
-          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
-          RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-        run: |
-          put() { # secret name, value — adds a new version when the value changed
-            [ -n "$2" ] || return 0
-            if ! gcloud secrets describe "$1" --project "$PROJECT_ID" >/dev/null 2>&1; then
-              printf %s "$2" | gcloud secrets create "$1" --data-file=- --replication-policy=automatic --project "$PROJECT_ID"
-            elif [ "$(gcloud secrets versions access latest --secret="$1" --project "$PROJECT_ID")" != "$2" ]; then
-              printf %s "$2" | gcloud secrets versions add "$1" --data-file=- --project "$PROJECT_ID"
-            fi
-          }
-          put naamdev-razorpay-key-secret "$RAZORPAY_KEY_SECRET"
-          put naamdev-razorpay-webhook-secret "$RAZORPAY_WEBHOOK_SECRET"
-          put naamdev-smtp-pass "$SMTP_PASS"
-          SECRETS="ENCRYPTION_KEY=naamdev-encryption-key:latest,JOBS_SECRET=naamdev-jobs-secret:latest"
-          if [ -n "$RAZORPAY_KEY_ID" ] && [ -n "$RAZORPAY_KEY_SECRET" ]; then SECRETS="$SECRETS,RAZORPAY_KEY_SECRET=naamdev-razorpay-key-secret:latest"; fi
-          if [ -n "$RAZORPAY_WEBHOOK_SECRET" ]; then SECRETS="$SECRETS,RAZORPAY_WEBHOOK_SECRET=naamdev-razorpay-webhook-secret:latest"; fi
-          if [ -n "$SMTP_PASS" ]; then SECRETS="$SECRETS,SMTP_PASS=naamdev-smtp-pass:latest"; fi
-          echo "API_SECRETS=$SECRETS" >> "$GITHUB_ENV"
-
-      - name: Container registry
-        run: |
-          gcloud artifacts repositories describe naamdev --location="$REGION" --project "$PROJECT_ID" >/dev/null 2>&1 || \
-            gcloud artifacts repositories create naamdev --repository-format=docker --location="$REGION" --project "$PROJECT_ID"
-          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
-          echo "IMAGES=$REGION-docker.pkg.dev/$PROJECT_ID/naamdev" >> "$GITHUB_ENV"
-          echo "TAG=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          gcloud iam service-accounts keys create "$RUNNER_TEMP/run-key.json" --iam-account="$SA" --project "$PROJECT_ID" --quiet
+          NEW_KEY="$(jq -r .private_key_id "$RUNNER_TEMP/run-key.json")"
+          # Keep only the newest key (old ones stop working once the server restarts with the new one).
+          for k in $(gcloud iam service-accounts keys list --iam-account="$SA" --managed-by=user --format='value(name.basename())' --project "$PROJECT_ID"); do
+            [ "$k" != "$NEW_KEY" ] && gcloud iam service-accounts keys delete "$k" --iam-account="$SA" --project "$PROJECT_ID" --quiet || true
+          done
+          B64="$(base64 -w0 "$RUNNER_TEMP/run-key.json")"
+          rm -f "$RUNNER_TEMP/run-key.json"
+          echo "::add-mask::$B64"
+          echo "SA_B64=$B64" >> "$GITHUB_ENV"
           echo "WEB_URL=https://$WEB_SITE.web.app" >> "$GITHUB_ENV"
           echo "ADMIN_URL=https://$ADMIN_SITE.web.app" >> "$GITHUB_ENV"
           echo "PARTNER_URL=https://$PARTNER_SITE.web.app" >> "$GITHUB_ENV"
 
-      - name: Deploy API (Cloud Run)
+      - name: Deploy the API on Render (free web service)
         env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+          RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
           SMTP_HOST: ${{ vars.SMTP_HOST }}
           SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
           SMTP_USER: ${{ vars.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_FROM: ${{ vars.EMAIL_FROM || 'NAAMDEV SWEETS <no-reply@naamdevsweets.com>' }}
         run: |
-          docker build -f infra/docker/api.Dockerfile -t "$IMAGES/api:$TAG" .
-          docker push "$IMAGES/api:$TAG"
-          EMAIL_PROVIDER=none
-          if [ -n "$SMTP_HOST" ]; then EMAIL_PROVIDER=smtp; fi
-          # "##" separates variables (values such as EMAIL_FROM contain commas, spaces and "@").
-          ENVS="NODE_ENV=production##FIREBASE_PROJECT_ID=$PROJECT_ID##APP_URL_WEB=$WEB_URL##APP_URL_ADMIN=$ADMIN_URL##APP_URL_DELIVERY=$PARTNER_URL##TRUST_PROXY=2##JOBS_ENABLED=false##SMS_PROVIDER=none##EMAIL_PROVIDER=$EMAIL_PROVIDER##EMAIL_FROM=$EMAIL_FROM"
-          if [ -n "$RAZORPAY_KEY_ID" ]; then ENVS="$ENVS##RAZORPAY_KEY_ID=$RAZORPAY_KEY_ID"; fi
-          if [ -n "$SMTP_HOST" ]; then ENVS="$ENVS##SMTP_HOST=$SMTP_HOST##SMTP_PORT=$SMTP_PORT##SMTP_USER=$SMTP_USER"; fi
-          gcloud run deploy naamdev-api --image "$IMAGES/api:$TAG" --region "$REGION" --project "$PROJECT_ID" \
-            --service-account "$RUN_SA" --allow-unauthenticated --port 4000 --cpu 1 --memory 512Mi \
-            --min-instances 0 --max-instances 4 --timeout 120 \
-            --set-env-vars "^##^$ENVS" --set-secrets "$API_SECRETS" --quiet
-          API_URL="$(gcloud run services describe naamdev-api --region "$REGION" --project "$PROJECT_ID" --format='value(status.url)')"
-          echo "API_URL=$API_URL" >> "$GITHUB_ENV"
-          curl -sf "$API_URL/health" && echo
+          R="${RENDER_API_BASE:-https://api.render.com/v1}"
+          rapi() { curl -sS --fail-with-body -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" -H "Content-Type: application/json" "$@"; }
+          OWNER="$(rapi "$R/owners?limit=20" | jq -r '.[0].owner.id')"
+          [ -n "$OWNER" ] && [ "$OWNER" != "null" ] || { echo "::error::The Render API key didn't return a workspace."; exit 1; }
+          SERVICE="$(rapi "$R/services?name=$RENDER_SERVICE&ownerId=$OWNER&limit=20" | jq -r --arg n "$RENDER_SERVICE" '[.[] | select(.service.name == $n)][0].service.id // empty')"
 
-      - name: Deploy storefront, console and partner app (Cloud Run)
-        env:
-          MAPS_KEY: ${{ vars.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
-          VAPID_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_VAPID_KEY }}
-        run: |
-          deploy() { # app, service, site URL
-            docker build -f infra/docker/next.Dockerfile --build-arg APP="$1" --build-arg API_INTERNAL_URL="$API_URL" \
-              --build-arg NEXT_PUBLIC_SITE_URL="$3" --build-arg NEXT_PUBLIC_STOREFRONT_URL="$WEB_URL" \
-              --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="$PROJECT_ID" --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="$MAPS_KEY" \
-              --build-arg NEXT_PUBLIC_FIREBASE_VAPID_KEY="$VAPID_KEY" -t "$IMAGES/$1:$TAG" .
-            docker push "$IMAGES/$1:$TAG"
-            gcloud run deploy "$2" --image "$IMAGES/$1:$TAG" --region "$REGION" --project "$PROJECT_ID" \
-              --service-account "$RUN_SA" --allow-unauthenticated --port 3000 --cpu 1 --memory 512Mi \
-              --min-instances 0 --max-instances 4 --set-env-vars "API_INTERNAL_URL=$API_URL" --quiet
-          }
-          deploy web naamdev-web "$WEB_URL"
-          deploy admin naamdev-admin "$ADMIN_URL"
-          deploy delivery naamdev-partner "$PARTNER_URL"
+          # Secrets that must stay the same across deploys are kept from the service's current settings.
+          CURRENT='[]'
+          if [ -n "$SERVICE" ]; then CURRENT="$(rapi "$R/services/$SERVICE/env-vars?limit=100" | jq '[.[] | .envVar]')"; fi
+          keep() { printf %s "$CURRENT" | jq -r --arg k "$1" '[.[] | select(.key == $k)][0].value // empty'; }
+          ENCRYPTION_KEY="$(keep ENCRYPTION_KEY)"; [ -n "$ENCRYPTION_KEY" ] || ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          JOBS_SECRET="$(keep JOBS_SECRET)"; [ -n "$JOBS_SECRET" ] || JOBS_SECRET="$(openssl rand -hex 24)"
+          echo "::add-mask::$ENCRYPTION_KEY"; echo "::add-mask::$JOBS_SECRET"
+          EMAIL_PROVIDER=none; [ -n "$SMTP_HOST" ] && EMAIL_PROVIDER=smtp
+
+          ENV_JSON="$(jq -n \
+            --arg project "$PROJECT_ID" --arg sa "$SA_B64" --arg enc "$ENCRYPTION_KEY" --arg jobs "$JOBS_SECRET" \
+            --arg web "$WEB_URL" --arg admin "$ADMIN_URL" --arg partner "$PARTNER_URL" --arg email "$EMAIL_PROVIDER" \
+            --arg rzpId "$RAZORPAY_KEY_ID" --arg rzpSecret "$RAZORPAY_KEY_SECRET" --arg rzpHook "$RAZORPAY_WEBHOOK_SECRET" \
+            --arg smtpHost "$SMTP_HOST" --arg smtpPort "$SMTP_PORT" --arg smtpUser "$SMTP_USER" --arg smtpPass "$SMTP_PASS" --arg from "$EMAIL_FROM" '
+            [ {key:"NODE_ENV",value:"production"}, {key:"LOG_LEVEL",value:"info"}, {key:"FIREBASE_PROJECT_ID",value:$project},
+              {key:"FIREBASE_SERVICE_ACCOUNT_BASE64",value:$sa}, {key:"ENCRYPTION_KEY",value:$enc}, {key:"JOBS_SECRET",value:$jobs},
+              {key:"APP_URL_WEB",value:$web}, {key:"APP_URL_ADMIN",value:$admin}, {key:"APP_URL_DELIVERY",value:$partner},
+              {key:"TRUST_PROXY",value:"1"}, {key:"STORAGE_DRIVER",value:"firestore"}, {key:"SMS_PROVIDER",value:"none"},
+              {key:"EMAIL_PROVIDER",value:$email}, {key:"EMAIL_FROM",value:$from},
+              {key:"JOBS_ENABLED",value:"true"}, {key:"JOBS_LEASES",value:"false"}, {key:"JOBS_OFFER_EVERY_MS",value:"60000"},
+              {key:"CATALOG_CHECK_MS",value:"600000"}, {key:"CATALOG_MAX_AGE_MS",value:"21600000"} ]
+            + (if $rzpId != "" and $rzpSecret != "" then [{key:"RAZORPAY_KEY_ID",value:$rzpId},{key:"RAZORPAY_KEY_SECRET",value:$rzpSecret}] else [] end)
+            + (if $rzpHook != "" then [{key:"RAZORPAY_WEBHOOK_SECRET",value:$rzpHook}] else [] end)
+            + (if $smtpHost != "" then [{key:"SMTP_HOST",value:$smtpHost},{key:"SMTP_PORT",value:$smtpPort},{key:"SMTP_USER",value:$smtpUser},{key:"SMTP_PASS",value:$smtpPass}] else [] end)')"
+
+          if [ -z "$SERVICE" ]; then
+            BODY="$(jq -n --arg name "$RENDER_SERVICE" --arg owner "$OWNER" --arg repo "https://github.com/${{ github.repository }}" \
+              --arg branch "${{ github.ref_name }}" --arg region "$RENDER_REGION" --argjson env "$ENV_JSON" '
+              { type:"web_service", name:$name, ownerId:$owner, repo:$repo, branch:$branch, autoDeployTrigger:"off", envVars:$env,
+                serviceDetails:{ runtime:"docker", plan:"free", region:$region, healthCheckPath:"/healthz", numInstances:1,
+                  envSpecificDetails:{ dockerfilePath:"./naamdev-sweets/infra/docker/api.Dockerfile", dockerContext:"./naamdev-sweets" } } }')"
+            CREATED="$(rapi -X POST "$R/services" -d "$BODY")"
+            SERVICE="$(printf %s "$CREATED" | jq -r '.service.id // .id')"
+            DEPLOY="$(printf %s "$CREATED" | jq -r '.deployId // empty')"
+            echo "Created Render service $SERVICE."
+          else
+            rapi -X PATCH "$R/services/$SERVICE" -d "$(jq -n --arg b "${{ github.ref_name }}" '{branch:$b}')" >/dev/null
+            rapi -X PUT "$R/services/$SERVICE/env-vars" -d "$ENV_JSON" >/dev/null
+          fi
+          # A new service starts its first deploy by itself; otherwise start one now.
+          [ -n "${DEPLOY:-}" ] || DEPLOY="$(rapi -X POST "$R/services/$SERVICE/deploys" -d '{"clearCache":"do_not_clear"}' | jq -r '.id')"
+          echo "Waiting for Render deploy $DEPLOY (the free plan builds slowly — up to ~15 minutes)…"
+          for i in $(seq 1 120); do
+            STATUS="$(rapi "$R/services/$SERVICE/deploys/$DEPLOY" | jq -r '.status')"
+            case "$STATUS" in
+              live) break ;;
+              build_failed|update_failed|canceled|deactivated|pre_deploy_failed)
+                echo "::error::Render deploy ended with status $STATUS — open the service's Events/Logs in the Render dashboard."; exit 1 ;;
+            esac
+            sleep 15
+          done
+          [ "$STATUS" = live ] || { echo "::error::Render deploy didn't finish in time (status $STATUS)."; exit 1; }
+          API_URL="$(rapi "$R/services/$SERVICE" | jq -r '.serviceDetails.url')"
+          echo "API_URL=$API_URL" >> "$GITHUB_ENV"
+          for i in $(seq 1 12); do curl -sf "$API_URL/health" && break; sleep 10; done
+          echo
 
       - name: Seed data (idempotent)
         id: seed
@@ -252,19 +250,28 @@ jobs:
           # GOOGLE_APPLICATION_CREDENTIALS comes from the sign-in step (key file or keyless).
           NODE_ENV=production FIREBASE_PROJECT_ID="$PROJECT_ID" pnpm --filter @naamdev/db seed
 
-      - name: Firebase Hosting, Firestore rules & indexes, Storage rules
+      - name: Build the three apps (static files)
+        env:
+          MAPS_KEY: ${{ vars.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
+          VAPID_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_VAPID_KEY }}
+        run: |
+          export NEXT_PUBLIC_API_URL="$API_URL" NEXT_PUBLIC_STOREFRONT_URL="$WEB_URL" NEXT_PUBLIC_FIREBASE_PROJECT_ID="$PROJECT_ID" \
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="$MAPS_KEY" NEXT_PUBLIC_FIREBASE_VAPID_KEY="$VAPID_KEY"
+          NEXT_PUBLIC_SITE_URL="$WEB_URL" pnpm --filter @naamdev/web build
+          NEXT_PUBLIC_SITE_URL="$ADMIN_URL" pnpm --filter @naamdev/admin build
+          NEXT_PUBLIC_SITE_URL="$PARTNER_URL" pnpm --filter @naamdev/delivery build
+
+      - name: Firebase Hosting, Firestore rules & indexes
         run: |
           for site in "$ADMIN_SITE" "$PARTNER_SITE"; do
             npx firebase hosting:sites:get "$site" --project "$PROJECT_ID" >/dev/null 2>&1 || \
               npx firebase hosting:sites:create "$site" --project "$PROJECT_ID" --non-interactive
           done
-          npx firebase target:clear hosting web --project "$PROJECT_ID" >/dev/null 2>&1 || true
-          npx firebase target:clear hosting admin --project "$PROJECT_ID" >/dev/null 2>&1 || true
-          npx firebase target:clear hosting partner --project "$PROJECT_ID" >/dev/null 2>&1 || true
+          for t in web admin partner; do npx firebase target:clear hosting "$t" --project "$PROJECT_ID" >/dev/null 2>&1 || true; done
           npx firebase target:apply hosting web "$WEB_SITE" --project "$PROJECT_ID"
           npx firebase target:apply hosting admin "$ADMIN_SITE" --project "$PROJECT_ID"
           npx firebase target:apply hosting partner "$PARTNER_SITE" --project "$PROJECT_ID"
-          npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "$PROJECT_ID" --non-interactive --force
+          npx firebase deploy --only hosting,firestore:rules,firestore:indexes --project "$PROJECT_ID" --non-interactive --force
 
       - name: Email the owner a link to set the console password
         if: steps.seed.outputs.admin_created == 'true'
@@ -275,42 +282,29 @@ jobs:
           BODY="$(jq -cn --arg email "$ADMIN_EMAIL" '{requestType:"PASSWORD_RESET",email:$email}')"
           if curl -sf -X POST "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$WEB_API_KEY" \
                -H "Content-Type: application/json" -d "$BODY" >/dev/null; then
-            echo "Sent. Check your inbox (and spam) for the Firebase email to set your password."
             echo "SET_PASSWORD_NOTE=Check your email for the link to set your console password." >> "$GITHUB_ENV"
           else
-            echo "::warning::Couldn't send the email automatically. Open the console login page, type your email and click 'Forgot password?'."
             echo "SET_PASSWORD_NOTE=Open the console, type your email and click Forgot password? to set your password." >> "$GITHUB_ENV"
-          fi
-
-      - name: Background jobs (Cloud Scheduler, every minute)
-        run: |
-          SECRET="$(gcloud secrets versions access latest --secret=naamdev-jobs-secret --project "$PROJECT_ID")"
-          echo "::add-mask::$SECRET"
-          ARGS=(--location="$REGION" --project "$PROJECT_ID" --schedule="* * * * *" --time-zone="Asia/Kolkata"
-                --uri="$API_URL/internal/jobs/tick" --http-method=POST --attempt-deadline=120s)
-          if gcloud scheduler jobs describe naamdev-jobs --location="$REGION" --project "$PROJECT_ID" >/dev/null 2>&1; then
-            gcloud scheduler jobs update http naamdev-jobs "${ARGS[@]}" --update-headers="x-jobs-secret=$SECRET" --quiet >/dev/null
-          else
-            gcloud scheduler jobs create http naamdev-jobs "${ARGS[@]}" --headers="x-jobs-secret=$SECRET" --quiet >/dev/null
           fi
 
       - name: Smoke test
         run: |
-          for url in "$WEB_URL" "$WEB_URL/api/v1/public/settings" "$ADMIN_URL/login" "$PARTNER_URL/login"; do
-            code="$(curl -s -o /dev/null -w '%{http_code}' "$url")"
+          for url in "$WEB_URL" "$WEB_URL/product/kaju-katli" "$ADMIN_URL/login" "$PARTNER_URL/login" "$API_URL/api/v1/public/settings"; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$url")"
             echo "$code $url"
             [ "$code" -lt 400 ] || { echo "::error::$url returned $code"; exit 1; }
           done
           {
-            echo "### NAAMDEV SWEETS is live"
+            echo "### NAAMDEV SWEETS is live (free plans)"
             echo ""
             echo "| | Address |"
             echo "|---|---|"
             echo "| Storefront (customer app) | $WEB_URL |"
             echo "| Staff console | $ADMIN_URL |"
             echo "| Delivery partner app | $PARTNER_URL |"
+            echo "| API server (Render) | $API_URL |"
             echo ""
             echo "Sign in to the console with your NAAMDEV_ADMIN_EMAIL. ${SET_PASSWORD_NOTE:-}"
             echo ""
-            echo "The Android apps open these addresses automatically."
+            echo "The *NAAMDEV keep-alive* workflow pings the API every 10 minutes so the free server doesn't fall asleep."
           } >> "$GITHUB_STEP_SUMMARY"

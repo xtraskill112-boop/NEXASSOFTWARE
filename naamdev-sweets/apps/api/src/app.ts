@@ -67,8 +67,8 @@ export function createApp() {
     }
   });
 
-  // Cloud Scheduler calls this once a minute with the shared secret header (?sweepSeconds=45 keeps
-  // expiring delivery offers every 15 s for most of the minute, at the cost of a longer request).
+  // Optional external trigger for the background jobs, with the shared secret header (?sweepSeconds=45
+  // keeps expiring delivery offers every 15 s for most of the minute, at the cost of a longer request).
   app.post("/internal/jobs/tick", async (req, res) => {
     const secret = req.get("x-jobs-secret") ?? "";
     if (!env.JOBS_SECRET || !safeEqual(secret, env.JOBS_SECRET)) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Not found" } });

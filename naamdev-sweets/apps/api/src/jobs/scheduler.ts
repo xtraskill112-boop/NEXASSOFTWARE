@@ -87,7 +87,7 @@ async function runJob(job: Job, leaseMs = 5 * 60_000) {
   }
 }
 
-/** Runs every job that is due. Called by Cloud Scheduler once a minute (and by the local timer in development). */
+/** Runs every job that is due. Called by the in-process timer once a minute, or on demand through /internal/jobs/tick. */
 export async function runDueJobs() {
   const results = [];
   for (const job of JOBS) results.push(await runJob(job));
