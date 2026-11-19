@@ -27,6 +27,11 @@ function watch(page: Page) {
   return problems;
 }
 
+/** First lines of what the page shows, for failure messages. */
+async function bodyText(page: Page) {
+  return (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 400);
+}
+
 async function noSplash(page: Page) {
   await page.addInitScript(() => sessionStorage.setItem("nd_splash", "1"));
 }
@@ -36,13 +41,25 @@ test("API is up and Firestore answers", async ({ request }) => {
   expect(res.status()).toBe(200);
   const settings = await request.get(`${API}/api/v1/public/settings`);
   expect(settings.status()).toBe(200);
+  // What the storefront home page will show: each section and how many products it has.
+  const home = await request.get(`${API}/api/v1/catalog/home`);
+  const text = await home.text();
+  console.log(`catalog/home → ${home.status()}`);
+  expect(home.status(), text.slice(0, 500)).toBe(200);
+  const feed = JSON.parse(text) as { sections: { type: string; title: string; products?: unknown[] }[] };
+  console.log(feed.sections.map((s) => `${s.type}=${s.products?.length ?? "-"}`).join(" "));
+  expect(feed.sections.find((s) => s.type === "BESTSELLERS")?.products?.length ?? 0).toBeGreaterThan(0);
 });
 
 test("storefront shows the catalogue from the API", async ({ page }) => {
   const problems = watch(page);
   await noSplash(page);
   await page.goto(WEB);
-  await expect(page.getByRole("heading", { name: "Bestselling sweets" })).toBeVisible();
+  try {
+    await expect(page.getByRole("heading", { name: "Bestselling sweets" })).toBeVisible();
+  } catch (e) {
+    throw new Error(`${(e as Error).message}\n\nThe page shows: ${await bodyText(page)}\nProblems: ${problems.join(" | ") || "none"}`);
+  }
   await expect(page.getByRole("link", { name: "Kaju Katli" }).first()).toBeVisible();
 
   await page.goto(`${WEB}/product/kaju-katli`);
