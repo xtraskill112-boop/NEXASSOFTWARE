@@ -1,11 +1,16 @@
 import type { MetadataRoute } from "next";
+import { API_URL } from "@naamdev/api-client";
 import { SITE_URL } from "@/lib/api";
-import { fetchPublic } from "@/lib/server-api";
+
+export const dynamic = "force-static";
 
 type Row = { slug: string; updatedAt: string };
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const data = await fetchPublic<{ products: Row[]; categories: Row[]; collections: Row[]; pages: Row[] }>("/public/sitemap-data", 600);
+  // Generated when the site is built (deploy); products added later appear after the next deploy.
+  const data = (await fetch(`${API_URL}/api/v1/public/sitemap-data`, { headers: { "x-nds-app": "web" } })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)) as { products: Row[]; categories: Row[]; collections: Row[]; pages: Row[] } | null;
   const now = new Date();
   const base: MetadataRoute.Sitemap = [
     { url: SITE_URL, lastModified: now, changeFrequency: "daily", priority: 1 },

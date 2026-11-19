@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { localized, translate, type Locale, type TranslationKey } from "@naamdev/shared/i18n";
 
 interface I18nCtx {
@@ -11,11 +11,27 @@ interface I18nCtx {
 
 const Ctx = createContext<I18nCtx | null>(null);
 
-export function I18nProvider({ initialLocale, children }: { initialLocale: Locale; children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(initialLocale);
+const LANG_KEY = "nd_lang";
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocaleState] = useState<Locale>("en");
+  // The chosen language is remembered in this browser (the shop is static, so there's no server to ask).
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(LANG_KEY) === "hi") {
+        setLocaleState("hi");
+        document.documentElement.lang = "hi";
+      }
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
   const setLocale = useCallback((l: Locale) => {
-    // Firebase Hosting only forwards the cookie named "__session" to the server, so the language lives there.
-    document.cookie = `__session=${l}; path=/; max-age=31536000; samesite=lax; secure`;
+    try {
+      window.localStorage.setItem(LANG_KEY, l);
+    } catch {
+      /* storage unavailable */
+    }
     document.documentElement.lang = l;
     setLocaleState(l);
   }, []);

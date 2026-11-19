@@ -30,13 +30,15 @@ export interface ApiClientOptions {
 
 export const CART_TOKEN_HEADER = "x-cart-token";
 
+/** Where the browser reaches the API (its own server, e.g. on Render). */
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/$/, "");
+
 /**
- * Thin fetch wrapper used by every frontend. In the browser it calls same-origin `/api/v1/*`
- * (Firebase Hosting / the Next.js dev server forward it to the API) and authenticates with the
+ * Thin fetch wrapper used by every frontend. It calls the API at `API_URL` and authenticates with the
  * Firebase ID token as a bearer token — no cookies, so no CSRF surface.
  */
 export function createApiClient(opts: ApiClientOptions) {
-  const base = (opts.baseUrl ?? "").replace(/\/$/, "");
+  const base = (opts.baseUrl ?? API_URL).replace(/\/$/, "");
 
   async function request<T>(method: string, path: string, body?: unknown, o: RequestOptions = {}): Promise<T> {
     const qs = o.query

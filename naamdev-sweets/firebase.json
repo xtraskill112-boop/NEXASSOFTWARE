@@ -2,94 +2,296 @@
   "hosting": [
     {
       "target": "web",
-      "public": "firebase/hosting-public",
-      "ignore": [
-        "**/.*"
-      ],
-      "cleanUrls": false,
+      "public": "apps/web/out",
+      "cleanUrls": true,
+      "trailingSlash": false,
       "rewrites": [
         {
-          "source": "/api/**",
-          "run": {
-            "serviceId": "naamdev-api",
-            "region": "asia-south1"
-          }
+          "source": "/account/orders/*.txt",
+          "destination": "/account/orders/_.txt"
+        },
+        {
+          "source": "/account/orders/*",
+          "destination": "/account/orders/_.html"
+        },
+        {
+          "source": "/account/support/*.txt",
+          "destination": "/account/support/_.txt"
+        },
+        {
+          "source": "/account/support/*",
+          "destination": "/account/support/_.html"
+        },
+        {
+          "source": "/orders/*/placed.txt",
+          "destination": "/orders/_/placed.txt"
+        },
+        {
+          "source": "/orders/*/placed",
+          "destination": "/orders/_/placed.html"
+        },
+        {
+          "source": "/category/*.txt",
+          "destination": "/category/_.txt"
+        },
+        {
+          "source": "/category/*",
+          "destination": "/category/_.html"
+        },
+        {
+          "source": "/collections/*.txt",
+          "destination": "/collections/_.txt"
+        },
+        {
+          "source": "/collections/*",
+          "destination": "/collections/_.html"
+        },
+        {
+          "source": "/pages/*.txt",
+          "destination": "/pages/_.txt"
+        },
+        {
+          "source": "/pages/*",
+          "destination": "/pages/_.html"
+        },
+        {
+          "source": "/product/*.txt",
+          "destination": "/product/_.txt"
+        },
+        {
+          "source": "/product/*",
+          "destination": "/product/_.html"
+        },
+        {
+          "source": "/invoice/*.txt",
+          "destination": "/invoice/_.txt"
+        },
+        {
+          "source": "/invoice/*",
+          "destination": "/invoice/_.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://maps.googleapis.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.onrender.com https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.razorpay.com; font-src 'self' data:; connect-src 'self' https://*.onrender.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://*.razorpay.com https://maps.googleapis.com https://*.googleapis.com https://www.gstatic.com; frame-src https://api.razorpay.com https://checkout.razorpay.com https://naamdevseets.firebaseapp.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            }
+          ]
+        },
+        {
+          "source": "/_next/static/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
         },
         {
           "source": "/static/**",
-          "run": {
-            "serviceId": "naamdev-api",
-            "region": "asia-south1"
-          }
-        },
-        {
-          "source": "**",
-          "run": {
-            "serviceId": "naamdev-web",
-            "region": "asia-south1"
-          }
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
         }
       ]
     },
     {
       "target": "admin",
-      "public": "firebase/hosting-public",
-      "ignore": [
-        "**/.*"
-      ],
-      "cleanUrls": false,
+      "public": "apps/admin/out",
+      "cleanUrls": true,
+      "trailingSlash": false,
       "rewrites": [
         {
-          "source": "/api/**",
-          "run": {
-            "serviceId": "naamdev-api",
-            "region": "asia-south1"
-          }
+          "source": "/delivery/partners/*.txt",
+          "destination": "/delivery/partners/_.txt"
+        },
+        {
+          "source": "/delivery/partners/*",
+          "destination": "/delivery/partners/_.html"
+        },
+        {
+          "source": "/orders/*/slip.txt",
+          "destination": "/orders/_/slip.txt"
+        },
+        {
+          "source": "/orders/*/slip",
+          "destination": "/orders/_/slip.html"
+        },
+        {
+          "source": "/customers/*.txt",
+          "destination": "/customers/_.txt"
+        },
+        {
+          "source": "/customers/*",
+          "destination": "/customers/_.html"
+        },
+        {
+          "source": "/inventory/*.txt",
+          "destination": "/inventory/_.txt"
+        },
+        {
+          "source": "/inventory/*",
+          "destination": "/inventory/_.html"
+        },
+        {
+          "source": "/orders/*.txt",
+          "destination": "/orders/_.txt"
+        },
+        {
+          "source": "/orders/*",
+          "destination": "/orders/_.html"
+        },
+        {
+          "source": "/products/*.txt",
+          "destination": "/products/_.txt"
+        },
+        {
+          "source": "/products/*",
+          "destination": "/products/_.html"
+        },
+        {
+          "source": "/support/*.txt",
+          "destination": "/support/_.txt"
+        },
+        {
+          "source": "/support/*",
+          "destination": "/support/_.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://maps.googleapis.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.onrender.com https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.razorpay.com; font-src 'self' data:; connect-src 'self' https://*.onrender.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://*.razorpay.com https://maps.googleapis.com https://*.googleapis.com https://www.gstatic.com; frame-src https://api.razorpay.com https://checkout.razorpay.com https://naamdevseets.firebaseapp.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "X-Robots-Tag",
+              "value": "noindex, nofollow"
+            }
+          ]
+        },
+        {
+          "source": "/_next/static/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
         },
         {
           "source": "/static/**",
-          "run": {
-            "serviceId": "naamdev-api",
-            "region": "asia-south1"
-          }
-        },
-        {
-          "source": "**",
-          "run": {
-            "serviceId": "naamdev-admin",
-            "region": "asia-south1"
-          }
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
         }
       ]
     },
     {
       "target": "partner",
-      "public": "firebase/hosting-public",
-      "ignore": [
-        "**/.*"
-      ],
-      "cleanUrls": false,
+      "public": "apps/delivery/out",
+      "cleanUrls": true,
+      "trailingSlash": false,
       "rewrites": [
         {
-          "source": "/api/**",
-          "run": {
-            "serviceId": "naamdev-api",
-            "region": "asia-south1"
-          }
+          "source": "/delivery/*.txt",
+          "destination": "/delivery/_.txt"
+        },
+        {
+          "source": "/delivery/*",
+          "destination": "/delivery/_.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://maps.googleapis.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.onrender.com https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.razorpay.com; font-src 'self' data:; connect-src 'self' https://*.onrender.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://*.razorpay.com https://maps.googleapis.com https://*.googleapis.com https://www.gstatic.com; frame-src https://api.razorpay.com https://checkout.razorpay.com https://naamdevseets.firebaseapp.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "Permissions-Policy",
+              "value": "camera=(self), microphone=(), geolocation=(self), payment=(self)"
+            },
+            {
+              "key": "X-Robots-Tag",
+              "value": "noindex, nofollow"
+            }
+          ]
+        },
+        {
+          "source": "/_next/static/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
         },
         {
           "source": "/static/**",
-          "run": {
-            "serviceId": "naamdev-api",
-            "region": "asia-south1"
-          }
-        },
-        {
-          "source": "**",
-          "run": {
-            "serviceId": "naamdev-partner",
-            "region": "asia-south1"
-          }
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
         }
       ]
     }

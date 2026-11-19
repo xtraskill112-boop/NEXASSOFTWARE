@@ -1,11 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { cookies } from "next/headers";
-import type { PublicSettings } from "@naamdev/api-client";
 import { SplashScreen } from "@naamdev/ui";
 import { Providers } from "@/components/providers";
 import { SITE_URL } from "@/lib/api";
-import { fetchPublic } from "@/lib/server-api";
 import "./globals.css";
 
 // Fonts are self-hosted from npm (Fontsource) so builds never depend on reaching Google Fonts.
@@ -34,10 +31,7 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const jar = await cookies();
-  const locale = jar.get("__session")?.value === "hi" ? "hi" : "en";
-  const settings = await fetchPublic<PublicSettings>("/public/settings", 60);
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   const orgLd = {
     "@context": "https://schema.org",
     "@type": "Bakery",
@@ -45,17 +39,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     url: SITE_URL,
     logo: `${SITE_URL}/icons/icon-512.png`,
     image: `${SITE_URL}/og-image.png`,
-    telephone: settings?.storeProfile.phone || undefined,
-    address: settings?.storeProfile.address || undefined,
     servesCuisine: "Indian sweets",
     priceRange: "₹₹",
     potentialAction: { "@type": "SearchAction", target: `${SITE_URL}/search?q={query}`, "query-input": "required name=query" },
   };
   return (
-    <html lang={locale} suppressHydrationWarning className={`${fraunces.variable} ${jakarta.variable} ${deva.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${fraunces.variable} ${jakarta.variable} ${deva.variable}`}>
       <body className="min-h-dvh">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd).replace(/</g, "\\u003c") }} />
-        <Providers locale={locale} settings={settings}>
+        <Providers>
           <SplashScreen />
           {children}
         </Providers>
