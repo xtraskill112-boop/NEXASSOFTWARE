@@ -55,7 +55,7 @@ of every notification. Setup steps: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 1. Firebase console: keep the project on the **Blaze** plan.
 2. Google Cloud console → IAM → Service accounts: create a key for a service account with the
    **Owner** role and add it to this GitHub repository as the secret `FIREBASE_SERVICE_ACCOUNT`.
-3. Add secrets `NAAMDEV_ADMIN_EMAIL` and `NAAMDEV_ADMIN_PASSWORD` (your first console login).
+3. Add the secret `NAAMDEV_ADMIN_EMAIL` (your console login; Firebase emails you a link to set the password).
 4. GitHub → Actions → **NAAMDEV deploy to Firebase** → Run workflow.
 
 The workflow creates the Firestore database, turns on email/password sign-in, deploys the API and

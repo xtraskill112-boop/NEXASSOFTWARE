@@ -23,8 +23,9 @@ A GitHub Actions workflow does the whole deploy; you only add three secrets and 
    *Create service account* (e.g. `github-deploy`) → role **Owner** → Keys → *Add key* → JSON.
    In GitHub: repository → Settings → Secrets and variables → Actions → *New repository secret*:
    - `FIREBASE_SERVICE_ACCOUNT` — paste the whole JSON file.
-   - `NAAMDEV_ADMIN_EMAIL` — your email for the console (super admin).
-   - `NAAMDEV_ADMIN_PASSWORD` — at least 8 characters with a letter and a number.
+   - `NAAMDEV_ADMIN_EMAIL` — your email for the console (super admin). On the first deploy Firebase
+     emails you a link to set your password (or use *Forgot password?* on the console login page).
+   - Optional `NAAMDEV_ADMIN_PASSWORD` — set the password directly instead (8+ characters, letters and numbers).
 
    Owner is the simplest choice because the workflow enables APIs, creates the Firestore database,
    a runtime service account, secrets, Cloud Run services, Hosting sites and the scheduler. Delete the
@@ -33,7 +34,8 @@ A GitHub Actions workflow does the whole deploy; you only add three secrets and 
    Leave *load the sample sweets catalogue* ticked on the first run if you want a ready-made menu to
    edit; untick it to start with empty categories.
 
-The run summary lists the live addresses. Sign in to the console with `NAAMDEV_ADMIN_EMAIL`, then:
+The run summary lists the live addresses. Set your password from the email, sign in to the console
+with `NAAMDEV_ADMIN_EMAIL`, then:
 
 - **Settings → Store location**: your real shop address, phone, hours and map position.
 - **Settings → Delivery zones**: the PIN codes you deliver to (the sample seed adds Jaipur ones).

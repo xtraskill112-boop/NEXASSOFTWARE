@@ -199,13 +199,15 @@ jobs:
           deploy delivery naamdev-partner "$PARTNER_URL"
 
       - name: Seed data (idempotent)
+        id: seed
         env:
           SEED_ADMIN_EMAIL: ${{ secrets.NAAMDEV_ADMIN_EMAIL }}
+          # Optional: without it the owner sets a password from the reset email sent below.
           SEED_ADMIN_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
           SEED_SAMPLE_CATALOG: ${{ inputs.seed_sample_catalog }}
         run: |
-          if [ -z "$SEED_ADMIN_EMAIL" ] || [ -z "$SEED_ADMIN_PASSWORD" ]; then
-            echo "::error::Add NAAMDEV_ADMIN_EMAIL and NAAMDEV_ADMIN_PASSWORD secrets — they create your first console login."
+          if [ -z "$SEED_ADMIN_EMAIL" ]; then
+            echo "::error::Add the NAAMDEV_ADMIN_EMAIL secret (your email) — it becomes your console login."
             exit 1
           fi
           NODE_ENV=production FIREBASE_PROJECT_ID="$PROJECT_ID" SEED_DEMO_ACCOUNTS=false \
@@ -227,6 +229,22 @@ jobs:
           npx firebase target:apply hosting admin "$ADMIN_SITE" --project "$PROJECT_ID"
           npx firebase target:apply hosting partner "$PARTNER_SITE" --project "$PROJECT_ID"
           npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "$PROJECT_ID" --non-interactive --force
+
+      - name: Email the owner a link to set the console password
+        if: steps.seed.outputs.admin_created == 'true'
+        env:
+          ADMIN_EMAIL: ${{ secrets.NAAMDEV_ADMIN_EMAIL }}
+          WEB_API_KEY: ${{ vars.FIREBASE_WEB_API_KEY || 'AIzaSyBX1iMZlblRmkRgZIc_C7TQrDPtarYLCtw' }}
+        run: |
+          BODY="$(jq -cn --arg email "$ADMIN_EMAIL" '{requestType:"PASSWORD_RESET",email:$email}')"
+          if curl -sf -X POST "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$WEB_API_KEY" \
+               -H "Content-Type: application/json" -d "$BODY" >/dev/null; then
+            echo "Sent. Check your inbox (and spam) for the Firebase email to set your password."
+            echo "SET_PASSWORD_NOTE=Check your email for the link to set your console password." >> "$GITHUB_ENV"
+          else
+            echo "::warning::Couldn't send the email automatically. Open the console login page, type your email and click 'Forgot password?'."
+            echo "SET_PASSWORD_NOTE=Open the console, type your email and click Forgot password? to set your password." >> "$GITHUB_ENV"
+          fi
 
       - name: Background jobs (Cloud Scheduler, every minute)
         run: |
@@ -256,5 +274,7 @@ jobs:
             echo "| Staff console | $ADMIN_URL |"
             echo "| Delivery partner app | $PARTNER_URL |"
             echo ""
-            echo "Sign in to the console with NAAMDEV_ADMIN_EMAIL. Build the Android apps with the *NAAMDEV Android apps* workflow — they open these addresses automatically."
+            echo "Sign in to the console with your NAAMDEV_ADMIN_EMAIL. ${SET_PASSWORD_NOTE:-}"
+            echo ""
+            echo "The Android apps open these addresses automatically."
           } >> "$GITHUB_STEP_SUMMARY"

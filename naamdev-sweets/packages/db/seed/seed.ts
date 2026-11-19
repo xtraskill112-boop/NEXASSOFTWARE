@@ -5,9 +5,11 @@
  * Run against the emulators (FIRESTORE_EMULATOR_HOST/FIREBASE_AUTH_EMULATOR_HOST) or a real project (ADC).
  */
 import "dotenv/config";
+import { randomBytes } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { DEFAULT_SETTINGS, SYSTEM_ROLES, sellingPrice } from "@naamdev/shared";
 import {
-  C, SUB, createUserDoc, db, ensureAuthUser, newId, productDerived, syncClaims,
+  auth, C, SUB, createUserDoc, db, ensureAuthUser, newId, productDerived, syncClaims,
   type Category, type DeliveryPartner, type Inventory, type InventoryBatch, type Product, type ProductVariant, type StaffProfile,
 } from "../src/index";
 import { CATEGORIES, COLLECTIONS, PRODUCTS } from "./catalog";
@@ -334,11 +336,25 @@ async function upsertAccount(opts: { name: string; email: string; phone: string 
 }
 
 async function seedAccounts() {
-  if (!adminPassword) {
-    console.warn("! SEED_ADMIN_PASSWORD not set — skipping super admin creation.");
+  const admin = { name: "Super Admin", email: adminEmail, phone: adminPhone, role: "SUPER_ADMIN", staff: { designation: "Platform Administrator", code: "ND-ADMIN" } };
+  if (adminPassword) {
+    await upsertAccount({ ...admin, password: adminPassword });
+    console.log(isProd ? "✓ super admin" : `✓ super admin ${adminEmail}`);
+  } else if (isProd && process.env.SEED_ADMIN_EMAIL) {
+    // No password given: the login is created with a random password nobody knows, and the owner
+    // sets their own from Firebase's password-reset email (sent by the deploy workflow).
+    let existed = true;
+    try {
+      await auth.getUserByEmail(adminEmail);
+    } catch (err) {
+      if ((err as { code?: string }).code !== "auth/user-not-found") throw err;
+      existed = false;
+    }
+    await upsertAccount({ ...admin, password: `${randomBytes(24).toString("base64url")}Aa1` });
+    if (!existed && process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, "admin_created=true\n");
+    console.log(existed ? "✓ super admin (existing login kept)" : "✓ super admin login created — the owner sets the password from the reset email");
   } else {
-    await upsertAccount({ name: "Super Admin", email: adminEmail, phone: adminPhone, password: adminPassword, role: "SUPER_ADMIN", staff: { designation: "Platform Administrator", code: "ND-ADMIN" } });
-    console.log(`✓ super admin ${adminEmail}`);
+    console.warn("! SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set — skipping super admin creation.");
   }
   if (!seedDemo) return;
   const staff = [
