@@ -1,0 +1,41 @@
+{
+  "name": "naamdev-sweets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NAAMDEV SWEETS \u2014 premium Indian sweets & food delivery ecosystem",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
+    "dev:api": "pnpm --filter @naamdev/api dev",
+    "dev:web": "pnpm --filter @naamdev/web dev",
+    "dev:admin": "pnpm --filter @naamdev/admin dev",
+    "dev:delivery": "pnpm --filter @naamdev/delivery dev",
+    "build": "pnpm -r --filter \"./packages/*\" build && pnpm -r --filter \"./apps/*\" build",
+    "typecheck": "pnpm -r typecheck",
+    "db:seed": "pnpm --filter @naamdev/db seed",
+    "test": "pnpm --filter @naamdev/shared test && pnpm --filter @naamdev/api test",
+    "test:unit": "pnpm --filter @naamdev/shared test",
+    "test:api": "pnpm --filter @naamdev/api test",
+    "test:e2e": "bash scripts/e2e.sh",
+    "test:e2e:only": "playwright test --config tests/e2e/playwright.config.ts --trace off",
+    "assets": "pnpm --filter @naamdev/api exec tsx scripts/generate-assets.ts",
+    "emulators": "firebase emulators:start --project demo-naamdev --only auth,firestore,storage",
+    "db:seed:local": "FIREBASE_PROJECT_ID=demo-naamdev FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 pnpm --filter @naamdev/db seed"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.5",
+    "firebase-tools": "15.34.2",
+    "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp",
+      "esbuild",
+      "protobufjs"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "projects": {
+    "default": "naamdevseets"
+  },
+  "targets": {
+    "naamdevseets": {
+      "hosting": {
+        "web": [
+          "naamdevseets"
+        ],
+        "admin": [
+          "naamdevseets-admin"
+        ],
+        "partner": [
+          "naamdevseets-partner"
+        ]
+      }
+    }
+  }
+}

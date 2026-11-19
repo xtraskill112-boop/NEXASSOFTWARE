@@ -1,0 +1,22 @@
+import { Router } from "express";
+import { requireStaff } from "../../middleware/auth";
+import { adminUploadsRouter } from "../uploads/routes";
+import { adminAnalyticsRouter } from "./analytics";
+import { adminCatalogRouter } from "./catalog";
+import { adminInventoryRouter } from "./inventory";
+import { adminMarketingRouter } from "./marketing";
+import { adminOrdersRouter, adminPaymentsRouter } from "./orders";
+import { adminPeopleRouter } from "./people";
+import { adminSettingsRouter } from "./settings";
+
+export const adminRouter = Router();
+adminRouter.use(requireStaff);
+adminRouter.use(adminAnalyticsRouter);
+adminRouter.use("/orders", adminOrdersRouter);
+adminRouter.use("/payments", adminPaymentsRouter);
+adminRouter.use("/catalog", adminCatalogRouter);
+adminRouter.use("/inventory", adminInventoryRouter);
+adminRouter.use("/marketing", adminMarketingRouter);
+adminRouter.use("/people", adminPeopleRouter);
+adminRouter.use("/uploads", adminUploadsRouter);
+adminRouter.use(adminSettingsRouter);

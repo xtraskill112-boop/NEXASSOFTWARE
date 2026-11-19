@@ -1,0 +1,163 @@
+# Architecture
+
+```
+  customers ──▶ naamdevseets.web.app          ─┐                     ┌─▶ Cloud Run naamdev-web    (Next.js storefront)
+  staff     ──▶ naamdevseets-admin.web.app    ─┼─ Firebase Hosting ──┼─▶ Cloud Run naamdev-admin  (Next.js console)
+  riders    ──▶ naamdevseets-partner.web.app  ─┘   /api/**, /static/**└─▶ Cloud Run naamdev-partner (Next.js PWA)
+                                                        │
+                                                        ▼
+                                         Cloud Run naamdev-api (Express 5) ──▶ Cloud Firestore
+                                                        │                    ├─▶ Firebase Auth (verify ID tokens, accounts, claims)
+                                                        │                    ├─▶ Firebase Storage (uploads)
+                                                        │                    └─▶ FCM (push), SMTP/SMS (optional)
+  Cloud Scheduler ── every minute ── POST /internal/jobs/tick ─┘
+  Razorpay ── webhooks ──▶ /api/v1/payments/razorpay/webhook (optional)
+  Browsers ── Firestore listeners (read-only "live" documents) ── real-time updates
+```
+
+* **One API, three apps.** Each Hosting site forwards `/api/**` to the API, so browsers and the
+  Android apps talk to their own origin. Requests authenticate with the **Firebase ID token** as
+  `Authorization: Bearer …` — no cookies, so there is no CSRF surface. The language preference is the
+  only cookie (`__session`, the one cookie Firebase Hosting forwards).
+* **Sign-in is Firebase Authentication with email + password** (sign-up, email verification, password
+  reset and email change are handled by the Firebase SDK in the browser). The API verifies each token,
+  loads the NAAMDEV profile from `users/{uid}` and applies role permissions. Custom claims
+  (`role`, `staff`, `partner`) mirror the role for the Firestore security rules.
+* **Server components fetch on the server** (`API_INTERNAL_URL`) for SEO pages — home, category,
+  product (with JSON-LD), collections, content pages, sitemap. Signed-in areas (cart, checkout,
+  account, console, partner app) are client components using `@naamdev/api-client`.
+* **pnpm monorepo**: `apps/*` and `packages/*`. Workspace packages ship TypeScript source; the API
+  bundle (tsup) inlines them, Next.js transpiles them.
+
+## Packages
+
+| Package | Contents |
+|---|---|
+| `packages/shared` | Money helpers (integer **paise** everywhere), `priceCart` (GST-inclusive pricing, coupon allocation, loyalty cap), coupon rules, loyalty, order state machine, permissions × system roles, zod schemas shared by client and server, UPI link builder, English/Hindi dictionaries, geo helpers |
+| `packages/db` | Firebase Admin initialisation, Firestore collection map and entity types, transaction helper (`runTx`: reads first, queued writes, per-document write coalescing), account/claims helpers, idempotent seed |
+| `packages/ui` | Tailwind v4 design system: semantic tokens with light/dark themes, buttons, forms, dialogs, status chips, skeletons, empty/error states, brand emblem & splash |
+| `packages/api-client` | Typed fetch client (bearer token, guest-cart token, field-level errors) and Firebase helpers: email/password auth, live-document listeners, Android tracking hand-off |
+
+## Data model (Firestore)
+
+Top-level collections (see `packages/db/src/index.ts`): `users` (+ `addresses`, `wishlist`, `views`,
+`notifications`, `devices`, `loyalty` sub-collections), `roles`, `stores`, `zones` (id = PIN code),
+`categories`, `products` (variants and images embedded), `skus`, `collections`, `inventory`
+(id = variant), `batches`, `stockTransactions`, `suppliers`, `purchases`, `carts`
+(`u_{uid}` / `g_{token}`), `orders` (items, allocations, status history and staff notes embedded),
+`orderKeys` (idempotency), `payments`, `upiReferences` (id = UTR), `refunds`, `returns`,
+`webhookEvents`, `coupons` (id = code), `couponUsages` (id = order), `partners` (id = uid, +
+`documents`), `assignments`, `earnings`, `reviews` (id = `user_product`), `tickets` (+ `messages`),
+`faqs`, `pages`, `banners`, `homeSections`, `settings`, `auditLogs`, `counters`, `jobRuns`, and the
+read-only live documents `liveOrders`, `liveUsers`, `livePartners`, `liveStaff`.
+
+Composite indexes are declared in `firebase/firestore.indexes.json`. Catalogue reads are served from
+an in-memory snapshot per API instance, refreshed when the `meta/catalog` version counters change;
+search (typo-tolerant trigram similarity) runs on that snapshot. Console list views scan the most
+recent 2,000 documents and filter in memory — ample for one shop; see PROGRESS.md for limits.
+
+## Money and pricing — the server decides
+
+All amounts are integers in paise. The client never submits prices: `POST /checkout/quote` and
+`POST /checkout/place-order` re-read variants, stock, coupon, loyalty balance and settings inside a
+Firestore transaction and compute every total with `priceCart`. Prices are GST-inclusive by default
+(5%); tax is back-calculated per line and stored on the order item for invoices.
+
+## Order lifecycle
+
+```
+PENDING ─▶ CONFIRMED ─▶ PROCESSING ─▶ PREPARING ─▶ PACKED ─▶ READY_FOR_PICKUP ─▶ DISPATCHED ─▶ OUT_FOR_DELIVERY ─▶ DELIVERED
+   │            │             │             │           │              │                                                │
+   └────────────┴─────────────┴─────────────┴───────────┴──────────────┴──▶ CANCELLED ─▶ REFUND_INITIATED ─▶ REFUNDED ◀─┘
+```
+
+* Transitions are whitelisted in `packages/shared/src/order-state.ts` and enforced server-side;
+  every change is appended to the order's history, updates the live document and notifies the customer.
+* Kitchen steps need only `orders.process` (packing staff); other transitions need `orders.manage`;
+  cancellation needs `orders.cancel`. Customers can self-cancel while `PENDING`/`CONFIRMED`/`PROCESSING`.
+* **COD** orders are created `CONFIRMED`.
+* **Direct UPI** orders are created `PENDING` with stock reserved for `upi.payWithinMinutes`. The
+  customer pays the shop's UPI ID with a `upi://pay` link (or QR code) carrying the exact amount and
+  `ORDER #<number>` note, then submits the 12-digit UPI reference: the order moves to payment status
+  `VERIFYING` (stock stays reserved, the expiry job skips it). Staff with `payments.verify` check the
+  shop's UPI account: **Payment received** → `PAID` + `CONFIRMED`; **Not found** → the customer gets
+  another payment window to correct the reference or pay. A reference can be used by one order only.
+* **Razorpay** orders are created `PENDING`; they become `CONFIRMED` only after the server verifies the
+  payment (signature + fetched status/amount, or a signed webhook). Unpaid orders are cancelled by
+  the `expire-unpaid-orders` job and stock is released. A payment that arrives after cancellation is
+  refunded automatically (Razorpay) or queued as a manual refund for staff (UPI).
+
+### Duplicate protection
+
+* Every checkout carries a client-generated `idempotencyKey`; `orderKeys/{uid}__{key}` is created in
+  the same transaction as the order, so double taps and retries return the original order.
+* `markOrderPaid` is idempotent (status guard inside the transaction), so the verify call and the
+  webhook can race safely. Webhooks are de-duplicated by event id (`webhookEvents/{id}` create).
+* UPI references are claimed with `upiReferences/{utr}` inside the order transaction.
+
+## Inventory
+
+* Stock is tracked per **variant** (`inventory/{variantId}`: available/reserved) and per **batch**
+  (`batches`: manufacture/expiry dates, supplier, cost).
+* Reservation and allocation run in the order transaction: batches are picked
+  **first-expiry-first-out**, skipping batches within the sale cut-off (6 h) of expiry.
+* On dispatch reservations are committed; on cancel they are released back to the same batches.
+* Every movement (purchase, sale, release, adjustment, wastage, expiry) is a `stockTransactions` entry.
+
+## Delivery dispatch
+
+1. When an order is `PACKED`/`READY_FOR_PICKUP` without an active assignment (or a manager clicks
+   *Auto-assign*), the API offers it to the nearest approved, **online** partner with a recent GPS fix,
+   within `delivery.serviceRadiusKm`, carrying fewer than 2 active orders.
+2. The partner app shows the offer with a countdown; the scheduler re-offers on timeout or rejection.
+3. *Accept → Arrived → Picked up (`DISPATCHED`) → Start trip (`OUT_FOR_DELIVERY`) → Deliver* with the
+   customer's **4-digit delivery OTP** and, for COD, confirmation of the cash collected.
+4. While online, GPS is posted at most every 10 s (or 30 m moved). In the Android partner app a
+   foreground service does this in the background using the rider's Firebase credentials (memory only).
+5. Earnings: base fee + per-km rate, plus a daily incentive; settlements are recorded in the console.
+
+## Realtime
+
+The API writes small **live documents** whose `version` increments on every change; browsers listen
+to them with the Firestore SDK and re-fetch what they show. Security rules allow reads only by the
+right people:
+
+| Document | Readers | Used for |
+|---|---|---|
+| `liveOrders/{orderId}` | the customer, the assigned rider, staff | status changes, rider position on the tracking page |
+| `liveUsers/{uid}` | that user | new in-app notifications (toast + badge) |
+| `livePartners/{uid}` | that rider | new offers, withdrawn offers, assignment changes |
+| `liveStaff/orders` | staff | new-order chime, kitchen board / order lists refresh |
+
+Everything else in Firestore is server-only (rules deny all client reads and writes).
+
+## Background jobs
+
+Cloud Scheduler calls `POST /internal/jobs/tick` every minute with a secret header. Each job runs
+when due, holding a lease in `jobRuns/{name}` so overlapping ticks or instances never run it twice.
+In development the same jobs run on an in-process timer (`JOBS_ENABLED=true`).
+
+| Job | Every | Purpose |
+|---|---|---|
+| `expire-unpaid-orders` | 1 min | Cancel Razorpay/UPI orders past their payment window (not those being verified), release stock |
+| `expire-delivery-offers` | 1 min (15 s in development) | Re-offer timed-out delivery offers |
+| `expire-batches` | 10 min | Write off expired batches |
+| `inventory-alerts` | 30 min | Low-stock and expiring-soon alerts |
+| `cleanup` | 6 h | Abandoned guest carts (30 days), tracking points (90 days), idempotency keys (7 days) |
+
+## Notifications
+
+`notify()` writes an in-app notification, bumps the user's live document and fans out to email, SMS
+and FCM according to preferences and configured providers. Every external attempt is logged in
+`notificationDeliveries` with `SENT`, `FAILED` or `SKIPPED`. The API finishes this work before
+sending its response (bounded to 5 s), because Cloud Run throttles CPU once a response is sent.
+
+## Front-end notes
+
+* Design tokens are defined once in `packages/ui/src/styles/theme.css` (Tailwind v4 `@theme`), with a
+  `.dark` variant toggled by `next-themes`; all three apps share them.
+* Motion uses Framer Motion and respects `prefers-reduced-motion`.
+* Storefront i18n: English/Hindi dictionaries in `packages/shared/src/i18n`; product and category names
+  have Hindi fields; the language is stored in the `__session` cookie so server-rendered pages match.
+* SEO: per-page metadata, Open Graph, canonical URLs, JSON-LD (`Bakery`, `Product`, `BreadcrumbList`,
+  `FAQPage`), `sitemap.xml` and `robots.txt` generated from live data.

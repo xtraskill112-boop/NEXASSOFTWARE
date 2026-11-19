@@ -1,0 +1,45 @@
+name: NAAMDEV SWEETS CI
+
+on:
+  push:
+    paths: ["naamdev-sweets/**", ".github/workflows/naamdev-ci.yml"]
+  pull_request:
+    paths: ["naamdev-sweets/**", ".github/workflows/naamdev-ci.yml"]
+
+defaults:
+  run:
+    working-directory: naamdev-sweets
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: naamdev-sweets/package.json }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: naamdev-sweets/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # The Firestore emulator runs on Java.
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('naamdev-sweets/pnpm-lock.yaml') }}
+      - name: Typecheck all packages
+        run: pnpm -r typecheck
+      - name: Unit tests (pricing, coupons, permissions, state machine)
+        run: pnpm test:unit
+      - name: API integration tests (Firebase Auth/Firestore/Storage emulators)
+        run: pnpm test:api
+      - name: API production build
+        run: pnpm --filter @naamdev/api build
+      - name: End-to-end on the emulators (production builds of all apps; customer → console → rider, UPI)
+        run: |
+          npx playwright install --with-deps chromium
+          ./scripts/e2e.sh
