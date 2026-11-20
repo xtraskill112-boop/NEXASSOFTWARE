@@ -6,7 +6,9 @@
  */
 import "dotenv/config";
 import { randomBytes } from "node:crypto";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_SETTINGS, SYSTEM_ROLES, sellingPrice } from "@naamdev/shared";
 import {
   auth, C, SUB, FieldValue, createUserDoc, db, ensureAuthUser, newId, productDerived, syncClaims,
@@ -28,6 +30,21 @@ const adminPhone = process.env.SEED_ADMIN_PHONE || (isProd ? null : "+9190000000
 // The sample sweets catalogue (products, stock, sample suppliers): always in development, opt-in in production.
 const sampleCatalog = isProd ? process.env.SEED_SAMPLE_CATALOG === "true" : process.env.SEED_SAMPLE_CATALOG !== "false";
 const rupees = (r: number) => Math.round(r * 100);
+
+// Real photographs (scripts/photos): /static/catalog/photos/<name>.webp when one was chosen for that item.
+const PHOTO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../apps/api/public/catalog/photos");
+const photoUrl = (name: string) => (existsSync(path.join(PHOTO_DIR, `${name}.webp`)) ? `/static/catalog/photos/${name}.webp` : null);
+const photoImages = (slug: string, name: string) => {
+  const urls = [photoUrl(slug), photoUrl(`${slug}-2`)].filter((u): u is string => !!u);
+  return urls.map((url, i) => ({ id: newId(), url, alt: i ? `${name} — another view` : name, publicId: null, width: 1200, height: 1200, sortOrder: i }));
+};
+/** The product whose photo stands for each category. */
+const CATEGORY_PHOTO: Record<string, string> = {
+  "kaju-sweets": "kaju-katli", laddu: "motichoor-laddu", barfi: "kesar-pista-barfi", peda: "mathura-peda", rasgulla: "classic-rasgulla",
+  "bengali-sweets": "rasmalai", "gulab-jamun": "gulab-jamun", "milk-sweets": "kalakand", "indian-sweets": "jalebi", "dry-fruits": "royal-mixed-dry-fruits",
+  namkeen: "bikaneri-aloo-bhujia", snacks: "punjabi-samosa", cakes: "eggless-chocolate-truffle", "gift-hampers": "mithai-assortment-box", "special-combos": "family-feast-combo",
+};
+const isSeedArtwork = (url: unknown) => typeof url === "string" && url.startsWith("/static/catalog/") && url.endsWith(".svg");
 const day = 86_400_000;
 const now = () => new Date();
 
@@ -103,7 +120,7 @@ async function seedCatalog() {
     const id = newId();
     const data: Partial<Category> = {
       slug: c.slug, name: c.name, nameHi: c.nameHi, description: c.description, accentColor: c.accent, gstRate: null, sortOrder: i, updatedAt: now(),
-      imageUrl: `/static/catalog/category-${c.slug}.svg`, parentId: null, isActive: true, createdAt: now(),
+      imageUrl: (CATEGORY_PHOTO[c.slug] && photoUrl(CATEGORY_PHOTO[c.slug]!)) || `/static/catalog/category-${c.slug}.svg`, parentId: null, isActive: true, createdAt: now(),
     };
     await db.collection(C.categories).doc(id).set(data);
     catIds.set(c.slug, id);
@@ -151,7 +168,7 @@ async function seedCatalog() {
       isFeatured: !!p.flags?.featured, isBestseller: !!p.flags?.bestseller, isNewArrival: !!p.flags?.newArrival, isActive: true,
       tags: [...(p.tags ?? [])], videoUrl: null, gstRate: null, avgRating: 0, reviewCount: 0, soldCount: 0, viewCount: 0,
       seoTitle: `${p.name} — Buy Online | NAAMDEV SWEETS`, seoDescription: p.short, deletedAt: null,
-      images: [
+      images: photoImages(p.slug, p.name).length ? photoImages(p.slug, p.name) : [
         { id: newId(), url: `/static/catalog/${p.slug}.svg`, alt: p.name, publicId: null, width: 800, height: 800, sortOrder: 0 },
         { id: newId(), url: `/static/catalog/${p.slug}-alt.svg`, alt: `${p.name} — close-up`, publicId: null, width: 800, height: 800, sortOrder: 1 },
       ],
@@ -431,7 +448,8 @@ async function removeDemoAccounts() {
  * One-time data changes for an existing shop, recorded in meta/migrations so each runs once. They set
  * what the owner asked for at that time; anything changed later in the console is left alone.
  */
-const MIGRATIONS: { id: string; run: () => Promise<void> }[] = [
+/** A migration returns false when it can't run yet (it is then tried again on the next seed). */
+const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
   {
     // No GST; ₹20 delivery below ₹100, free from ₹100; no minimum order.
     id: "2026-11-20-no-gst-flat-delivery",
@@ -450,6 +468,32 @@ const MIGRATIONS: { id: string; run: () => Promise<void> }[] = [
       console.log(`  ${writes.length} record(s) updated`);
     },
   },
+  {
+    // Real photographs replace the drawn artwork wherever the owner hasn't uploaded their own.
+    id: "2026-11-21-real-photos",
+    run: async () => {
+      if (!existsSync(path.join(PHOTO_DIR, "credits.json"))) return false;
+      const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+      for (const d of (await db.collection(C.products).get()).docs) {
+        const p = d.data() as { slug: string; name: string; images?: { url: string }[] };
+        const photos = photoImages(p.slug, p.name);
+        if (photos.length && (p.images ?? []).every((im) => isSeedArtwork(im.url))) writes.push((b) => b.update(d.ref, { images: photos, updatedAt: now() }));
+      }
+      for (const d of (await db.collection(C.categories).get()).docs) {
+        const c = d.data() as { slug: string; imageUrl?: string | null };
+        const url = CATEGORY_PHOTO[c.slug] && photoUrl(CATEGORY_PHOTO[c.slug]!);
+        if (url && (!c.imageUrl || isSeedArtwork(c.imageUrl))) writes.push((b) => b.update(d.ref, { imageUrl: url, updatedAt: now() }));
+      }
+      for (const d of (await db.collection(C.banners).get()).docs) {
+        const url = d.data().imageUrl as string | null | undefined;
+        const m = isSeedArtwork(url) ? /^\/static\/catalog\/([a-z0-9-]+)\.svg$/.exec(url as string) : null;
+        const photo = m ? photoUrl(m[1]!) : null;
+        if (photo) writes.push((b) => b.update(d.ref, { imageUrl: photo, updatedAt: now() }));
+      }
+      await commitInChunks(writes);
+      console.log(`  ${writes.length} record(s) now use real photos`);
+    },
+  },
 ];
 
 async function runMigrations() {
@@ -458,7 +502,10 @@ async function runMigrations() {
   for (const m of MIGRATIONS) {
     if (applied[m.id]) continue;
     console.log(`→ migration ${m.id}`);
-    await m.run();
+    if ((await m.run()) === false) {
+      console.log("  not ready yet — will run on a later seed");
+      continue;
+    }
     await ref.set({ applied: { [m.id]: now() } }, { merge: true });
   }
 }

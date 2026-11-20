@@ -14,7 +14,7 @@ export function Footer() {
   const cols = [
     { title: t("footer.company"), links: [["/pages/about", t("footer.about")], ["/contact", t("footer.contact")], ["/faqs", t("footer.faqs")]] },
     { title: "Shop", links: [["/categories", t("nav.categories")], ["/offers", t("nav.offers")], ["/category/gift-hampers", t("nav.hampers")], ["/collections/winter-specials", "Winter specials"]] },
-    { title: t("footer.policies"), links: [["/pages/privacy-policy", t("footer.privacy")], ["/pages/terms", t("footer.terms")], ["/pages/refund-policy", t("footer.refund")], ["/pages/shipping-policy", t("footer.shipping")]] },
+    { title: t("footer.policies"), links: [["/pages/privacy-policy", t("footer.privacy")], ["/pages/terms", t("footer.terms")], ["/pages/refund-policy", t("footer.refund")], ["/pages/shipping-policy", t("footer.shipping")], ["/photo-credits", "Photo credits"]] },
   ];
   const socials = [
     [social.instagram, InstagramIcon, "Instagram"],

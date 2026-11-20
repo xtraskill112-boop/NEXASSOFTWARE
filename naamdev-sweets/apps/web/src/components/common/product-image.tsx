@@ -1,6 +1,7 @@
 import { Emblem, cn } from "@naamdev/ui";
+import { isCatalogPhoto, photoSrcSet } from "@/lib/photos";
 
-/** Product imagery: uploaded photos (WebP via Cloudinary/local) or generated SVG artwork. */
+/** Product imagery: uploaded photos, the catalogue's real photographs (responsive sizes) or SVG artwork. */
 export function ProductImage({ src, alt, className, priority, sizes = 400 }: { src: string | null; alt: string; className?: string; priority?: boolean; sizes?: number }) {
   if (!src)
     return (
@@ -11,7 +12,9 @@ export function ProductImage({ src, alt, className, priority, sizes = 400 }: { s
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
+      src={isCatalogPhoto(src) && sizes <= 360 ? src.replace(/\.webp$/, "-m.webp") : src}
+      srcSet={isCatalogPhoto(src) ? photoSrcSet(src) : undefined}
+      sizes={isCatalogPhoto(src) ? `${sizes}px` : undefined}
       alt={alt}
       width={sizes}
       height={sizes}
