@@ -1,6 +1,7 @@
 "use client";
 import { BrandLoader } from "@naamdev/ui";
-import { PHOTO_PREFIX, usePhotoCredits } from "@/lib/photos";
+import { PHOTO_PREFIX } from "@/lib/photos";
+import { usePhotoCredits } from "@/lib/use-photo-credits";
 
 /** The photographers and licences of the catalogue photos (the licences require this credit). */
 export function PhotoCreditsView() {

@@ -1,6 +1,3 @@
-"use client";
-import { useEffect, useState } from "react";
-
 /**
  * Real catalogue photographs (freely licensed, from Wikimedia Commons) live under this path in three
  * widths: <name>-s.webp (320 px), <name>-m.webp (640 px) and <name>.webp (960 px). Their credits —
@@ -32,12 +29,4 @@ export function loadPhotoCredits() {
     .then((r) => (r.ok ? r.json() : {}))
     .catch(() => ({}));
   return creditsPromise;
-}
-
-export function usePhotoCredits() {
-  const [credits, setCredits] = useState<Record<string, PhotoCredit> | null>(null);
-  useEffect(() => {
-    void loadPhotoCredits().then(setCredits);
-  }, []);
-  return credits;
 }

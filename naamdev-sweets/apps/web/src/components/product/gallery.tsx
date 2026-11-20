@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Expand, PlayCircle, X } from "lucide-react";
 import { cn } from "@naamdev/ui";
-import { isCatalogPhoto, photoName, usePhotoCredits } from "@/lib/photos";
+import { isCatalogPhoto, photoName } from "@/lib/photos";
+import { usePhotoCredits } from "@/lib/use-photo-credits";
 import { ProductImage } from "../common/product-image";
 
 /** Image gallery with hover-zoom (desktop), swipe (mobile), full-screen lightbox and optional video. */
