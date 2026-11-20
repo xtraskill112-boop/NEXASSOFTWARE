@@ -13,6 +13,7 @@ if (!["candidates", "final"].includes(mode) || !outDir) throw new Error("usage: 
 const API = "https://commons.wikimedia.org/w/api.php";
 const HEADERS = { "User-Agent": "NAAMDEV-catalog-photos/1.0 (GitHub Actions; product photos with attribution)" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const API_GAP_MS = 3000;
 const strip = (html) => String(html ?? "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 const OK_LICENSE = /^(cc0|cc[- ]by(-sa)?[- ][\d.]+|public domain|pd\b|pdm)/i;
 
@@ -20,15 +21,17 @@ async function api(params) {
   const u = new URL(API);
   for (const [k, v] of Object.entries({ action: "query", format: "json", formatversion: "2", ...params })) u.searchParams.set(k, v);
   let last = "";
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 7; i++) {
+    await sleep(API_GAP_MS); // stay well inside Commons' rate limits for anonymous clients
     const r = await fetch(u, { headers: HEADERS });
     const text = await r.text();
     if (r.ok && text.trimStart().startsWith("{")) return JSON.parse(text);
-    last = `HTTP ${r.status} ${r.headers.get("content-type")}: ${text.replace(/\s+/g, " ").slice(0, 600)}`;
-    console.error(`Commons API attempt ${i + 1}: ${last}`);
-    await sleep(3000 * (i + 1));
+    last = `HTTP ${r.status}: ${text.replace(/\s+/g, " ").slice(0, 160)}`;
+    const wait = Math.min(120, Number(r.headers.get("retry-after")) || 10 * (i + 1));
+    console.error(`  Commons API attempt ${i + 1}: ${last} — waiting ${wait}s`);
+    await sleep(wait * 1000);
   }
-  throw new Error(`Commons API failed (${last.slice(0, 200)})`);
+  throw new Error(`Commons API failed (${last})`);
 }
 
 function describe(p) {
@@ -55,7 +58,7 @@ async function download(url, file) {
       return null;
     }
     why = `HTTP ${r.status} ${(await r.text()).replace(/\s+/g, " ").slice(0, 160)}`;
-    await sleep(r.status === 429 ? 15000 : 3000 * (i + 1));
+    await sleep(r.status === 429 ? Math.min(120, Number(r.headers.get("retry-after")) || 20) * 1000 : 3000 * (i + 1));
   }
   return why;
 }
@@ -68,7 +71,14 @@ if (mode === "candidates") {
     const seen = new Set();
     const picks = [];
     for (const q of qs) {
-      const data = await api({ generator: "search", gsrsearch: `filetype:bitmap ${q}`, gsrnamespace: "6", gsrlimit: "12", iiurlwidth: "500", ...IMAGE_INFO });
+      if (picks.length >= 3) break; // the second query only when the first found too little
+      let data;
+      try {
+        data = await api({ generator: "search", gsrsearch: `filetype:bitmap ${q}`, gsrnamespace: "6", gsrlimit: "12", iiurlwidth: "500", ...IMAGE_INFO });
+      } catch (e) {
+        console.error(`  ${slug}: search "${q}" failed — ${e.message}`);
+        continue;
+      }
       const pages = (data.query?.pages ?? []).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
       for (const p of pages) {
         const d = describe(p);
@@ -79,7 +89,6 @@ if (mode === "candidates") {
         if (picks.length >= 6) break;
       }
       if (picks.length >= 6) break;
-      await sleep(300);
     }
     mkdirSync(path.join(outDir, slug), { recursive: true });
     const saved = [];
@@ -87,7 +96,7 @@ if (mode === "candidates") {
       const why = await download(d.thumb, path.join(outDir, slug, `${saved.length}.jpg`));
       if (why) console.error(`  skipped ${d.title}: ${why}`);
       else saved.push(d);
-      await sleep(700);
+      await sleep(1200);
     }
     all[slug] = saved;
     console.log(`${slug}: ${saved.length} candidate(s)`);
