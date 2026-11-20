@@ -88,7 +88,9 @@ test.describe("demo logins", () => {
 
     // Payment sheet: opens with UPI and cash on delivery. Nothing is paid or ordered here.
     await page.goto(`${WEB}/cart`);
-    await page.waitForLoadState("networkidle");
+    // The cart has loaded once it shows either its heading or the empty state (live listeners keep
+    // a connection open, so "network idle" never happens).
+    await expect(page.getByText(/^(Your cart|Your cart is empty)$/).first()).toBeVisible();
     const hadKaju = await page.getByRole("button", { name: "Remove Kaju Katli" }).count();
     await page.goto(`${WEB}/product/kaju-katli`);
     await page.getByRole("button", { name: "Buy now" }).first().click();
