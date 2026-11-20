@@ -68,6 +68,9 @@ test("storefront shows the catalogue from the API", async ({ page }) => {
 
   await page.goto(`${WEB}/product/kaju-katli`);
   await expect(page.getByRole("heading", { level: 1, name: "Kaju Katli" })).toBeVisible();
+  // For the record (not checked — the owner may upload their own): which picture the product shows.
+  const src = await page.getByRole("img", { name: "Kaju Katli", exact: true }).first().getAttribute("src", { timeout: 5000 }).catch(() => "not found");
+  console.log(`kaju-katli image: ${src}`);
   await expect(page.getByText(/₹\s?[\d,]+/).first()).toBeVisible();
 
   await page.goto(`${WEB}/search?q=kaju%20katri`);
