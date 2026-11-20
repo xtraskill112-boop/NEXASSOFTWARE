@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 /**
  * Real catalogue photographs (freely licensed, from Wikimedia Commons) live under this path in three
- * widths: <name>-s.webp (360 px), <name>-m.webp (720 px) and <name>.webp (1200 px). Their credits —
+ * widths: <name>-s.webp (320 px), <name>-m.webp (640 px) and <name>.webp (960 px). Their credits —
  * which the licences require us to show — are in credits.json next to them.
  */
 export const PHOTO_PREFIX = "/static/catalog/photos/";
@@ -23,7 +23,7 @@ export const photoName = (url: string) => url.slice(PHOTO_PREFIX.length).replace
 
 export function photoSrcSet(url: string) {
   const base = url.replace(/\.webp$/, "");
-  return `${base}-s.webp 360w, ${base}-m.webp 720w, ${url} 1200w`;
+  return `${base}-s.webp 320w, ${base}-m.webp 640w, ${url} 960w`;
 }
 
 let creditsPromise: Promise<Record<string, PhotoCredit>> | null = null;

@@ -1,6 +1,7 @@
 // Fetches real photographs of the catalogue's sweets from Wikimedia Commons (freely licensed).
 //   node scripts/photos/commons.mjs candidates <outDir>  → up to 6 candidates per product (500 px) + candidates.json
-//   node scripts/photos/commons.mjs final <outDir>       → the files chosen in selection.json (1280 px) + credits.json
+//   node scripts/photos/commons.mjs final <outDir>       → the files chosen in selection.json (960 px) + credits.json
+// Only Commons' standard thumbnail widths are requested (500, 960): other sizes are rate-limited.
 // Only CC0 / public domain / CC BY / CC BY-SA files are accepted; the credit line each license asks for
 // is saved with every photo. Runs in GitHub Actions (the development container can't reach Commons).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -107,15 +108,21 @@ if (mode === "candidates") {
 } else {
   const selection = JSON.parse(readFileSync(path.join(here, "selection.json"), "utf8"));
   const credits = {};
+  const missing = [];
   for (const [name, title] of Object.entries(selection)) {
-    const data = await api({ titles: title, iiurlwidth: "1280", ...IMAGE_INFO });
+    const data = await api({ titles: title, iiurlwidth: "960", ...IMAGE_INFO });
     const d = describe(data.query?.pages?.[0] ?? {});
     if (!d || !OK_LICENSE.test(d.license)) throw new Error(`${name}: ${title} is missing or not freely licensed`);
     const why = await download(d.thumb, path.join(outDir, `${name}.jpg`));
-    if (why) throw new Error(`${name}: download failed: ${why}`);
+    if (why) {
+      console.error(`  ${name}: download failed — ${why.slice(0, 80)}`);
+      missing.push(name);
+      continue;
+    }
     credits[name] = { title: d.title, page: d.page, author: d.author, license: d.license, licenseUrl: d.licenseUrl };
     console.log(`${name}: ${d.title} (${d.license}, ${d.author})`);
-    await sleep(300);
+    await sleep(1500);
   }
   writeFileSync(path.join(outDir, "credits.json"), JSON.stringify(credits, null, 2));
+  if (missing.length) console.log(`MISSING (${missing.length}): ${missing.join(" ")}`);
 }

@@ -12,7 +12,7 @@ export function ProductImage({ src, alt, className, priority, sizes = 400 }: { s
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={isCatalogPhoto(src) && sizes <= 360 ? src.replace(/\.webp$/, "-m.webp") : src}
+      src={isCatalogPhoto(src) && sizes <= 320 ? src.replace(/\.webp$/, "-m.webp") : src}
       srcSet={isCatalogPhoto(src) ? photoSrcSet(src) : undefined}
       sizes={isCatalogPhoto(src) ? `${sizes}px` : undefined}
       alt={alt}

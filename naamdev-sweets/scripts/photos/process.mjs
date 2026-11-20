@@ -1,6 +1,6 @@
 // Turns the downloaded photos (commons.mjs final) into the catalogue's square WebP images:
 //   node scripts/photos/process.mjs <downloadDir>
-// writes apps/api/public/catalog/photos/<name>.webp (1200 px), <name>-m.webp (720), <name>-s.webp (360)
+// writes apps/api/public/catalog/photos/<name>.webp (960 px), <name>-m.webp (640), <name>-s.webp (320)
 // and credits.json. Crops are centred unless scripts/photos/crops.json gives a position for that name
 // ("north", "south", "east", "west", "attention", …).
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -24,8 +24,8 @@ let bytes = 0;
 for (const name of Object.keys(credits).sort()) {
   const input = sharp(path.join(src, `${name}.jpg`)).rotate();
   const position = crops[name] ?? "centre";
-  const square = await input.resize(1200, 1200, { fit: "cover", position }).toBuffer();
-  for (const [suffix, size, quality] of [["", 1200, 78], ["-m", 720, 76], ["-s", 360, 72]]) {
+  const square = await input.resize(960, 960, { fit: "cover", position, withoutEnlargement: false }).toBuffer();
+  for (const [suffix, size, quality] of [["", 960, 80], ["-m", 640, 76], ["-s", 320, 72]]) {
     const file = path.join(out, `${name}${suffix}.webp`);
     const info = await sharp(square).resize(size, size).webp({ quality, effort: 6 }).toFile(file);
     bytes += info.size;

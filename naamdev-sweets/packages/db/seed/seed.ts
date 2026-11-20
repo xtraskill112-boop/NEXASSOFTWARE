@@ -36,7 +36,7 @@ const PHOTO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const photoUrl = (name: string) => (existsSync(path.join(PHOTO_DIR, `${name}.webp`)) ? `/static/catalog/photos/${name}.webp` : null);
 const photoImages = (slug: string, name: string) => {
   const urls = [photoUrl(slug), photoUrl(`${slug}-2`)].filter((u): u is string => !!u);
-  return urls.map((url, i) => ({ id: newId(), url, alt: i ? `${name} — another view` : name, publicId: null, width: 1200, height: 1200, sortOrder: i }));
+  return urls.map((url, i) => ({ id: newId(), url, alt: i ? `${name} — another view` : name, publicId: null, width: 960, height: 960, sortOrder: i }));
 };
 /** The product whose photo stands for each category. */
 const CATEGORY_PHOTO: Record<string, string> = {
