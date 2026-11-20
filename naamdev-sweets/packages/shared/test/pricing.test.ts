@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, priceCart, type CouponRule, type PricingLineInput } from "../src";
 
-const checkout = DEFAULT_SETTINGS.checkout;
+// Fixed rules for these tests (the shop's own defaults can change): ₹199 minimum, ₹49 delivery
+// below ₹999, 5% GST included in prices.
+const checkout = { ...DEFAULT_SETTINGS.checkout, minOrderPaise: 19900, freeDeliveryThresholdPaise: 99900, baseDeliveryFeePaise: 4900, defaultGstRate: 5, pricesIncludeTax: true };
 const loyalty = DEFAULT_SETTINGS.loyalty;
 
 const line = (over: Partial<PricingLineInput> = {}): PricingLineInput => ({

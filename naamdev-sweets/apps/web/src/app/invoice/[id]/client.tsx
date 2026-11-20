@@ -32,7 +32,7 @@ export default function InvoicePage() {
           {s?.storeProfile.fssaiLicense && <p>FSSAI: {s.storeProfile.fssaiLicense}</p>}
         </div>
         <div className="text-right">
-          <p className="font-display text-2xl font-bold text-maroon-800">TAX INVOICE</p>
+          <p className="font-display text-2xl font-bold text-maroon-800">{T.taxPaise > 0 ? "TAX INVOICE" : "INVOICE"}</p>
           <p className="mt-2">Invoice no: <b>{order.invoiceNumber ?? "—"}</b></p>
           <p>Order no: <b>{order.orderNumber}</b></p>
           <p>Date: {new Date(order.confirmedAt ?? order.placedAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}</p>
@@ -64,10 +64,10 @@ export default function InvoicePage() {
         {T.couponDiscountPaise > 0 && <div className="flex justify-between"><span>Coupon {order.couponCode}</span><span>−{formatINR(T.couponDiscountPaise)}</span></div>}
         {T.loyaltyDiscountPaise > 0 && <div className="flex justify-between"><span>Mithaas points</span><span>−{formatINR(T.loyaltyDiscountPaise)}</span></div>}
         <div className="flex justify-between"><span>Delivery</span><span>{T.deliveryFeePaise ? formatINR(T.deliveryFeePaise) : "Free"}</span></div>
-        <div className="flex justify-between text-neutral-500"><span>CGST</span><span>{formatINR(Math.floor(T.taxPaise / 2))}</span></div>
-        <div className="flex justify-between text-neutral-500"><span>SGST</span><span>{formatINR(T.taxPaise - Math.floor(T.taxPaise / 2))}</span></div>
+        {T.taxPaise > 0 && <div className="flex justify-between text-neutral-500"><span>CGST</span><span>{formatINR(Math.floor(T.taxPaise / 2))}</span></div>}
+        {T.taxPaise > 0 && <div className="flex justify-between text-neutral-500"><span>SGST</span><span>{formatINR(T.taxPaise - Math.floor(T.taxPaise / 2))}</span></div>}
         <div className="flex justify-between border-t-2 border-maroon-800 pt-2 text-base font-bold"><span>Total</span><span>{formatINR(T.totalPaise)}</span></div>
-        {s?.checkout.pricesIncludeTax && <p className="text-right text-[11px] text-neutral-500">Prices are inclusive of GST.</p>}
+        {T.taxPaise > 0 && s?.checkout.pricesIncludeTax && <p className="text-right text-[11px] text-neutral-500">Prices are inclusive of GST.</p>}
       </div>
       <p className="mt-12 text-center text-[11px] text-neutral-500">This is a computer-generated invoice. Thank you for choosing NAAMDEV SWEETS — mithaas that feels like home.</p>
     </div>

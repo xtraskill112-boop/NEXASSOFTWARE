@@ -202,6 +202,36 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     await ctx.close();
   });
 
+  test("store owner changes the store location (decimal coordinates, time and PIN)", async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const p = await ctx.newPage();
+    await p.goto(`${ADMIN}/login`);
+    await p.getByLabel("Work email").fill("owner@naamdevsweets.local");
+    await p.getByLabel("Password").fill(PASSWORD);
+    await p.getByRole("button", { name: "Sign in" }).click();
+    await expect(p.getByRole("heading", { name: "Store overview" })).toBeVisible();
+    await p.goto(`${ADMIN}/settings`);
+    await p.getByRole("tab", { name: "Store location" }).click();
+    await p.getByLabel("Latitude").fill("26.912434");
+    await p.getByLabel("Longitude").fill("75.787270");
+    await p.getByLabel("Address", { exact: true }).fill("Shop 4, MI Road");
+    await p.getByLabel("Opens at").fill("07:30");
+    await p.getByRole("button", { name: "Save store" }).click();
+    await expect(p.getByText("Store updated")).toBeVisible();
+    await p.reload();
+    await p.getByRole("tab", { name: "Store location" }).click();
+    await expect(p.getByLabel("Latitude")).toHaveValue("26.912434");
+    await expect(p.getByLabel("Longitude")).toHaveValue("75.78727");
+    await expect(p.getByLabel("Address", { exact: true })).toHaveValue("Shop 4, MI Road");
+    await expect(p.getByLabel("Opens at")).toHaveValue("07:30");
+    // Put the kitchen back where the other tests expect it.
+    await p.getByLabel("Latitude").fill("26.9157");
+    await p.getByLabel("Longitude").fill("75.8069");
+    await p.getByRole("button", { name: "Save store" }).click();
+    await expect(p.getByText("Store updated").last()).toBeVisible();
+    await ctx.close();
+  });
+
   test("staff change their own password; the old one stops working", async ({ browser }) => {
     const NEW_PASSWORD = "Packing@2026x";
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });

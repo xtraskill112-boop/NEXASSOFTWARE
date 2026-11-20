@@ -84,7 +84,7 @@ async function seedStoreAndZones() {
       .filter(([pincode]) => !existing.has(pincode))
       .map(([pincode, area, eta]) => (b: FirebaseFirestore.WriteBatch) =>
         b.set(db.collection(C.zones).doc(pincode), {
-          pincode, area, city: "Jaipur", etaMinutes: eta, deliveryFeePaise: eta >= 55 ? 6900 : null, isActive: true, createdAt: now(), updatedAt: now(),
+          pincode, area, city: "Jaipur", etaMinutes: eta, deliveryFeePaise: null, isActive: true, createdAt: now(), updatedAt: now(),
         }),
       ),
   );
@@ -102,7 +102,7 @@ async function seedCatalog() {
     }
     const id = newId();
     const data: Partial<Category> = {
-      slug: c.slug, name: c.name, nameHi: c.nameHi, description: c.description, accentColor: c.accent, gstRate: c.gst, sortOrder: i, updatedAt: now(),
+      slug: c.slug, name: c.name, nameHi: c.nameHi, description: c.description, accentColor: c.accent, gstRate: null, sortOrder: i, updatedAt: now(),
       imageUrl: `/static/catalog/category-${c.slug}.svg`, parentId: null, isActive: true, createdAt: now(),
     };
     await db.collection(C.categories).doc(id).set(data);
@@ -149,7 +149,7 @@ async function seedCatalog() {
       manufacturingInfo: "Manufactured & packed by Naamdev Sweets Pvt. Ltd., Flagship Kitchen, MI Road, Jaipur 302001. FSSAI Lic. No. to be updated by the business.",
       shelfLifeDays: p.shelfLifeDays, storageInstructions: p.storage, foodType: p.foodType ?? "VEG",
       isFeatured: !!p.flags?.featured, isBestseller: !!p.flags?.bestseller, isNewArrival: !!p.flags?.newArrival, isActive: true,
-      tags: [...(p.tags ?? [])], videoUrl: null, gstRate: p.gstRate ?? null, avgRating: 0, reviewCount: 0, soldCount: 0, viewCount: 0,
+      tags: [...(p.tags ?? [])], videoUrl: null, gstRate: null, avgRating: 0, reviewCount: 0, soldCount: 0, viewCount: 0,
       seoTitle: `${p.name} — Buy Online | NAAMDEV SWEETS`, seoDescription: p.short, deletedAt: null,
       images: [
         { id: newId(), url: `/static/catalog/${p.slug}.svg`, alt: p.name, publicId: null, width: 800, height: 800, sortOrder: 0 },
@@ -250,7 +250,7 @@ async function seedMarketing() {
       { title: "Wedding season gifting", titleHi: "शादी के मौसम के उपहार", eyebrow: "Up to 20% off · SHAGUN20", subtitle: "Royal hampers and shagun boxes, personalised for your big day.", ctaLabel: "Explore hampers", ctaLink: "/collections/wedding-season", theme: "maroon", placement: "HERO", sortOrder: 1, imageUrl: "/static/catalog/royal-celebration-hamper.svg" },
       { title: "The Kaju Katli everyone talks about", titleHi: "सबकी पसंदीदा काजू कतली", eyebrow: "Bestseller · 10% off with KAJU10", subtitle: "Hand-sorted W240 cashews, silver vark, made fresh every morning.", ctaLabel: "Order now", ctaLink: "/product/kaju-katli", theme: "royal", placement: "HERO", sortOrder: 2, imageUrl: "/static/catalog/kaju-katli.svg" },
       { title: "₹100 off your first order", subtitle: "Use WELCOME100 on orders above ₹499", ctaLabel: "WELCOME100", ctaLink: "/offers", theme: "pistachio", placement: "OFFER_STRIP", sortOrder: 0 },
-      { title: "Free delivery above ₹999", subtitle: "Across all serviceable Jaipur pincodes", ctaLabel: "Learn more", ctaLink: "/pages/shipping-policy", theme: "gold", placement: "OFFER_STRIP", sortOrder: 1 },
+      { title: "Free delivery above ₹100", subtitle: "₹20 delivery on smaller orders", ctaLabel: "Learn more", ctaLink: "/pages/shipping-policy", theme: "gold", placement: "OFFER_STRIP", sortOrder: 1 },
       { title: "Fresh from the kadhai", subtitle: "Jalebi, samosa and kachori fried to order", ctaLabel: "Order hot snacks", ctaLink: "/category/snacks", theme: "rose", placement: "PROMO_GRID", sortOrder: 0, imageUrl: "/static/catalog/jalebi.svg" },
       { title: "Eggless fusion cakes", subtitle: "Rasmalai cake, gulab jamun cheesecake & more", ctaLabel: "See cakes", ctaLink: "/category/cakes", theme: "midnight", placement: "PROMO_GRID", sortOrder: 1, imageUrl: "/static/catalog/rasmalai-fusion-cake.svg" },
     ];
@@ -427,6 +427,42 @@ async function removeDemoAccounts() {
   console.log(`✓ removed ${removed} demo login(s)`);
 }
 
+/**
+ * One-time data changes for an existing shop, recorded in meta/migrations so each runs once. They set
+ * what the owner asked for at that time; anything changed later in the console is left alone.
+ */
+const MIGRATIONS: { id: string; run: () => Promise<void> }[] = [
+  {
+    // No GST; ₹20 delivery below ₹100, free from ₹100; no minimum order.
+    id: "2026-11-20-no-gst-flat-delivery",
+    run: async () => {
+      const ref = db.collection(C.settings).doc("checkout");
+      const current = ((await ref.get()).data()?.value ?? {}) as Record<string, unknown>;
+      await ref.set({ value: { ...current, defaultGstRate: 0, baseDeliveryFeePaise: 2000, freeDeliveryThresholdPaise: 10000, minOrderPaise: 0 }, updatedById: null, updatedAt: now() });
+      const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+      for (const col of [C.categories, C.products]) {
+        for (const d of (await db.collection(col).where("gstRate", "!=", null).get()).docs) writes.push((b) => b.update(d.ref, { gstRate: null, updatedAt: now() }));
+      }
+      for (const d of (await db.collection(C.zones).where("deliveryFeePaise", "!=", null).get()).docs) writes.push((b) => b.update(d.ref, { deliveryFeePaise: null, updatedAt: now() }));
+      for (const d of (await db.collection(C.banners).where("title", "==", "Free delivery above ₹999").get()).docs)
+        writes.push((b) => b.update(d.ref, { title: "Free delivery above ₹100", subtitle: "₹20 delivery on smaller orders", updatedAt: now() }));
+      await commitInChunks(writes);
+      console.log(`  ${writes.length} record(s) updated`);
+    },
+  },
+];
+
+async function runMigrations() {
+  const ref = db.collection("meta").doc("migrations");
+  const applied = ((await ref.get()).data()?.applied ?? {}) as Record<string, unknown>;
+  for (const m of MIGRATIONS) {
+    if (applied[m.id]) continue;
+    console.log(`→ migration ${m.id}`);
+    await m.run();
+    await ref.set({ applied: { [m.id]: now() } }, { merge: true });
+  }
+}
+
 export async function seed() {
   console.log(`Seeding NAAMDEV SWEETS (${isProd ? "production" : "development"})…`);
   await seedRoles();
@@ -435,6 +471,7 @@ export async function seed() {
   await seedMarketing();
   await seedContent();
   await seedAccounts();
+  await runMigrations();
   // Tell running API servers the catalogue changed, so they reload it instead of keeping an older copy.
   await db.collection("meta").doc("catalog").set({ products: FieldValue.increment(1), stock: FieldValue.increment(1) }, { merge: true });
   console.log("Done.");

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { C, countOf, db, FieldValue, getDoc, getDocs, type Coupon, type CouponUsage, type InventoryBatch } from "@naamdev/db";
+import { DEFAULT_SETTINGS } from "@naamdev/shared";
+import { setSetting } from "../src/lib/settings";
 import { addAddress, Client, inventoryOf, newCustomer, orderDoc, placeCodOrder, settle, userDoc, variantBySlug } from "./helpers";
 
 describe("cart", () => {
@@ -63,11 +65,29 @@ describe("cart", () => {
   });
 
   it("enforces the minimum order value", async () => {
+    // The shop has no minimum by default; set ₹199 for this test, then restore the defaults.
+    await setSetting("checkout", { ...DEFAULT_SETTINGS.checkout, minOrderPaise: 19900 });
+    try {
+      const { c } = await newCustomer();
+      const v = await variantBySlug("mishti-doi", 0); // ₹80 < ₹199 minimum
+      const r = await c.post("/api/v1/cart/items", { variantId: v.id, quantity: 1 });
+      expect(r.body.cart.canCheckout).toBe(false);
+      expect(r.body.cart.pricing.meetsMinimumOrder).toBe(false);
+    } finally {
+      await setSetting("checkout", DEFAULT_SETTINGS.checkout);
+    }
+  });
+
+  it("charges ₹20 delivery below ₹100 and delivers free from ₹100, with no GST", async () => {
     const { c } = await newCustomer();
-    const v = await variantBySlug("mishti-doi", 0); // ₹80 < ₹199 minimum
-    const r = await c.post("/api/v1/cart/items", { variantId: v.id, quantity: 1 });
-    expect(r.body.cart.canCheckout).toBe(false);
-    expect(r.body.cart.pricing.meetsMinimumOrder).toBe(false);
+    const v = await variantBySlug("mishti-doi", 0); // ₹80
+    const small = await c.post("/api/v1/cart/items", { variantId: v.id, quantity: 1 });
+    expect(small.body.cart.canCheckout).toBe(true);
+    expect(small.body.cart.pricing.deliveryFeePaise).toBe(2000);
+    expect(small.body.cart.pricing.taxPaise).toBe(0);
+    const big = await c.post("/api/v1/cart/items", { variantId: v.id, quantity: 1 }); // ₹160
+    expect(big.body.cart.pricing.deliveryFeePaise).toBe(0);
+    expect(big.body.cart.pricing.deliveryFeeWaived).toBe(true);
   });
 });
 

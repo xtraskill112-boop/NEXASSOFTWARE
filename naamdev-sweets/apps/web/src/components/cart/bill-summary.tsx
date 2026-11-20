@@ -36,7 +36,7 @@ export function BillSummary({ pricing, couponCode }: { pricing: PricingResult; c
       {pricing.couponDiscountPaise > 0 && row(<>{t("cart.couponDiscount")} {couponCode && <span className="ml-1 rounded bg-pista-400/15 px-1.5 py-0.5 font-mono text-[11px] font-bold text-pista-600">{couponCode}</span>}</>, <span className="text-pista-600 dark:text-pista-400">−{formatINR(pricing.couponDiscountPaise)}</span>)}
       {pricing.loyaltyDiscountPaise > 0 && row(`${t("cart.loyaltyDiscount")} (${pricing.pointsRedeemed} pts)`, <span className="text-pista-600 dark:text-pista-400">−{formatINR(pricing.loyaltyDiscountPaise)}</span>)}
       {row(t("cart.deliveryFee"), pricing.deliveryFeePaise === 0 ? <span className="text-pista-600 dark:text-pista-400">{t("common.free")}</span> : formatINR(pricing.deliveryFeePaise))}
-      {row(pricing.taxIncluded ? t("cart.taxesIncluded") : t("cart.taxes"), formatINR(pricing.taxPaise), pricing.taxIncluded ? "opacity-75" : "")}
+      {pricing.taxPaise > 0 && row(pricing.taxIncluded ? t("cart.taxesIncluded") : t("cart.taxes"), formatINR(pricing.taxPaise), pricing.taxIncluded ? "opacity-75" : "")}
       <div className="my-3 border-t border-dashed border-line" />
       <div className="flex items-center justify-between"><span className="font-display text-lg font-semibold text-ink">{t("cart.toPay")}</span><span className="text-xl font-extrabold tabular-nums text-ink">{formatINR(pricing.totalPaise)}</span></div>
       {pricing.totalSavingsPaise > 0 && (

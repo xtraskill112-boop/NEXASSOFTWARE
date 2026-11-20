@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Plus, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, MapPin, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge, Button, Card, Field, Input, Modal, Pagination, Segmented, Skeleton, Switch } from "@naamdev/ui";
 import { DataTable, Guard, PageHeader, confirmAction } from "@/components/kit";
@@ -74,17 +74,92 @@ export default function SettingsPage() {
   );
 }
 
+const STORE_FIELDS = ["name", "phone", "addressLine", "city", "state", "pincode", "lat", "lng", "openingTime", "closingTime", "email"] as const;
+type StoreDraft = Record<(typeof STORE_FIELDS)[number], string>;
+
+/**
+ * The kitchen's address and map position. Every box keeps exactly what is typed (a number box that
+ * converts on each key press would drop the "." while typing 26.91…); values are checked on save.
+ */
 function StoreForm() {
-  const { data, reload } = useResource<{ store: Record<string, string | number | boolean | null> | null }>("/admin/store");
-  const [s, setS] = useState<Record<string, string | number | boolean | null> | null>(null);
-  useEffect(() => { if (data?.store) setS(data.store); }, [data]);
+  const { data, reload } = useResource<{ store: Record<string, unknown> | null }>("/admin/store");
+  const [s, setS] = useState<StoreDraft | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
+  useEffect(() => {
+    if (data?.store) setS(Object.fromEntries(STORE_FIELDS.map((k) => [k, data.store![k] == null ? "" : String(data.store![k])])) as StoreDraft);
+  }, [data]);
+  if (data && !data.store) return <Card className="max-w-3xl p-6 text-sm text-ink-soft">No store record yet. Run the deploy once to create it.</Card>;
   if (!s) return <Skeleton className="h-64" />;
-  const f = (k: string, label: string, type = "text") => <Field label={label}>{(p) => <Input {...p} type={type} step="any" value={String(s[k] ?? "")} onChange={(e) => setS({ ...s, [k]: type === "number" ? Number(e.target.value) : e.target.value })} />}</Field>;
+
+  const field = (k: keyof StoreDraft, label: string, extra: Partial<React.ComponentProps<typeof Input>> = {}, hint?: string) => (
+    <Field label={label} error={errors[k]} hint={hint}>{(p) => <Input {...p} {...extra} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} />}</Field>
+  );
+  const lat = Number(s.lat);
+  const lng = Number(s.lng);
+  const validPoint = s.lat.trim() !== "" && s.lng.trim() !== "" && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) return void toast.error("Location isn't available on this device");
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setS((x) => x && { ...x, lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) });
+        setLocating(false);
+        toast.success("Filled in your current location — check it on the map, then save");
+      },
+      (err) => {
+        setLocating(false);
+        toast.error(err.code === 1 ? "Location permission was denied" : "Couldn't get your location — type the coordinates instead");
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+
+  const save = async () => {
+    const local: Record<string, string> = {};
+    if (s.lat.trim() === "" || !Number.isFinite(lat) || Math.abs(lat) > 90) local.lat = "Enter a latitude such as 26.915700";
+    if (s.lng.trim() === "" || !Number.isFinite(lng) || Math.abs(lng) > 180) local.lng = "Enter a longitude such as 75.806900";
+    setErrors(local);
+    if (Object.keys(local).length) return void toast.error("Check the highlighted fields");
+    setSaving(true);
+    try {
+      await api.put("/admin/store", {
+        name: s.name.trim(), addressLine: s.addressLine.trim(), city: s.city.trim(), state: s.state.trim(), pincode: s.pincode.trim(), lat, lng,
+        phone: s.phone.trim(), email: s.email.trim() || null, openingTime: s.openingTime, closingTime: s.closingTime, isActive: data?.store?.isActive !== false,
+      });
+      toast.success("Store updated");
+      void reload();
+    } catch (e) {
+      if (e instanceof ApiError) setErrors(e.fieldErrors);
+      toast.error(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card className="max-w-3xl p-6">
-      <p className="mb-4 text-sm text-muted">The kitchen location anchors delivery distance, partner pay and ETAs. Get coordinates by right-clicking the spot in Google Maps.</p>
-      <div className="grid gap-4 sm:grid-cols-2">{f("name", "Store name")}{f("phone", "Phone")}{f("addressLine", "Address")}{f("city", "City")}{f("state", "State")}{f("pincode", "PIN code")}{f("lat", "Latitude", "number")}{f("lng", "Longitude", "number")}{f("openingTime", "Opens (HH:MM)")}{f("closingTime", "Closes (HH:MM)")}{f("email", "Email")}</div>
-      <Button className="mt-6" onClick={async () => { try { await api.put("/admin/store", { name: s.name, addressLine: s.addressLine, city: s.city, state: s.state, pincode: s.pincode, lat: Number(s.lat), lng: Number(s.lng), phone: s.phone, email: s.email || null, openingTime: s.openingTime, closingTime: s.closingTime, isActive: s.isActive ?? true }); toast.success("Store updated"); void reload(); } catch (e) { toast.error(errorMessage(e)); } }}>Save store</Button>
+      <p className="mb-4 text-sm text-muted">The kitchen location anchors delivery distance, partner pay and ETAs. At the shop, tap <b>Use my current location</b>; otherwise right-click the spot in Google Maps and copy the two numbers.</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {field("name", "Store name")}
+        {field("phone", "Phone", { type: "tel", inputMode: "tel" })}
+        {field("addressLine", "Address")}
+        {field("city", "City")}
+        {field("state", "State")}
+        {field("pincode", "PIN code", { inputMode: "numeric", maxLength: 6 })}
+        {field("lat", "Latitude", { inputMode: "decimal", placeholder: "26.915700" })}
+        {field("lng", "Longitude", { inputMode: "decimal", placeholder: "75.806900" })}
+        {field("openingTime", "Opens at", { type: "time" })}
+        {field("closingTime", "Closes at", { type: "time" })}
+        {field("email", "Email (optional)", { type: "email" })}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button variant="outline" size="sm" loading={locating} onClick={useMyLocation}><MapPin className="h-4 w-4" />Use my current location</Button>
+        {validPoint && <a href={`https://www.google.com/maps?q=${lat},${lng}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-saffron-700 hover:underline">Check on Google Maps<ExternalLink className="h-3.5 w-3.5" /></a>}
+      </div>
+      <Button className="mt-6" loading={saving} onClick={() => void save()}>Save store</Button>
     </Card>
   );
 }

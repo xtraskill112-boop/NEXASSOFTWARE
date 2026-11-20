@@ -105,14 +105,14 @@ export type SettingKey = keyof SettingsMap;
 
 export const DEFAULT_SETTINGS: SettingsMap = {
   checkout: {
-    minOrderPaise: 19900,
-    freeDeliveryThresholdPaise: 99900,
-    baseDeliveryFeePaise: 4900,
+    minOrderPaise: 0,
+    freeDeliveryThresholdPaise: 10000,
+    baseDeliveryFeePaise: 2000,
     codEnabled: true,
     codMaxOrderPaise: 500000,
     onlinePaymentsEnabled: true,
     pricesIncludeTax: true,
-    defaultGstRate: 5,
+    defaultGstRate: 0,
     reservationMinutes: 15,
     maxQtyPerItem: 20,
     preparationMinutes: 25,
