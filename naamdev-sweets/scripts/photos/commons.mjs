@@ -19,12 +19,16 @@ const OK_LICENSE = /^(cc0|cc[- ]by(-sa)?[- ][\d.]+|public domain|pd\b|pdm)/i;
 async function api(params) {
   const u = new URL(API);
   for (const [k, v] of Object.entries({ format: "json", formatversion: "2", ...params })) u.searchParams.set(k, v);
+  let last = "";
   for (let i = 0; i < 4; i++) {
     const r = await fetch(u, { headers: HEADERS });
-    if (r.ok) return r.json();
-    await sleep(2000 * (i + 1));
+    const text = await r.text();
+    if (r.ok && text.trimStart().startsWith("{")) return JSON.parse(text);
+    last = `HTTP ${r.status} ${r.headers.get("content-type")}: ${text.replace(/\s+/g, " ").slice(0, 600)}`;
+    console.error(`Commons API attempt ${i + 1}: ${last}`);
+    await sleep(3000 * (i + 1));
   }
-  throw new Error(`Commons API failed: ${u}`);
+  throw new Error(`Commons API failed (${last.slice(0, 200)})`);
 }
 
 function describe(p) {
