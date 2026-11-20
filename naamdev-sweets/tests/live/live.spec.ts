@@ -2,8 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 /**
  * Read-only check of the deployed shop: pages load their data from the API in a real browser
- * (CORS, Content-Security-Policy, API address), and the demo logins can sign in to each app.
- * It creates no orders, accounts or other data. Run by .github/workflows/naamdev-live-check.yml.
+ * (CORS, Content-Security-Policy, API address), the demo logins can sign in to each app, and the
+ * payment sheet opens with UPI and cash on delivery. It creates no orders, accounts or other data
+ * (the item it puts in the demo customer's cart to reach checkout is removed again). Run by .github/workflows/naamdev-live-check.yml.
  */
 const WEB = process.env.LIVE_WEB_URL ?? "https://naamdevseets.web.app";
 const ADMIN = process.env.LIVE_ADMIN_URL ?? "https://naamdevseets-admin.web.app";
@@ -84,6 +85,32 @@ test.describe("demo logins", () => {
     await expect(page).not.toHaveURL(/\/login/);
     await page.goto(`${WEB}/account/orders`);
     await expect(page.getByRole("heading", { name: "My orders" })).toBeVisible();
+
+    // Payment sheet: opens with UPI and cash on delivery. Nothing is paid or ordered here.
+    await page.goto(`${WEB}/cart`);
+    await page.waitForLoadState("networkidle");
+    const hadKaju = await page.getByRole("button", { name: "Remove Kaju Katli" }).count();
+    await page.goto(`${WEB}/product/kaju-katli`);
+    await page.getByRole("button", { name: "Buy now" }).first().click();
+    await expect(page.getByRole("heading", { name: "Checkout" })).toBeVisible();
+    await expect(page.getByText(/Estimated delivery/)).toBeVisible();
+    await page.getByRole("button", { name: /Proceed to pay/ }).last().click();
+    const sheet = page.getByRole("dialog", { name: "Payment" });
+    await expect(sheet.getByText("NAAMDEV SWEETS", { exact: true })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: /^Pay ₹[\d,.]+ with UPI$/ })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: /Cash on Delivery/ })).toBeVisible();
+    await sheet.getByRole("button", { name: "Close" }).first().click();
+    await expect(sheet).toHaveCount(0);
+    // Leave the demo cart as it was.
+    if (!hadKaju) {
+      await page.goto(`${WEB}/cart`);
+      const remove = page.getByRole("button", { name: "Remove Kaju Katli" });
+      await expect(remove.first()).toBeVisible();
+      while (await remove.count()) {
+        await remove.first().click();
+        await page.waitForTimeout(1500);
+      }
+    }
     expect(problems).toEqual([]);
   });
 
