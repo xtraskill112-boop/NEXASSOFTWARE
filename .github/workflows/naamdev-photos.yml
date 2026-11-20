@@ -25,7 +25,8 @@ jobs:
         with: { node-version: 22 }
       - name: Fetch from Wikimedia Commons
         run: |
-          MODE=candidates; [ -f scripts/photos/selection.json ] && MODE=final
+          # queries-extra.json → search a few more items; otherwise selection.json → download the chosen ones.
+          MODE=candidates; [ -f scripts/photos/selection.json ] && [ ! -f scripts/photos/queries-extra.json ] && MODE=final
           echo "MODE=$MODE" >> "$GITHUB_ENV"
           node scripts/photos/commons.mjs "$MODE" "$RUNNER_TEMP/photos"
           tar -czf "$RUNNER_TEMP/photos-$MODE.tgz" -C "$RUNNER_TEMP/photos" .

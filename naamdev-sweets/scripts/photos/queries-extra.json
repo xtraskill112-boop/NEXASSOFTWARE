@@ -1,0 +1,15 @@
+{
+  "white-barfi": ["milk barfi", "white barfi", "mawa barfi plain"],
+  "vanilla-barfi": ["vanilla burfi", "plain barfi"],
+  "mava-katli": ["mawa katli", "khoya barfi", "mawa barfi"],
+  "besan-chakki": ["besan chakki", "besan barfi", "besan burfi"],
+  "dal-kachori": ["dal kachori", "khasta kachori"],
+  "kolhapuri-namkeen": ["kolhapuri chivda", "spicy chivda", "farsan"],
+  "ratlami-namkeen": ["ratlami sev", "sev namkeen"],
+  "moth-bhujia": ["moth bhujia", "bhujia"],
+  "haath-wali-namkeen": ["sev bhujia", "bhujia sev"],
+  "tasty-namkeen": ["namkeen", "indian savoury snack mix"],
+  "mirchi-bada": ["mirchi vada", "mirchi bada", "mirchi bajji"],
+  "khurma": ["shakarpara", "shankarpali", "khurma sweet"],
+  "khopra-pak": ["khopra pak", "nariyal barfi", "coconut burfi"]
+}
