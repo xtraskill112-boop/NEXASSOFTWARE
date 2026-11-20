@@ -32,9 +32,9 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Check the live sites
         env:
-          LIVE_WEB_URL: https://${{ vars.NAAMDEV_WEB_SITE || 'naamdevseets' }}.web.app
-          LIVE_ADMIN_URL: https://${{ vars.NAAMDEV_ADMIN_SITE || 'naamdevseets-admin' }}.web.app
-          LIVE_PARTNER_URL: https://${{ vars.NAAMDEV_PARTNER_SITE || 'naamdevseets-partner' }}.web.app
+          LIVE_WEB_URL: https://${{ vars.NAAMDEV_WEB_SITE || 'naamdevsweets' }}.web.app
+          LIVE_ADMIN_URL: https://${{ vars.NAAMDEV_ADMIN_SITE || 'naamdevsweets-admin' }}.web.app
+          LIVE_PARTNER_URL: https://${{ vars.NAAMDEV_PARTNER_SITE || 'naamdevsweets-partner' }}.web.app
           LIVE_API_URL: ${{ vars.NAAMDEV_API_URL || 'https://naamdev-api.onrender.com' }}
           LIVE_DEMO_PASSWORD: ${{ secrets.NAAMDEV_ADMIN_PASSWORD }}
         run: npx playwright test --config tests/live/playwright.config.ts --trace off

@@ -6,9 +6,9 @@ import { expect, test, type Page } from "@playwright/test";
  * payment sheet opens with UPI and cash on delivery. It creates no orders, accounts or other data
  * (the item it puts in the demo customer's cart to reach checkout is removed again). Run by .github/workflows/naamdev-live-check.yml.
  */
-const WEB = process.env.LIVE_WEB_URL ?? "https://naamdevseets.web.app";
-const ADMIN = process.env.LIVE_ADMIN_URL ?? "https://naamdevseets-admin.web.app";
-const RIDER = process.env.LIVE_PARTNER_URL ?? "https://naamdevseets-partner.web.app";
+const WEB = process.env.LIVE_WEB_URL ?? "https://naamdevsweets.web.app";
+const ADMIN = process.env.LIVE_ADMIN_URL ?? "https://naamdevsweets-admin.web.app";
+const RIDER = process.env.LIVE_PARTNER_URL ?? "https://naamdevsweets-partner.web.app";
 const API = process.env.LIVE_API_URL ?? "https://naamdev-api.onrender.com";
 const PASSWORD = process.env.LIVE_DEMO_PASSWORD ?? "";
 
