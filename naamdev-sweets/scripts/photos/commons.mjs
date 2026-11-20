@@ -106,7 +106,9 @@ if (mode === "candidates") {
   }
   writeFileSync(path.join(outDir, "candidates.json"), JSON.stringify(all, null, 2));
 } else {
-  const selection = JSON.parse(readFileSync(path.join(here, "selection.json"), "utf8"));
+  // selection-retry.json (when present) fetches just the photos a previous run couldn't download.
+  const retry = path.join(here, "selection-retry.json");
+  const selection = JSON.parse(readFileSync(existsSync(retry) ? retry : path.join(here, "selection.json"), "utf8"));
   const credits = {};
   const missing = [];
   for (const [name, title] of Object.entries(selection)) {
