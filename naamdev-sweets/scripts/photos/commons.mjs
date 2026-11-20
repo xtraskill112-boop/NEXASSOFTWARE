@@ -1,6 +1,6 @@
 // Fetches real photographs of the catalogue's sweets from Wikimedia Commons (freely licensed).
-//   node scripts/photos/commons.mjs candidates <outDir>  → up to 6 candidates per product (640 px) + candidates.json
-//   node scripts/photos/commons.mjs final <outDir>       → the files chosen in selection.json (1600 px) + credits.json
+//   node scripts/photos/commons.mjs candidates <outDir>  → up to 6 candidates per product (500 px) + candidates.json
+//   node scripts/photos/commons.mjs final <outDir>       → the files chosen in selection.json (1280 px) + credits.json
 // Only CC0 / public domain / CC BY / CC BY-SA files are accepted; the credit line each license asks for
 // is saved with every photo. Runs in GitHub Actions (the development container can't reach Commons).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -45,16 +45,19 @@ function describe(p) {
 
 const IMAGE_INFO = { prop: "imageinfo", iiprop: "url|size|mime|extmetadata", iiextmetadatafilter: "LicenseShortName|LicenseUrl|Artist|ImageDescription" };
 
+/** @returns null when saved, otherwise why it failed. */
 async function download(url, file) {
+  let why = "";
   for (let i = 0; i < 4; i++) {
     const r = await fetch(url, { headers: HEADERS });
     if (r.ok) {
       writeFileSync(file, Buffer.from(await r.arrayBuffer()));
-      return;
+      return null;
     }
-    await sleep(2000 * (i + 1));
+    why = `HTTP ${r.status} ${(await r.text()).replace(/\s+/g, " ").slice(0, 160)}`;
+    await sleep(r.status === 429 ? 15000 : 3000 * (i + 1));
   }
-  throw new Error(`download failed: ${url}`);
+  return why;
 }
 
 mkdirSync(outDir, { recursive: true });
@@ -65,7 +68,7 @@ if (mode === "candidates") {
     const seen = new Set();
     const picks = [];
     for (const q of qs) {
-      const data = await api({ generator: "search", gsrsearch: `filetype:bitmap ${q}`, gsrnamespace: "6", gsrlimit: "12", iiurlwidth: "640", ...IMAGE_INFO });
+      const data = await api({ generator: "search", gsrsearch: `filetype:bitmap ${q}`, gsrnamespace: "6", gsrlimit: "12", iiurlwidth: "500", ...IMAGE_INFO });
       const pages = (data.query?.pages ?? []).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
       for (const p of pages) {
         const d = describe(p);
@@ -79,22 +82,26 @@ if (mode === "candidates") {
       await sleep(300);
     }
     mkdirSync(path.join(outDir, slug), { recursive: true });
-    for (const [i, d] of picks.entries()) {
-      await download(d.thumb, path.join(outDir, slug, `${i}.jpg`));
-      await sleep(150);
+    const saved = [];
+    for (const d of picks) {
+      const why = await download(d.thumb, path.join(outDir, slug, `${saved.length}.jpg`));
+      if (why) console.error(`  skipped ${d.title}: ${why}`);
+      else saved.push(d);
+      await sleep(700);
     }
-    all[slug] = picks;
-    console.log(`${slug}: ${picks.length} candidate(s)`);
+    all[slug] = saved;
+    console.log(`${slug}: ${saved.length} candidate(s)`);
   }
   writeFileSync(path.join(outDir, "candidates.json"), JSON.stringify(all, null, 2));
 } else {
   const selection = JSON.parse(readFileSync(path.join(here, "selection.json"), "utf8"));
   const credits = {};
   for (const [name, title] of Object.entries(selection)) {
-    const data = await api({ titles: title, iiurlwidth: "1600", ...IMAGE_INFO });
+    const data = await api({ titles: title, iiurlwidth: "1280", ...IMAGE_INFO });
     const d = describe(data.query?.pages?.[0] ?? {});
     if (!d || !OK_LICENSE.test(d.license)) throw new Error(`${name}: ${title} is missing or not freely licensed`);
-    await download(d.thumb, path.join(outDir, `${name}.jpg`));
+    const why = await download(d.thumb, path.join(outDir, `${name}.jpg`));
+    if (why) throw new Error(`${name}: download failed: ${why}`);
     credits[name] = { title: d.title, page: d.page, author: d.author, license: d.license, licenseUrl: d.licenseUrl };
     console.log(`${name}: ${d.title} (${d.license}, ${d.author})`);
     await sleep(300);
