@@ -66,7 +66,7 @@ without repository activity — re-enable it under Actions if that happens.
 ## Product photos
 
 The sample catalogue shows real photographs of each sweet from Wikimedia Commons (free licences; the
-credit each licence requires appears under the photo and on `/photo-credits`). They are fetched and
+credit each licence requires is on `/photo-credits`, linked from every page's footer). They are fetched and
 chosen with `scripts/photos/` and the *NAAMDEV catalogue photos* workflow, stored as small WebP files in
 `apps/api/public/catalog/photos/`, and applied on every deploy to products that still show the drawn
 artwork. **Your own photos are best for customers' trust**: upload them in the console (Products → a

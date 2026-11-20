@@ -16,6 +16,7 @@ import {
 } from "../src/index";
 import { CATEGORIES, COLLECTIONS, PRODUCTS } from "./catalog";
 import { CONTENT_PAGES, FAQS } from "./content";
+import { KEEP, NEW_PRODUCTS, PHOTO_FALLBACK, PRICES, UNKNOWN_INGREDIENTS } from "./owner-catalogue";
 
 const isProd = process.env.NODE_ENV === "production";
 const seedDemo = process.env.SEED_DEMO_ACCOUNTS ? process.env.SEED_DEMO_ACCOUNTS === "true" : !isProd;
@@ -44,6 +45,8 @@ const CATEGORY_PHOTO: Record<string, string> = {
   "bengali-sweets": "rasmalai", "gulab-jamun": "gulab-jamun", "milk-sweets": "kalakand", "indian-sweets": "jalebi", "dry-fruits": "royal-mixed-dry-fruits",
   namkeen: "bikaneri-aloo-bhujia", snacks: "punjabi-samosa", cakes: "eggless-chocolate-truffle", "gift-hampers": "mithai-assortment-box", "special-combos": "family-feast-combo",
 };
+/** The owner's catalogue applies to the live shop only (development and tests keep the sample catalogue). */
+const applyOwnerCatalogueHere = isProd || process.env.SEED_OWNER_CATALOGUE === "true";
 const isSeedArtwork = (url: unknown) => typeof url === "string" && url.startsWith("/static/catalog/") && url.endsWith(".svg");
 const day = 86_400_000;
 const now = () => new Date();
@@ -450,6 +453,7 @@ async function removeDemoAccounts() {
  */
 /** A migration returns false when it can't run yet (it is then tried again on the next seed). */
 const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
+  { id: "2026-11-21-owner-catalogue", run: () => applyOwnerCatalogue() },
   {
     // No GST; ₹20 delivery below ₹100, free from ₹100; no minimum order.
     id: "2026-11-20-no-gst-flat-delivery",
@@ -496,6 +500,158 @@ async function syncCatalogPhotos() {
   }
   await commitInChunks(writes);
   if (writes.length) console.log(`✓ ${writes.length} record(s) switched to real photos`);
+}
+
+/** Opening stock for a new pack: one batch, its stock-in record and the inventory row (0 = out of stock). */
+function openingStock(
+  writes: ((b: FirebaseFirestore.WriteBatch) => void)[], productId: string, variant: ProductVariant, qty: number, shelfLifeDays: number,
+  batchNumber: string, supplierId: string | null,
+) {
+  if (qty > 0) {
+    const batchId = newId();
+    const batch: InventoryBatch = {
+      variantId: variant.id, productId, batchNumber, supplierId, manufacturedAt: new Date(Date.now() - 3600_000),
+      expiresAt: new Date(Date.now() + shelfLifeDays * day), quantity: qty, remaining: qty, costPricePaise: 0, status: "ACTIVE",
+      expiryAlertedAt: null, createdAt: now(), updatedAt: now(),
+    };
+    writes.push((b) => b.set(db.collection(C.batches).doc(batchId), batch));
+    writes.push((b) =>
+      b.set(db.collection(C.stockTransactions).doc(), {
+        variantId: variant.id, productId, batchId, type: "STOCK_IN", quantity: qty, balanceAfter: qty, reason: "Opening stock",
+        orderId: null, createdById: null, createdAt: now(),
+      }),
+    );
+  }
+  const inv: Inventory = {
+    variantId: variant.id, productId, available: qty, reserved: 0, lowStockThreshold: 5, lastRestockedAt: qty > 0 ? now() : null,
+    lowStockAlertedAt: null, updatedAt: now(),
+  };
+  writes.push((b) => b.set(db.collection(C.inventory).doc(variant.id), inv));
+}
+
+/**
+ * The owner's catalogue (owner-catalogue.ts): keep 13 sample products with the owner's prices, hide the
+ * rest (orders keep their history), add the owner's new products, and hide the categories,
+ * collections, banners and category coupons that would otherwise lead to empty pages.
+ */
+async function applyOwnerCatalogue(): Promise<void | false> {
+  if (!applyOwnerCatalogueHere) return false;
+  const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+  const productDocs = (await db.collection(C.products).get()).docs;
+  const bySlug = new Map(productDocs.map((d) => [d.data().slug as string, d]));
+  const state = new Map(productDocs.map((d) => [d.id, { slug: d.data().slug as string, categoryId: d.data().categoryId as string, active: d.data().isActive !== false }]));
+  const keep = new Set<string>(KEEP);
+  const supplierId = (await db.collection(C.suppliers).limit(1).get()).docs[0]?.id ?? null;
+
+  let hidden = 0;
+  for (const p of PRODUCTS) {
+    const d = bySlug.get(p.slug);
+    if (!d || keep.has(p.slug) || d.data().isActive === false) continue;
+    writes.push((b) => b.update(d.ref, { isActive: false, isFeatured: false, updatedAt: now() }));
+    state.get(d.id)!.active = false;
+    hidden++;
+  }
+
+  for (const [slug, packs] of Object.entries(PRICES)) {
+    const d = bySlug.get(slug);
+    if (!d) continue;
+    const prod = d.data() as Product;
+    const variants = prod.variants.map((v) => ({ ...v }));
+    for (const pk of packs) {
+      const v = variants.find((x) => x.label === pk.label);
+      if (v) {
+        v.mrpPaise = rupees(pk.rupees);
+        v.salePricePaise = null;
+        continue;
+      }
+      const nv: ProductVariant = {
+        id: newId(), label: pk.label, weightGrams: pk.weightGrams, sku: `${prod.sku}-${variants.length + 1}`, barcode: null,
+        mrpPaise: rupees(pk.rupees), salePricePaise: null, isActive: true, isDefault: false, sortOrder: 0,
+      };
+      variants.push(nv);
+      writes.push((b) => b.set(db.collection(C.skus).doc(nv.sku), { productId: d.id, variantId: nv.id }));
+      openingStock(writes, d.id, nv, 40, prod.shelfLifeDays, `OWN-${nv.sku}`, supplierId);
+    }
+    const order = (v: ProductVariant) => {
+      const i = packs.findIndex((pk) => pk.label === v.label);
+      return i === -1 ? packs.length + v.sortOrder : i;
+    };
+    variants.sort((a, b) => order(a) - order(b)).forEach((v, i) => (v.sortOrder = i));
+    for (const v of variants) if (!packs.some((pk) => pk.label === v.label)) console.warn(`  ${slug}: pack "${v.label}" keeps its old price`);
+    writes.push((b) => b.update(d.ref, { variants, ...productDerived({ ...prod, variants }), updatedAt: now() }));
+  }
+
+  const catDocs = new Map((await db.collection(C.categories).get()).docs.map((d) => [d.data().slug as string, d]));
+  let added = 0;
+  for (const [i, p] of NEW_PRODUCTS.entries()) {
+    const cat = catDocs.get(p.category);
+    if (bySlug.has(p.slug) || !cat) continue;
+    const productId = newId();
+    const sku = `ND-${p.slug.split("-").map((w) => w[0]).join("").toUpperCase()}-${String(101 + i).padStart(3, "0")}`;
+    const variants: ProductVariant[] = p.packs.map((pk, vi) => ({
+      id: newId(), label: pk.label, weightGrams: pk.weightGrams, sku: `${sku}-${vi + 1}`, barcode: null, mrpPaise: rupees(pk.rupees),
+      salePricePaise: null, isActive: true, isDefault: vi === (p.packs.length > 2 ? 1 : 0), sortOrder: vi,
+    }));
+    const own = photoImages(p.slug, p.name);
+    const images = own.length ? own : PHOTO_FALLBACK[p.slug] ? photoImages(PHOTO_FALLBACK[p.slug]!, p.name) : [];
+    const base = {
+      name: p.name, nameHi: p.nameHi, slug: p.slug, shortDescription: p.short, shortDescriptionHi: null, description: p.description,
+      categoryId: cat.id, subcategoryId: null, sku, barcode: null, hsnCode: "21069099", ingredients: UNKNOWN_INGREDIENTS, allergens: [],
+      nutrition: null, manufacturingInfo: "Made fresh in the NAAMDEV SWEETS kitchen.", shelfLifeDays: p.shelfLifeDays,
+      storageInstructions: p.storage, foodType: "VEG" as const, isFeatured: false, isBestseller: false, isNewArrival: true, isActive: true,
+      tags: [...p.tags], videoUrl: null, gstRate: null, avgRating: 0, reviewCount: 0, soldCount: 0, viewCount: 0,
+      seoTitle: `${p.name} — Buy Online | NAAMDEV SWEETS`, seoDescription: p.short, deletedAt: null, images, variants,
+      createdAt: now(), updatedAt: now(),
+    };
+    writes.push((b) => b.set(db.collection(C.products).doc(productId), { ...base, ...productDerived(base) }));
+    writes.push((b) => b.set(db.collection(C.skus).doc(sku), { productId, variantId: null }));
+    for (const v of variants) {
+      writes.push((b) => b.set(db.collection(C.skus).doc(v.sku), { productId, variantId: v.id }));
+      openingStock(writes, productId, v, p.stock, p.shelfLifeDays, `OWN-${v.sku}`, supplierId);
+    }
+    state.set(productId, { slug: p.slug, categoryId: cat.id, active: true });
+    if (cat.data().isActive === false) writes.push((b) => b.update(cat.ref, { isActive: true, updatedAt: now() }));
+    added++;
+  }
+
+  // Categories, collections, banners and category coupons that would now lead to empty pages.
+  const liveCount = new Map<string, number>();
+  for (const s of state.values()) if (s.active) liveCount.set(s.categoryId, (liveCount.get(s.categoryId) ?? 0) + 1);
+  const sampleCats = new Set<string>(CATEGORIES.map((c) => c.slug));
+  const offCats = new Set<string>();
+  const offCatIds = new Set<string>();
+  for (const [slug, d] of catDocs) {
+    const empty = !liveCount.get(d.id);
+    if (empty && sampleCats.has(slug) && d.data().isActive !== false) writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+    if (empty || d.data().isActive === false) {
+      offCats.add(slug);
+      offCatIds.add(d.id);
+    }
+  }
+  const offCollections = new Set<string>();
+  for (const d of (await db.collection(C.collections).get()).docs) {
+    const c = d.data() as { slug: string; isActive?: boolean; products?: { productId: string }[] };
+    const any = (c.products ?? []).some((x) => state.get(x.productId)?.active);
+    if (!any && c.isActive !== false) writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+    if (!any || c.isActive === false) offCollections.add(c.slug);
+  }
+  const liveSlugs = new Set([...state.values()].filter((s) => s.active).map((s) => s.slug));
+  for (const d of (await db.collection(C.banners).get()).docs) {
+    const bn = d.data() as { title: string; subtitle?: string | null; ctaLink?: string | null; isActive?: boolean };
+    if (bn.isActive === false) continue;
+    const m = /^\/(category|collections|product)\/([a-z0-9-]+)/.exec(bn.ctaLink ?? "");
+    const dead = !!m && ((m[1] === "category" && offCats.has(m[2]!)) || (m[1] === "collections" && offCollections.has(m[2]!)) || (m[1] === "product" && !liveSlugs.has(m[2]!)));
+    if (dead || bn.title === "Wedding season gifting") writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+    else if (bn.title === "Fresh from the kadhai" && bn.subtitle === "Jalebi, samosa and kachori fried to order")
+      writes.push((b) => b.update(d.ref, { subtitle: "Jalebi, kachori and mirchi bada, fried fresh", updatedAt: now() }));
+  }
+  for (const d of (await db.collection(C.coupons).get()).docs) {
+    const c = d.data() as { scope?: string; categoryIds?: string[]; isActive?: boolean };
+    if (c.isActive !== false && c.scope === "CATEGORY" && (c.categoryIds ?? []).length && c.categoryIds!.every((id) => offCatIds.has(id)))
+      writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+  }
+  await commitInChunks(writes);
+  console.log(`  ${hidden} sample product(s) hidden, ${Object.keys(PRICES).length} repriced, ${added} new product(s)`);
 }
 
 async function runMigrations() {

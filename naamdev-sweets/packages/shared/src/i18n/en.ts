@@ -1,7 +1,7 @@
 export const en = {
   common: {
     search: "Search",
-    searchPlaceholder: "Search for kaju katli, laddu, hampers…",
+    searchPlaceholder: "Search for kaju katli, laddu, namkeen…",
     viewAll: "View all",
     addToCart: "Add",
     add: "Add",
@@ -41,6 +41,8 @@ export const en = {
     wishlist: "Wishlist",
     orders: "Orders",
     hampers: "Hampers",
+    namkeen: "Namkeen",
+    snacks: "Snacks",
     search: "Search",
   },
   home: {

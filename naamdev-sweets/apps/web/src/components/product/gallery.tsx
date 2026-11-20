@@ -3,8 +3,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Expand, PlayCircle, X } from "lucide-react";
 import { cn } from "@naamdev/ui";
-import { isCatalogPhoto, photoName } from "@/lib/photos";
-import { usePhotoCredits } from "@/lib/use-photo-credits";
 import { ProductImage } from "../common/product-image";
 
 /** Image gallery with hover-zoom (desktop), swipe (mobile), full-screen lightbox and optional video. */
@@ -15,8 +13,6 @@ export function Gallery({ images, name, videoUrl }: { images: { url: string; alt
   const [showVideo, setShowVideo] = useState(false);
   const items = images.length ? images : [{ url: "", alt: name }];
   const cur = items[i]!;
-  const credits = usePhotoCredits();
-  const credit = isCatalogPhoto(cur.url) ? credits?.[photoName(cur.url)] : undefined;
   return (
     <div className="lg:sticky lg:top-24">
       <div className="relative overflow-hidden rounded-[2rem] bg-surface-2 shadow-card ring-1 ring-line-soft">
@@ -45,12 +41,6 @@ export function Gallery({ images, name, videoUrl }: { images: { url: string; alt
           <span className="pointer-events-none absolute bottom-4 right-4 grid h-10 w-10 place-items-center rounded-full bg-white/85 text-ink shadow backdrop-blur dark:bg-black/50 dark:text-white"><Expand className="h-4 w-4" /></span>
         </div>
       </div>
-      {credit && (
-        <p className="mt-2 px-1 text-[11px] leading-snug text-muted">
-          Representative photo · <a href={credit.page} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-ink">{credit.author}</a>
-          {" · "}{credit.licenseUrl ? <a href={credit.licenseUrl} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-ink">{credit.license}</a> : credit.license} · via Wikimedia Commons
-        </p>
-      )}
       {(items.length > 1 || videoUrl) && (
         <div className="mt-3 flex gap-2.5">
           {items.map((im, k) => (

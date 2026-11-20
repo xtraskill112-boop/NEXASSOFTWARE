@@ -14,7 +14,7 @@ import { useRealtime } from "@/lib/realtime";
 import { useSettings } from "@/lib/settings";
 import { LocationSheet } from "./location-sheet";
 
-const PLACEHOLDERS = ["kaju katli", "motichoor laddu", "gift hampers", "rasmalai", "til gajak", "aloo bhujia"];
+const PLACEHOLDERS = ["kaju katli", "motichoor laddu", "gulab jamun", "jalebi", "dal kachori", "moth bhujia"];
 
 export function IconButton({ href, label, children, badge, onClick, className }: { href?: string; label: string; children: React.ReactNode; badge?: number; onClick?: () => void; className?: string }) {
   const cls = cn("relative grid h-11 w-11 place-items-center rounded-2xl text-ink-soft transition hover:bg-surface-2 hover:text-ink", className);
@@ -121,7 +121,7 @@ export function Header() {
           {!hideSearch && <SearchTrigger className="mx-2 hidden flex-1 lg:flex" />}
           <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
             <nav className="mr-2 hidden items-center gap-1 xl:flex">
-              {[["/categories", t("nav.categories")], ["/offers", t("nav.offers")], ["/category/gift-hampers", t("nav.hampers")]].map(([href, label]) => (
+              {[["/categories", t("nav.categories")], ["/offers", t("nav.offers")], ["/category/namkeen", t("nav.namkeen")]].map(([href, label]) => (
                 <Link key={href} href={href!} className={cn("rounded-xl px-3 py-2 text-sm font-semibold transition hover:bg-surface-2", pathname === href ? "text-saffron-700" : "text-ink-soft")}>{label}</Link>
               ))}
             </nav>

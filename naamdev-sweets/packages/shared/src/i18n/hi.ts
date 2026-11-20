@@ -3,7 +3,7 @@ import type { Dictionary } from "./en";
 export const hi: Dictionary = {
   common: {
     search: "खोजें",
-    searchPlaceholder: "काजू कतली, लड्डू, गिफ्ट हैम्पर खोजें…",
+    searchPlaceholder: "काजू कतली, लड्डू, नमकीन खोजें…",
     viewAll: "सभी देखें",
     addToCart: "जोड़ें",
     add: "जोड़ें",
@@ -43,6 +43,8 @@ export const hi: Dictionary = {
     wishlist: "पसंदीदा",
     orders: "ऑर्डर",
     hampers: "हैम्पर",
+    namkeen: "नमकीन",
+    snacks: "स्नैक्स",
     search: "खोज",
   },
   home: {
