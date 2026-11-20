@@ -294,6 +294,39 @@
           ]
         }
       ]
+    },
+    {
+      "target": "legacy-web",
+      "public": "firebase/legacy-site",
+      "redirects": [
+        {
+          "source": "/:path*",
+          "destination": "https://naamdevsweets.web.app/:path",
+          "type": 301
+        }
+      ]
+    },
+    {
+      "target": "legacy-admin",
+      "public": "firebase/legacy-site",
+      "redirects": [
+        {
+          "source": "/:path*",
+          "destination": "https://naamdevsweets-admin.web.app/:path",
+          "type": 301
+        }
+      ]
+    },
+    {
+      "target": "legacy-partner",
+      "public": "firebase/legacy-site",
+      "redirects": [
+        {
+          "source": "/:path*",
+          "destination": "https://naamdevsweets-partner.web.app/:path",
+          "type": 301
+        }
+      ]
     }
   ],
   "firestore": {

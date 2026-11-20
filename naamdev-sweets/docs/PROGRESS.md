@@ -64,9 +64,10 @@ Status of every area in the original brief. ✅ built and covered by automated t
 
 ## Known limitations
 
-- **Nothing has run against the live `naamdevseets` Firebase project yet** — the first deploy happens
-  when you run the deploy workflow with the service-account secret. No third-party provider has been
-  tested for real either; follow the checklists in [INTEGRATIONS.md](INTEGRATIONS.md).
+- The shop is deployed on the live Firebase project (`naamdevseets`, addresses `naamdevsweets…web.app`)
+  and checked by *NAAMDEV live check*; real orders and UPI payments on the live shop have not been
+  exercised by automated tests. No third-party provider (Razorpay, SMTP, SMS, push, Maps) has been
+  tested for real; follow the checklists in [INTEGRATIONS.md](INTEGRATIONS.md).
 - **Direct UPI payments need a person to confirm them** (there is no callback from UPI apps). Use
   Razorpay if you want automatic confirmation.
 - **Console lists scan the latest 2,000 records** (orders, tickets, audit log search) and filter in

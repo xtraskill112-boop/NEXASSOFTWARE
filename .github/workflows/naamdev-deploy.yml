@@ -33,9 +33,14 @@ env:
   # The project number (Firebase "messagingSenderId"), used for keyless sign-in.
   PROJECT_NUMBER: ${{ vars.FIREBASE_PROJECT_NUMBER || '1008791450524' }}
   REGION: asia-south1
-  WEB_SITE: ${{ vars.NAAMDEV_WEB_SITE || 'naamdevseets' }}
-  ADMIN_SITE: ${{ vars.NAAMDEV_ADMIN_SITE || 'naamdevseets-admin' }}
-  PARTNER_SITE: ${{ vars.NAAMDEV_PARTNER_SITE || 'naamdevseets-partner' }}
+  # Hosting sites (addresses <site>.web.app). The project id can't be renamed, but sites can.
+  WEB_SITE: ${{ vars.NAAMDEV_WEB_SITE || 'naamdevsweets' }}
+  ADMIN_SITE: ${{ vars.NAAMDEV_ADMIN_SITE || 'naamdevsweets-admin' }}
+  PARTNER_SITE: ${{ vars.NAAMDEV_PARTNER_SITE || 'naamdevsweets-partner' }}
+  # The first, misspelt sites: they now redirect to the addresses above.
+  LEGACY_WEB_SITE: naamdevseets
+  LEGACY_ADMIN_SITE: naamdevseets-admin
+  LEGACY_PARTNER_SITE: naamdevseets-partner
   RENDER_SERVICE: ${{ vars.NAAMDEV_RENDER_SERVICE || 'naamdev-api' }}
   RENDER_REGION: singapore # closest free Render region to India
 
@@ -264,15 +269,29 @@ jobs:
 
       - name: Firebase Hosting, Firestore rules & indexes
         run: |
-          for site in "$ADMIN_SITE" "$PARTNER_SITE"; do
-            npx firebase hosting:sites:get "$site" --project "$PROJECT_ID" >/dev/null 2>&1 || \
-              npx firebase hosting:sites:create "$site" --project "$PROJECT_ID" --non-interactive
+          site_exists() { npx firebase hosting:sites:get "$1" --project "$PROJECT_ID" >/dev/null 2>&1; }
+          for site in "$WEB_SITE" "$ADMIN_SITE" "$PARTNER_SITE"; do
+            site_exists "$site" || npx firebase hosting:sites:create "$site" --project "$PROJECT_ID" --non-interactive || {
+              echo "::error::Couldn't create the Hosting site \"$site\" — the name may already belong to another Firebase project. Pick another name with the repository variables NAAMDEV_WEB_SITE / NAAMDEV_ADMIN_SITE / NAAMDEV_PARTNER_SITE and re-run."
+              exit 1
+            }
           done
-          for t in web admin partner; do npx firebase target:clear hosting "$t" --project "$PROJECT_ID" >/dev/null 2>&1 || true; done
+          # Old sites that still exist become permanent redirects to the new addresses.
+          old_site() { [ -n "$1" ] && [ "$1" != "$2" ] && site_exists "$1" && echo "$1" || echo ""; }
+          export NAAMDEV_WEB_SITE="$WEB_SITE" NAAMDEV_ADMIN_SITE="$ADMIN_SITE" NAAMDEV_PARTNER_SITE="$PARTNER_SITE"
+          export NAAMDEV_LEGACY_WEB_SITE="$(old_site "$LEGACY_WEB_SITE" "$WEB_SITE")"
+          export NAAMDEV_LEGACY_ADMIN_SITE="$(old_site "$LEGACY_ADMIN_SITE" "$ADMIN_SITE")"
+          export NAAMDEV_LEGACY_PARTNER_SITE="$(old_site "$LEGACY_PARTNER_SITE" "$PARTNER_SITE")"
+          node scripts/hosting-config.mjs
+          for t in web admin partner legacy-web legacy-admin legacy-partner; do npx firebase target:clear hosting "$t" --project "$PROJECT_ID" >/dev/null 2>&1 || true; done
           npx firebase target:apply hosting web "$WEB_SITE" --project "$PROJECT_ID"
           npx firebase target:apply hosting admin "$ADMIN_SITE" --project "$PROJECT_ID"
           npx firebase target:apply hosting partner "$PARTNER_SITE" --project "$PROJECT_ID"
+          [ -z "$NAAMDEV_LEGACY_WEB_SITE" ] || npx firebase target:apply hosting legacy-web "$NAAMDEV_LEGACY_WEB_SITE" --project "$PROJECT_ID"
+          [ -z "$NAAMDEV_LEGACY_ADMIN_SITE" ] || npx firebase target:apply hosting legacy-admin "$NAAMDEV_LEGACY_ADMIN_SITE" --project "$PROJECT_ID"
+          [ -z "$NAAMDEV_LEGACY_PARTNER_SITE" ] || npx firebase target:apply hosting legacy-partner "$NAAMDEV_LEGACY_PARTNER_SITE" --project "$PROJECT_ID"
           npx firebase deploy --only hosting,firestore:rules,firestore:indexes --project "$PROJECT_ID" --non-interactive --force
+          echo "LEGACY_URLS=$(for s in "$NAAMDEV_LEGACY_WEB_SITE" "$NAAMDEV_LEGACY_ADMIN_SITE" "$NAAMDEV_LEGACY_PARTNER_SITE"; do [ -n "$s" ] && printf 'https://%s.web.app ' "$s"; done)" >> "$GITHUB_ENV"
 
       - name: Email the owner a link to set the console password
         if: steps.seed.outputs.admin_created == 'true'
@@ -294,6 +313,11 @@ jobs:
             code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$url")"
             echo "$code $url"
             [ "$code" -lt 400 ] || { echo "::error::$url returned $code"; exit 1; }
+          done
+          for old in $LEGACY_URLS; do
+            got="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 30 "$old/login")"
+            echo "$got  ← $old/login"
+            case "$got" in 301\ https://*/login) ;; *) echo "::error::$old should redirect to the same page on the new address (got: $got)"; exit 1 ;; esac
           done
           {
             echo "### NAAMDEV SWEETS is live (free plans)"

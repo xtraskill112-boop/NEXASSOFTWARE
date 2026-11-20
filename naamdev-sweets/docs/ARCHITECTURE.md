@@ -1,9 +1,9 @@
 # Architecture
 
 ```
-  customers ──▶ naamdevseets.web.app          ─┐
-  staff     ──▶ naamdevseets-admin.web.app    ─┼─ Firebase Hosting (free): static pages of the three Next.js apps
-  riders    ──▶ naamdevseets-partner.web.app  ─┘
+  customers ──▶ naamdevsweets.web.app          ─┐
+  staff     ──▶ naamdevsweets-admin.web.app    ─┼─ Firebase Hosting (free): static pages of the three Next.js apps
+  riders    ──▶ naamdevsweets-partner.web.app  ─┘
         │  the browser (or Android app) calls the API with the Firebase ID token
         ▼
   Render free web service: naamdev-api (Express 5, Docker) ──▶ Cloud Firestore (data + uploaded photos)

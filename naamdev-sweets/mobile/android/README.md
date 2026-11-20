@@ -37,9 +37,9 @@ To install on a phone, allow "Install unknown apps" for your browser or file man
 
 ### Which site the app opens
 
-- **GitHub Actions builds (default):** the customer app opens `https://naamdevseets.web.app` and the
-  partner app `https://naamdevseets-partner.web.app` and the admin app
-  `https://naamdevseets-admin.web.app` — the Firebase Hosting sites created by the
+- **GitHub Actions builds (default):** the customer app opens `https://naamdevsweets.web.app` and the
+  partner app `https://naamdevsweets-partner.web.app` and the admin app
+  `https://naamdevsweets-admin.web.app` — the Firebase Hosting sites created by the
   deploy workflow. There is **no address to type**; the apps only allow HTTPS. Deploy the sites first
   (docs/DEPLOYMENT.md), otherwise the app shows its offline screen.
 - **Different addresses** (custom domain, renamed Hosting site): run the workflow manually
@@ -79,9 +79,9 @@ Studio, or:
 ```bash
 cd naamdev-sweets/mobile/android
 ./gradlew assembleCustomerDebug assemblePartnerDebug assembleAdminDebug   # debug builds (ask for the address)
-NAAMDEV_CUSTOMER_URL=https://naamdevseets.web.app \
-NAAMDEV_PARTNER_URL=https://naamdevseets-partner.web.app \
-NAAMDEV_ADMIN_URL=https://naamdevseets-admin.web.app \
+NAAMDEV_CUSTOMER_URL=https://naamdevsweets.web.app \
+NAAMDEV_PARTNER_URL=https://naamdevsweets-partner.web.app \
+NAAMDEV_ADMIN_URL=https://naamdevsweets-admin.web.app \
 NAAMDEV_KEYSTORE_FILE=/path/naamdev-release.keystore NAAMDEV_KEYSTORE_PASSWORD=… \
 NAAMDEV_KEY_ALIAS=naamdev NAAMDEV_KEY_PASSWORD=… \
 ./gradlew assembleCustomerRelease assemblePartnerRelease assembleAdminRelease

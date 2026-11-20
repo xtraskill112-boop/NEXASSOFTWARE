@@ -11,12 +11,18 @@ Everything runs on **free plans — no billing account, no card**:
 
 ```
  Customer / Rider / Staff (browser or Android app)
-      │ https://naamdevseets.web.app · naamdevseets-admin.web.app · naamdevseets-partner.web.app
+      │ https://naamdevsweets.web.app · naamdevsweets-admin.web.app · naamdevsweets-partner.web.app
       ▼
  Firebase Hosting (static pages) ──► the browser calls the API ──► Render: naamdev-api (Express) ──► Firestore · Firebase Auth
                                      and listens to Firestore live documents for real-time updates
  GitHub Actions "NAAMDEV keep-alive" ── pings the API every 10 minutes so it doesn't fall asleep
 ```
+
+The Firebase **project** id is `naamdevseets` (set when the project was created; Google doesn't allow
+renaming it). The **addresses** customers see are separate Hosting sites with the correct spelling —
+`naamdevsweets.web.app`, `naamdevsweets-admin.web.app`, `naamdevsweets-partner.web.app` — and the first,
+misspelt addresses (`naamdevseets…web.app`) permanently redirect to them. Sign-in emails from Firebase
+still show the project id in their links.
 
 ## One-time setup
 
@@ -86,7 +92,7 @@ Sign-up verification and password-reset emails are sent by Firebase Authenticati
 | Resource | Name |
 |---|---|
 | Firestore (native) | `(default)` in asia-south1, rules `firebase/firestore.rules`, indexes `firebase/firestore.indexes.json` |
-| Firebase Hosting | sites `naamdevseets`, `naamdevseets-admin`, `naamdevseets-partner` with the rewrites/headers in `firebase.json` (regenerate with `node scripts/hosting-config.mjs` after adding a dynamic page) |
+| Firebase Hosting | sites `naamdevsweets`, `naamdevsweets-admin`, `naamdevsweets-partner` with the rewrites/headers in `firebase.json` (regenerate with `node scripts/hosting-config.mjs` after adding a dynamic page) |
 | Service account | `naamdev-run@…` (Firestore user, Firebase Auth admin); its key is rotated on every deploy and stored only as a Render environment variable |
 | Render | web service `naamdev-api` (Docker, `infra/docker/api.Dockerfile`, free plan, health check `/healthz`); environment variables include `ENCRYPTION_KEY` and `JOBS_SECRET`, generated once and kept across deploys |
 
@@ -105,7 +111,7 @@ Cloud Storage uploads (videos), and run the API anywhere that runs a Docker imag
 
 ## Android apps
 
-Run **NAAMDEV Android apps** after the first deploy. The APKs open `https://naamdevseets.web.app`
-(customer), `https://naamdevseets-partner.web.app` (partner) and `https://naamdevseets-admin.web.app`
+Run **NAAMDEV Android apps** after the first deploy. The APKs open `https://naamdevsweets.web.app`
+(customer), `https://naamdevsweets-partner.web.app` (partner) and `https://naamdevsweets-admin.web.app`
 (admin) directly — download them from the repository's **Releases** page; the partner app's background
 location goes to the API address handed over by the partner site.

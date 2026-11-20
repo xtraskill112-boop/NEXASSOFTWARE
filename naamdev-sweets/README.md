@@ -6,9 +6,9 @@ a store/staff console, a delivery-partner app, live order tracking and Android a
 
 | App | Path | Live address (after deploy) | Who uses it |
 |---|---|---|---|
-| Storefront (Next.js, PWA-ready) | `apps/web` | https://naamdevseets.web.app | Customers: browse, search, cart, checkout, track, account, support |
-| Console (Next.js) | `apps/admin` | https://naamdevseets-admin.web.app | Super admin, store owner, managers, packing staff, support agents (permission-based) |
-| Partner app (Next.js PWA) | `apps/delivery` | https://naamdevseets-partner.web.app | Delivery partners: go online, accept offers, pickup, OTP delivery, earnings |
+| Storefront (Next.js, PWA-ready) | `apps/web` | https://naamdevsweets.web.app | Customers: browse, search, cart, checkout, track, account, support |
+| Console (Next.js) | `apps/admin` | https://naamdevsweets-admin.web.app | Super admin, store owner, managers, packing staff, support agents (permission-based) |
+| Partner app (Next.js PWA) | `apps/delivery` | https://naamdevsweets-partner.web.app | Delivery partners: go online, accept offers, pickup, OTP delivery, earnings |
 | API (Express, Docker on Render free) | `apps/api` | `https://naamdev-api….onrender.com` | Everything above |
 
 **Services used (all free):** Cloud Firestore (all data, plus uploaded photos on the free plan), Firebase

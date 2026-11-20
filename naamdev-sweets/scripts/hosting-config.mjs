@@ -1,12 +1,25 @@
 // Writes the "hosting" section of firebase.json from the apps' routes.
 // Every dynamic page (e.g. app/(shop)/product/[slug]) is exported once as a placeholder
 // (/product/_.html); these rewrites make Firebase Hosting serve it for /product/<anything>.
+// Also writes the old (misspelt) sites as permanent redirects to the new addresses.
 // Run after adding or removing a dynamic route: node scripts/hosting-config.mjs
+// (the deploy workflow re-runs it with NAAMDEV_*_SITE set to the site names it deploys).
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const SITE_NAMES = {
+  web: process.env.NAAMDEV_WEB_SITE || "naamdevsweets",
+  admin: process.env.NAAMDEV_ADMIN_SITE || "naamdevsweets-admin",
+  partner: process.env.NAAMDEV_PARTNER_SITE || "naamdevsweets-partner",
+};
+// The first sites were created with the project's misspelt id; they now only redirect.
+const LEGACY_SITES = {
+  web: process.env.NAAMDEV_LEGACY_WEB_SITE ?? "naamdevseets",
+  admin: process.env.NAAMDEV_LEGACY_ADMIN_SITE ?? "naamdevseets-admin",
+  partner: process.env.NAAMDEV_LEGACY_PARTNER_SITE ?? "naamdevseets-partner",
+};
 const SITES = [
   { target: "web", app: "web", camera: "()" },
   { target: "admin", app: "admin", camera: "()" },
@@ -80,8 +93,19 @@ const hosting = SITES.map((s) => ({
   ],
 }));
 
+// Old address → same page on the new address (301, so browsers and search engines update).
+for (const target of ["web", "admin", "partner"]) {
+  const legacy = LEGACY_SITES[target];
+  if (!legacy || legacy === SITE_NAMES[target]) continue;
+  hosting.push({
+    target: `legacy-${target}`,
+    public: "firebase/legacy-site",
+    redirects: [{ source: "/:path*", destination: `https://${SITE_NAMES[target]}.web.app/:path`, type: 301 }],
+  });
+}
+
 const file = path.join(root, "firebase.json");
 const config = JSON.parse(readFileSync(file, "utf8"));
 config.hosting = hosting;
 writeFileSync(file, JSON.stringify(config, null, 2) + "\n");
-for (const h of hosting) console.log(`${h.target}: ${h.rewrites.length / 2} dynamic route(s)`);
+for (const h of hosting) console.log(h.rewrites ? `${h.target}: ${h.rewrites.length / 2} dynamic route(s)` : `${h.target}: redirects to ${h.redirects[0].destination}`);

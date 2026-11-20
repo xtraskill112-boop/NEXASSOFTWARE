@@ -6,12 +6,21 @@
     "naamdevseets": {
       "hosting": {
         "web": [
-          "naamdevseets"
+          "naamdevsweets"
         ],
         "admin": [
-          "naamdevseets-admin"
+          "naamdevsweets-admin"
         ],
         "partner": [
+          "naamdevsweets-partner"
+        ],
+        "legacy-web": [
+          "naamdevseets"
+        ],
+        "legacy-admin": [
+          "naamdevseets-admin"
+        ],
+        "legacy-partner": [
           "naamdevseets-partner"
         ]
       }
