@@ -144,7 +144,7 @@ function MethodRow({ icon, title, subtitle, badge, option, expanded, onToggle, c
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-maroon-700 dark:text-saffron-300">{icon}</span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2 text-sm font-bold text-ink">{title}{badge && option.available && <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200">{badge}</span>}</span>
-          <span className="block truncate text-xs text-muted">{option.available ? subtitle : option.reason}</span>
+          <span className="block text-xs leading-snug text-muted">{option.available ? subtitle : option.reason}</span>
         </span>
         {option.available && <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted transition", expanded && "rotate-180")} />}
       </button>
