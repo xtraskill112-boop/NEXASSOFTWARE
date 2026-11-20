@@ -54,7 +54,7 @@ function useFocusTrap(open: boolean) {
   return ref;
 }
 
-export function Modal({ open, onClose, title, description, children, footer, size = "md", className }: { open: boolean; onClose: () => void; title?: ReactNode; description?: ReactNode; children?: ReactNode; footer?: ReactNode; size?: "sm" | "md" | "lg" | "xl"; className?: string }) {
+export function Modal({ open, onClose, title, description, children, footer, size = "md", className, bodyClassName, label }: { open: boolean; onClose: () => void; title?: ReactNode; description?: ReactNode; children?: ReactNode; footer?: ReactNode; size?: "sm" | "md" | "lg" | "xl"; className?: string; /** Overrides the body padding (e.g. a custom header). */ bodyClassName?: string; /** Accessible name when there is no title. */ label?: string }) {
   useLockScroll(open);
   useEscape(open, onClose);
   const ref = useFocusTrap(open);
@@ -71,6 +71,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? `${id}-t` : undefined}
+            aria-label={title ? undefined : label}
             tabIndex={-1}
             initial={{ opacity: 0, y: 40, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -89,7 +90,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
                 </button>
               </div>
             )}
-            <div className="overflow-y-auto px-6 py-5">{children}</div>
+            <div className={cn("overflow-y-auto px-6 py-5", bodyClassName)}>{children}</div>
             {footer && <div className="border-t border-line-soft bg-surface-2/50 px-6 py-4">{footer}</div>}
           </motion.div>
         </div>

@@ -7,9 +7,9 @@ import { formatINR } from "@naamdev/shared";
 import { Button, Card, Field, InlineAlert, Input, buttonStyles } from "@naamdev/ui";
 import { ApiError, api, errorMessage } from "@/lib/api";
 
-const onPhone = () => typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+export const onPhone = () => typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-function useCountdown(until: string | null) {
+export function useCountdown(until: string | null) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!until) return;

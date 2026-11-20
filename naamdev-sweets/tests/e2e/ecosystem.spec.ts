@@ -63,7 +63,7 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     await p.getByLabel("Password").fill(CUSTOMER_PASSWORD);
     await p.getByRole("button", { name: "Create account" }).click();
 
-    // Checkout: add address, choose COD, place order
+    // Checkout: add address, then pay in the payment sheet with cash on delivery
     await expect(p.getByRole("heading", { name: "Checkout" })).toBeVisible();
     // Email sign-up skipped the optional mobile number, so the address form asks for it.
     await p.getByLabel(/^Mobile number/).fill("9876543210");
@@ -72,8 +72,11 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     await p.getByLabel("PIN code").fill("302001");
     await p.getByRole("button", { name: "Save address" }).click();
     await expect(p.getByText(/Estimated delivery/)).toBeVisible();
-    await p.getByRole("radio", { name: /Cash on delivery/ }).click();
-    await p.getByRole("button", { name: /Place order/ }).last().click();
+    await p.getByRole("button", { name: /Proceed to pay/ }).last().click();
+    const sheet = p.getByRole("dialog", { name: "Payment" });
+    await expect(sheet.getByText("Payment options")).toBeVisible();
+    await sheet.getByRole("button", { name: /Cash on Delivery/ }).click();
+    await sheet.getByRole("button", { name: /Place order/ }).click();
 
     await expect(p.getByRole("heading", { name: "Order placed!" })).toBeVisible();
     orderNumber = (await p.locator("p.font-mono").first().innerText()).trim();
@@ -143,18 +146,23 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     await c.getByRole("button", { name: "Buy now" }).first().click();
     await expect(c.getByRole("heading", { name: "Checkout" })).toBeVisible();
     await expect(c.getByText(/Estimated delivery/)).toBeVisible();
-    await c.getByRole("radio", { name: /Pay by UPI app/ }).click();
-    await c.getByRole("button", { name: /^Pay ₹/ }).last().click();
+    await c.getByRole("button", { name: /Proceed to pay/ }).last().click();
 
-    // Order page: QR code (desktop) and the shop's UPI details; nothing is confirmed yet.
-    await expect(c.getByText("Step 1 · Pay by UPI")).toBeVisible();
-    await expect(c.getByLabel("UPI QR code").locator("svg")).toBeVisible();
-    await expect(c.getByText("RAKESH TAILOR")).toBeVisible();
-    await expect(c.getByText("UPI ID: paytmqr6rgzn2@ptys")).toBeVisible();
+    // Payment sheet: UPI is the recommended option; paying places the order and shows the compact
+    // UPI step — QR code (desktop) and the shop's UPI details. Nothing is confirmed yet.
+    const sheet = c.getByRole("dialog", { name: "Payment" });
+    await sheet.getByRole("button", { name: /^Pay ₹[\d,.]+ with UPI$/ }).click();
+    await expect(sheet.getByLabel("UPI QR code").locator("svg")).toBeVisible();
+    await expect(sheet.getByText("RAKESH TAILOR")).toBeVisible();
+    await expect(sheet.getByText("paytmqr6rgzn2@ptys")).toBeVisible();
+    const upiOrderNumber = ((await sheet.getByText(/^Order ND/).textContent()) ?? "").replace(/^Order /, "").trim();
+    expect(upiOrderNumber).toMatch(/^ND\d{6}-\d{4}$/);
+    await sheet.getByLabel("UPI reference number (UTR)").fill("412345678901");
+    await sheet.getByRole("button", { name: /I've paid/ }).click();
+    await expect(sheet.getByText("Checking your payment")).toBeVisible();
+    await sheet.getByRole("button", { name: "View order status" }).click();
+    await expect(c).toHaveURL(/\/account\/orders\//);
     const upiOrderId = c.url().split("/").pop()!;
-    const upiOrderNumber = (await c.locator("h1 span.font-mono").innerText()).trim();
-    await c.getByLabel("UPI reference number (UTR)").fill("412345678901");
-    await c.getByRole("button", { name: /I've paid/ }).click();
     await expect(c.getByText("Checking your UPI payment")).toBeVisible();
 
     // Staff with "payments.verify" check the shop's UPI account and confirm.

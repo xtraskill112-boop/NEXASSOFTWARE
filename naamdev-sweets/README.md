@@ -29,7 +29,7 @@ coupons, order state machine, permissions, validation, i18n), `packages/ui` (des
 
 | Method | How it's confirmed |
 |---|---|
-| **UPI (direct to the shop)** — default `paytmqr6rgzn2@ptys` (RAKESH TAILOR), editable in Console → Settings → UPI payments | The customer pays from any UPI app (button on phones, QR code on computers) and enters the 12-digit UPI reference. The order stays **on hold** until a staff member with *Confirm direct UPI payments* finds the money in the shop's UPI account and clicks **Payment received**. A reference number alone never confirms an order. |
+| **UPI (direct to the shop)** — default `paytmqr6rgzn2@ptys` (RAKESH TAILOR), editable in Console → Settings → UPI payments | Chosen in NAAMDEV's payment sheet at checkout (compact UPI step). The customer pays from any UPI app (button on phones, QR code on computers) and enters the 12-digit UPI reference. The order stays **on hold** until a staff member with *Confirm direct UPI payments* finds the money in the shop's UPI account and clicks **Payment received**. A reference number alone never confirms an order. |
 | Razorpay (cards, UPI, netbanking, wallets) | Off until you add Razorpay keys. Then: server-side signature and amount checks, webhooks, automatic refunds. |
 | Cash on delivery | Rider collects cash and confirms on delivery. |
 

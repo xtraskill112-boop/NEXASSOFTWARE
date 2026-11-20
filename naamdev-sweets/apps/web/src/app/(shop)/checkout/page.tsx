@@ -10,6 +10,7 @@ import { BrandLoader, Button, Card, InlineAlert, Modal, Switch, Textarea, VegMar
 import { BillSummary } from "@/components/cart/bill-summary";
 import { CouponBox } from "@/components/cart/coupon-box";
 import { AddressForm } from "@/components/checkout/address-form";
+import { PaySheet, type PayMethod, type PlaceResult } from "@/components/checkout/pay-sheet";
 import { payWithRazorpay } from "@/components/checkout/razorpay";
 import { ProductImage } from "@/components/common/product-image";
 import { api, errorMessage } from "@/lib/api";
@@ -26,9 +27,8 @@ export default function CheckoutPage() {
   const [addressId, setAddressId] = useState<string | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [usePoints, setUsePoints] = useState(false);
-  const [method, setMethod] = useState<"ONLINE" | "UPI" | "COD" | null>(null);
   const [note, setNote] = useState("");
-  const [placing, setPlacing] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const idempotencyKey = useRef<string>("");
@@ -56,7 +56,6 @@ export default function CheckoutPage() {
     try {
       const r = await api.post<{ quote: Quote }>("/checkout/quote", { addressId: addressId ?? undefined, redeemPoints: usePoints ? user.loyaltyPoints : 0 });
       setQuote(r.quote);
-      setMethod((m) => m ?? (r.quote.paymentOptions.online.available ? "ONLINE" : r.quote.paymentOptions.upi?.available ? "UPI" : r.quote.paymentOptions.cod.available ? "COD" : null));
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -82,31 +81,32 @@ export default function CheckoutPage() {
     }
   };
 
-  const place = async () => {
-    if (!addressId || !method || !quote) return;
-    setPlacing(true);
+  /** Places the order for the method chosen in the payment sheet; the server calculates every amount. */
+  const placeOrder = async (paymentMethod: PayMethod): Promise<PlaceResult> => {
+    if (!addressId || !quote) throw new Error("Choose a delivery address first");
     setError(null);
     try {
-      const r = await api.post<{ order: Order; payment: PaymentSession | null }>("/checkout/place-order", {
-        addressId, paymentMethod: method, idempotencyKey: idempotencyKey.current, redeemPoints: usePoints ? user?.loyaltyPoints ?? 0 : 0, customerNote: note || null,
+      return await api.post<PlaceResult>("/checkout/place-order", {
+        addressId, paymentMethod, idempotencyKey: idempotencyKey.current, redeemPoints: usePoints ? user?.loyaltyPoints ?? 0 : 0, customerNote: note || null,
       });
-      if (r.payment) await pay(r.payment);
-      else if (method === "UPI") {
-        // Pay the shop's UPI ID from the order page; staff confirm the payment before it's accepted.
-        void refresh();
-        router.replace(`/account/orders/${r.order.id}`);
-      } else finish(r.order.id);
     } catch (e) {
-      setError(errorMessage(e));
       idempotencyKey.current = crypto.randomUUID();
       void loadQuote();
-    } finally {
-      setPlacing(false);
+      throw e;
+    }
+  };
+
+  const closePay = (placedOrderId: string | null) => {
+    setPayOpen(false);
+    if (placedOrderId) {
+      // A UPI order exists (stock reserved): its page keeps the payment and live status.
+      void refresh();
+      router.replace(`/account/orders/${placedOrderId}`);
     }
   };
 
   if (!user || !addresses) return <BrandLoader className="min-h-[70dvh]" label="Preparing checkout" />;
-  if (cart && cart.items.length === 0 && !placing)
+  if (cart && cart.items.length === 0 && !payOpen)
     return (
       <div className="mx-auto max-w-md px-4 py-20 text-center">
         <p className="font-display text-2xl text-ink">Your cart is empty</p>
@@ -117,6 +117,10 @@ export default function CheckoutPage() {
   const selected = addresses.find((a) => a.id === addressId);
   const pricing = quote?.pricing;
   const loyaltyMax = pricing?.maxRedeemablePoints ?? 0;
+  const options = quote?.paymentOptions;
+  const anyMethod = !!options && (options.upi.available || options.cod.available || options.online.available);
+  const canPay = !!quote?.canCheckout && !!addressId && anyMethod;
+  const payLabel = t("checkout.proceedToPay", { amount: formatINR(pricing?.totalPaise ?? 0) });
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-36 pt-6 sm:px-6 md:pb-12">
@@ -169,20 +173,16 @@ export default function CheckoutPage() {
           {/* Payment */}
           <Card className="p-5">
             <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold text-ink"><span className="grid h-7 w-7 place-items-center rounded-full bg-saffron-500 text-xs font-bold text-white">3</span>{t("checkout.payment")}</h2>
-            <div role="radiogroup" className="space-y-3">
+            <div className="flex flex-wrap gap-2">
               {([
-                ["ONLINE", t("checkout.payOnline"), t("checkout.payOnlineHint"), CreditCard, quote?.paymentOptions.online],
-                ["UPI", t("checkout.payUpi"), t("checkout.payUpiHint"), Smartphone, quote?.paymentOptions.upi],
-                ["COD", t("checkout.cod"), t("checkout.codHint"), Banknote, quote?.paymentOptions.cod],
-              ] as const).map(([value, label, hint, Icon, opt]) => (
-                <button key={value} type="button" role="radio" aria-checked={method === value} disabled={!opt?.available} onClick={() => setMethod(value)}
-                  className={cn("flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-55", method === value ? "border-saffron-500 bg-saffron-50/60 dark:bg-saffron-500/10" : "border-line hover:border-saffron-200")}>
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-surface-2 text-maroon-700 dark:text-saffron-300"><Icon className="h-5 w-5" /></span>
-                  <span className="min-w-0 flex-1"><span className="block font-semibold text-ink">{label}</span><span className="block text-xs text-muted">{opt && !opt.available ? opt.reason : hint}</span></span>
-                  <span className={cn("grid h-5 w-5 place-items-center rounded-full border-2", method === value ? "border-saffron-500" : "border-line")}>{method === value && <span className="h-2.5 w-2.5 rounded-full bg-saffron-500" />}</span>
-                </button>
+                ["UPI", t("checkout.payUpi"), Smartphone, options?.upi],
+                ["COD", t("checkout.cod"), Banknote, options?.cod],
+                ["ONLINE", t("checkout.payOnline"), CreditCard, options?.online],
+              ] as const).filter(([, , , opt]) => opt?.available).map(([value, label, Icon]) => (
+                <span key={value} className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-sm font-semibold text-ink-soft"><Icon className="h-4 w-4 text-maroon-700 dark:text-saffron-300" />{label}</span>
               ))}
             </div>
+            <p className="mt-3 text-xs text-muted">{anyMethod || !options ? t("checkout.paymentNext") : options.upi.reason ?? options.cod.reason ?? "Payments are unavailable right now"}</p>
           </Card>
         </div>
 
@@ -203,18 +203,22 @@ export default function CheckoutPage() {
           {pricing ? <BillSummary pricing={pricing} couponCode={quote?.couponCode} /> : <Card className="h-64 nd-shimmer" />}
           {quote?.blockers.map((b) => <InlineAlert key={b} tone="warning">{b}</InlineAlert>)}
           {error && <InlineAlert tone="danger">{error}</InlineAlert>}
-          <Button size="xl" block className="hidden lg:inline-flex" loading={placing} disabled={!quote?.canCheckout || !method || !addressId} onClick={place}>
-            {method === "ONLINE" || method === "UPI" ? t("checkout.pay", { amount: formatINR(pricing?.totalPaise ?? 0) }) : `${t("checkout.placeOrder")} · ${formatINR(pricing?.totalPaise ?? 0)}`}
-          </Button>
-          <p className="text-center text-[11px] leading-relaxed text-muted">By placing this order you agree to our <Link href="/pages/terms" className="underline">terms</Link> and <Link href="/pages/refund-policy" className="underline">refund policy</Link>. Card details are handled by Razorpay and never stored by NAAMDEV.</p>
+          <Button size="xl" block className="hidden lg:inline-flex" disabled={!canPay} onClick={() => setPayOpen(true)}><Lock className="h-4 w-4" />{payLabel}</Button>
+          <p className="text-center text-[11px] leading-relaxed text-muted">By placing this order you agree to our <Link href="/pages/terms" className="underline">terms</Link> and <Link href="/pages/refund-policy" className="underline">refund policy</Link>. {options?.online.available ? "Card details are handled by Razorpay and never stored by NAAMDEV." : "UPI payments go directly to the shop's UPI ID and are confirmed by our team."}</p>
         </aside>
       </div>
 
       <div className="nd-glass fixed inset-x-0 bottom-0 z-50 border-t border-line-soft p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
-        <Button size="xl" block loading={placing} disabled={!quote?.canCheckout || !method || !addressId} onClick={place}>
-          {method === "ONLINE" || method === "UPI" ? t("checkout.pay", { amount: formatINR(pricing?.totalPaise ?? 0) }) : `${t("checkout.placeOrder")} · ${formatINR(pricing?.totalPaise ?? 0)}`}
-        </Button>
+        <Button size="xl" block disabled={!canPay} onClick={() => setPayOpen(true)}><Lock className="h-4 w-4" />{payLabel}</Button>
       </div>
+
+      {options && pricing && (
+        <PaySheet
+          open={payOpen} amountPaise={pricing.totalPaise} options={options} contact={user.email ?? user.phone ?? ""}
+          place={placeOrder} onCodPlaced={(id) => { setPayOpen(false); finish(id); }}
+          onOnline={(session) => { setPayOpen(false); void pay(session); }} onClose={closePay}
+        />
+      )}
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t("checkout.addAddress")} size="lg">
         <AddressForm defaultName={user.name} defaultPhone={user.phone} onCancel={addresses.length ? () => setAddOpen(false) : undefined} onSaved={(a) => {

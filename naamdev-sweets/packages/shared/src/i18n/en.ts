@@ -117,6 +117,8 @@ export const en = {
     codHint: "Pay with cash or UPI at your doorstep",
     placeOrder: "Place order",
     pay: "Pay {amount}",
+    proceedToPay: "Proceed to pay · {amount}",
+    paymentNext: "Choose UPI or cash on delivery on the next screen.",
     orderSummary: "Order summary",
     redeemPoints: "Redeem Mithaas points",
     notes: "Note for the kitchen (optional)",

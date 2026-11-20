@@ -119,6 +119,8 @@ export const hi: Dictionary = {
     codHint: "दरवाज़े पर नकद या UPI से भुगतान करें",
     placeOrder: "ऑर्डर करें",
     pay: "{amount} भुगतान करें",
+    proceedToPay: "भुगतान के लिए आगे बढ़ें · {amount}",
+    paymentNext: "अगली स्क्रीन पर UPI या कैश ऑन डिलीवरी चुनें।",
     orderSummary: "ऑर्डर सारांश",
     redeemPoints: "मिठास पॉइंट्स इस्तेमाल करें",
     notes: "रसोई के लिए नोट (वैकल्पिक)",

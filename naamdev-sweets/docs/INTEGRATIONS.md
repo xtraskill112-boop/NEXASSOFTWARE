@@ -28,6 +28,13 @@ Templates.
 *Console → Settings → UPI payments*: UPI ID (default `paytmqr6rgzn2@ptys`), payee name (default
 RAKESH TAILOR), note (`ORDER #{ORDER_NUMBER}`) and the time a customer has to pay (30 minutes).
 
+At checkout the customer taps **Proceed to pay** and NAAMDEV's own payment sheet opens (shop name and
+total at the top; options **UPI** — recommended — and **Cash on Delivery**, plus cards/netbanking only
+when Razorpay keys are set). Choosing UPI places the order and shows a compact UPI step in the same
+sheet: pay button (phone) or QR code (computer), the shop's UPI ID and payee name with a copy button,
+and the reference-number box. The sheet is branded NAAMDEV SWEETS on purpose — it never shows another
+company's name or logo, because the money goes straight to the shop's UPI ID.
+
 The storefront builds the standard UPI link for each order, e.g.
 `upi://pay?pa=paytmqr6rgzn2%40ptys&pn=RAKESH%20TAILOR&am=450.50&cu=INR&tn=ORDER%20%23ND261119-0042` —
 the amount is always the server-calculated order total. On phones the button opens the customer's
