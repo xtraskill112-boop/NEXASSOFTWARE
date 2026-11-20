@@ -1,0 +1,42 @@
+name: NAAMDEV catalogue photos
+
+# Fetches real, freely licensed photographs of the catalogue's sweets from Wikimedia Commons
+# (scripts/photos/commons.mjs). Without scripts/photos/selection.json it collects candidates to
+# choose from; with it, it downloads the chosen photos in high resolution with their credits.
+# The result is attached to a temporary pre-release ("photos-…"); older ones are removed.
+on:
+  workflow_dispatch:
+  push:
+    paths: ["naamdev-sweets/scripts/photos/**", ".github/workflows/naamdev-photos.yml"]
+
+permissions:
+  contents: write # the temporary release that carries the photos
+
+jobs:
+  photos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: naamdev-sweets
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Fetch from Wikimedia Commons
+        run: |
+          MODE=candidates; [ -f scripts/photos/selection.json ] && MODE=final
+          echo "MODE=$MODE" >> "$GITHUB_ENV"
+          node scripts/photos/commons.mjs "$MODE" "$RUNNER_TEMP/photos"
+          tar -czf "$RUNNER_TEMP/photos-$MODE.tgz" -C "$RUNNER_TEMP/photos" .
+      - name: Publish as a temporary pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for t in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' | grep '^photos-' || true); do
+            gh release delete "$t" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          done
+          TAG="photos-$MODE-${{ github.run_number }}"
+          gh release create "$TAG" "$RUNNER_TEMP/photos-$MODE.tgz" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Temporary: catalogue photo $MODE" --notes "Freely licensed photos from Wikimedia Commons with their credits (credits.json / candidates.json). Used to build the catalogue images; this release is replaced on the next run."
+          echo "Download: ${{ github.server_url }}/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
