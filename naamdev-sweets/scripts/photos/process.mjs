@@ -2,7 +2,7 @@
 //   node scripts/photos/process.mjs <downloadDir>
 // writes apps/api/public/catalog/photos/<name>.webp (960 px), <name>-m.webp (640), <name>-s.webp (320)
 // and credits.json. Crops are centred unless scripts/photos/crops.json gives a position for that name
-// ("north", "south", "east", "west", "attention", …).
+// ("north", "south", "east", "west", "attention", …) or a region { x, y, size } in fractions.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -24,8 +24,20 @@ let bytes = 0;
 for (const name of Object.keys(credits).sort()) {
   const input = sharp(path.join(src, `${name}.jpg`)).rotate();
   const position = crops[name] ?? "centre";
-  const square = await input.resize(960, 960, { fit: "cover", position, withoutEnlargement: false }).toBuffer();
-  for (const [suffix, size, quality] of [["", 960, 80], ["-m", 640, 76], ["-s", 320, 72]]) {
+  // Smaller originals (some could only be fetched at 500 px) are used at their own size, never blown up.
+  const meta = await input.metadata();
+  let base = input;
+  let w = meta.width ?? 960;
+  let h = meta.height ?? 960;
+  if (typeof position === "object") {
+    // { x, y, size }: a square region given as fractions of the width/height (tighter crops).
+    const sz = Math.round(position.size * Math.min(w, h));
+    base = sharp(await input.extract({ left: Math.round(position.x * w), top: Math.round(position.y * h), width: sz, height: sz }).toBuffer());
+    w = h = sz;
+  }
+  const side = Math.min(960, w, h);
+  const square = await base.resize(side, side, { fit: "cover", position: typeof position === "object" ? "centre" : position }).toBuffer();
+  for (const [suffix, size, quality] of [["", side, 80], ["-m", Math.min(640, side), 76], ["-s", 320, 72]]) {
     const file = path.join(out, `${name}${suffix}.webp`);
     const info = await sharp(square).resize(size, size).webp({ quality, effort: 6 }).toFile(file);
     bytes += info.size;
