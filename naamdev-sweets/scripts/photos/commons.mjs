@@ -18,7 +18,7 @@ const OK_LICENSE = /^(cc0|cc[- ]by(-sa)?[- ][\d.]+|public domain|pd\b|pdm)/i;
 
 async function api(params) {
   const u = new URL(API);
-  for (const [k, v] of Object.entries({ format: "json", formatversion: "2", ...params })) u.searchParams.set(k, v);
+  for (const [k, v] of Object.entries({ action: "query", format: "json", formatversion: "2", ...params })) u.searchParams.set(k, v);
   let last = "";
   for (let i = 0; i < 4; i++) {
     const r = await fetch(u, { headers: HEADERS });
