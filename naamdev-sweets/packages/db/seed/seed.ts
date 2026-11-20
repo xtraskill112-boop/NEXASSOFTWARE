@@ -468,33 +468,35 @@ const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
       console.log(`  ${writes.length} record(s) updated`);
     },
   },
-  {
-    // Real photographs replace the drawn artwork wherever the owner hasn't uploaded their own.
-    id: "2026-11-21-real-photos",
-    run: async () => {
-      if (!existsSync(path.join(PHOTO_DIR, "credits.json"))) return false;
-      const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
-      for (const d of (await db.collection(C.products).get()).docs) {
-        const p = d.data() as { slug: string; name: string; images?: { url: string }[] };
-        const photos = photoImages(p.slug, p.name);
-        if (photos.length && (p.images ?? []).every((im) => isSeedArtwork(im.url))) writes.push((b) => b.update(d.ref, { images: photos, updatedAt: now() }));
-      }
-      for (const d of (await db.collection(C.categories).get()).docs) {
-        const c = d.data() as { slug: string; imageUrl?: string | null };
-        const url = CATEGORY_PHOTO[c.slug] && photoUrl(CATEGORY_PHOTO[c.slug]!);
-        if (url && (!c.imageUrl || isSeedArtwork(c.imageUrl))) writes.push((b) => b.update(d.ref, { imageUrl: url, updatedAt: now() }));
-      }
-      for (const d of (await db.collection(C.banners).get()).docs) {
-        const url = d.data().imageUrl as string | null | undefined;
-        const m = isSeedArtwork(url) ? /^\/static\/catalog\/([a-z0-9-]+)\.svg$/.exec(url as string) : null;
-        const photo = m ? photoUrl(m[1]!) : null;
-        if (photo) writes.push((b) => b.update(d.ref, { imageUrl: photo, updatedAt: now() }));
-      }
-      await commitInChunks(writes);
-      console.log(`  ${writes.length} record(s) now use real photos`);
-    },
-  },
 ];
+
+/**
+ * Real photographs replace the drawn artwork wherever the owner hasn't uploaded their own: products
+ * whose images are all seeded artwork, categories and banners still showing artwork. Runs on every
+ * seed, so photos added later are picked up too; anything the owner changed is left alone.
+ */
+async function syncCatalogPhotos() {
+  if (!existsSync(path.join(PHOTO_DIR, "credits.json"))) return;
+  const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+  for (const d of (await db.collection(C.products).get()).docs) {
+    const p = d.data() as { slug: string; name: string; images?: { url: string }[] };
+    const photos = photoImages(p.slug, p.name);
+    if (photos.length && (p.images ?? []).every((im) => isSeedArtwork(im.url))) writes.push((b) => b.update(d.ref, { images: photos, updatedAt: now() }));
+  }
+  for (const d of (await db.collection(C.categories).get()).docs) {
+    const c = d.data() as { slug: string; imageUrl?: string | null };
+    const url = CATEGORY_PHOTO[c.slug] && photoUrl(CATEGORY_PHOTO[c.slug]!);
+    if (url && (!c.imageUrl || isSeedArtwork(c.imageUrl))) writes.push((b) => b.update(d.ref, { imageUrl: url, updatedAt: now() }));
+  }
+  for (const d of (await db.collection(C.banners).get()).docs) {
+    const url = d.data().imageUrl as string | null | undefined;
+    const m = isSeedArtwork(url) ? /^\/static\/catalog\/([a-z0-9-]+)\.svg$/.exec(url as string) : null;
+    const photo = m ? photoUrl(m[1]!) : null;
+    if (photo) writes.push((b) => b.update(d.ref, { imageUrl: photo, updatedAt: now() }));
+  }
+  await commitInChunks(writes);
+  if (writes.length) console.log(`✓ ${writes.length} record(s) switched to real photos`);
+}
 
 async function runMigrations() {
   const ref = db.collection("meta").doc("migrations");
@@ -519,6 +521,7 @@ export async function seed() {
   await seedContent();
   await seedAccounts();
   await runMigrations();
+  await syncCatalogPhotos();
   // Tell running API servers the catalogue changed, so they reload it instead of keeping an older copy.
   await db.collection("meta").doc("catalog").set({ products: FieldValue.increment(1), stock: FieldValue.increment(1) }, { merge: true });
   console.log("Done.");

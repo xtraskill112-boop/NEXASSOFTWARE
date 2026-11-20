@@ -63,6 +63,15 @@ The **NAAMDEV keep-alive** workflow pings it every 10 minutes (one always-on ser
 hours a month). Scheduled workflows only run from the `main` branch, and GitHub pauses them after 60 days
 without repository activity — re-enable it under Actions if that happens.
 
+## Product photos
+
+The sample catalogue shows real photographs of each sweet from Wikimedia Commons (free licences; the
+credit each licence requires appears under the photo and on `/photo-credits`). They are fetched and
+chosen with `scripts/photos/` and the *NAAMDEV catalogue photos* workflow, stored as small WebP files in
+`apps/api/public/catalog/photos/`, and applied on every deploy to products that still show the drawn
+artwork. **Your own photos are best for customers' trust**: upload them in the console (Products → a
+product → Photos) — a product with any uploaded photo is never changed by the deploy.
+
 ## Free-plan limits to know
 
 * **Firestore: 50,000 reads and 20,000 writes per day.** The API is tuned for this (catalogue cached in
