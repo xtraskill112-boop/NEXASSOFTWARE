@@ -42,6 +42,9 @@ test("API is up and Firestore answers", async ({ request }) => {
   expect(res.status()).toBe(200);
   const settings = await request.get(`${API}/api/v1/public/settings`);
   expect(settings.status()).toBe(200);
+  // For the record (not checked — the owner may change these): the current checkout rules.
+  const co = ((await settings.json()) as { checkout?: Record<string, number> }).checkout;
+  if (co) console.log(`checkout: delivery ₹${co.baseDeliveryFeePaise / 100}, free from ₹${co.freeDeliveryThresholdPaise / 100}, minimum ₹${co.minOrderPaise / 100}, GST ${co.defaultGstRate}%`);
   // What the storefront home page will show: each section and how many products it has.
   const home = await request.get(`${API}/api/v1/catalog/home`);
   const text = await home.text();
