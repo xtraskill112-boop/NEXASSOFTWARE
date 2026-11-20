@@ -3,7 +3,7 @@
 //   node scripts/photos/commons.mjs final <outDir>       → the files chosen in selection.json (1280 px) + credits.json
 // Only CC0 / public domain / CC BY / CC BY-SA files are accepted; the credit line each license asks for
 // is saved with every photo. Runs in GitHub Actions (the development container can't reach Commons).
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -65,7 +65,9 @@ async function download(url, file) {
 
 mkdirSync(outDir, { recursive: true });
 if (mode === "candidates") {
-  const queries = JSON.parse(readFileSync(path.join(here, "queries.json"), "utf8"));
+  // queries-extra.json (when present) re-searches just a few products with other words.
+  const extra = path.join(here, "queries-extra.json");
+  const queries = JSON.parse(readFileSync(existsSync(extra) ? extra : path.join(here, "queries.json"), "utf8"));
   const all = {};
   for (const [slug, qs] of Object.entries(queries)) {
     const seen = new Set();
