@@ -37,7 +37,13 @@ test.describe.serial("NAAMDEV ecosystem: order → kitchen → rider → doorste
     const p = await ctx.newPage();
     await noSplash(p);
     await p.goto(WEB);
-    await expect(p.getByRole("heading", { name: "Bestselling sweets" })).toBeVisible();
+    // The whole menu is on the home page: the category bar jumps straight to a section.
+    await expect(p.getByRole("heading", { level: 2, name: "Our menu" })).toBeVisible();
+    const bar = p.getByRole("navigation", { name: "Jump to a category" });
+    await bar.getByRole("link", { name: /^Namkeen/ }).click();
+    await expect(bar.getByRole("link", { name: /^Namkeen/ })).toHaveAttribute("aria-current", "true");
+    await expect(p.getByRole("heading", { level: 3, name: /^Namkeen/ })).toBeInViewport();
+    await expect(p.getByRole("link", { name: "Kaju Katli" }).first()).toBeAttached();
 
     // Typo-tolerant search
     await p.goto(`${WEB}/search?q=kaju%20katri`);

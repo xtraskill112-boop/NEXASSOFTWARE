@@ -63,6 +63,8 @@ export const hi: Dictionary = {
     trustHygiene: "FSSAI प्रमाणित रसोई",
     trustDelivery: "सील बंद डिब्बों में डिलीवरी",
     trustGhee: "शुद्ध देसी घी",
+    menuItems: "{n} आइटम",
+    menuJump: "श्रेणी पर जाएँ",
   },
   product: {
     illustrationPhoto: "फ़ोटो केवल उदाहरण के लिए है",

@@ -454,6 +454,7 @@ async function removeDemoAccounts() {
 /** A migration returns false when it can't run yet (it is then tried again on the next seed). */
 const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
   { id: "2026-11-21-owner-catalogue", run: () => applyOwnerCatalogue() },
+  { id: "2026-11-21-menu-home", run: () => menuHome() },
   {
     // No GST; ₹20 delivery below ₹100, free from ₹100; no minimum order.
     id: "2026-11-20-no-gst-flat-delivery",
@@ -473,6 +474,34 @@ const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
     },
   },
 ];
+
+/** Rails that repeat what the full menu already shows; hidden (not deleted) so the owner can bring any back. */
+const MENU_DUPLICATES = new Set(["CATEGORY_GRID", "BESTSELLERS", "POPULAR", "NEW_ARRIVALS", "TRENDING", "RECOMMENDED", "FAVOURITES", "GIFT_HAMPERS"]);
+
+/**
+ * The home page leads with the whole menu — every product, grouped by category — so customers don't
+ * have to dig through rails and category pages. Offers, "Order again", recently viewed and festival
+ * collections follow it, in their current order.
+ */
+async function menuHome() {
+  const rows = (await db.collection(C.homeSections).get()).docs
+    .map((d) => ({ ref: d.ref, ...(d.data() as { type: string; sortOrder: number }) }))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+  if (!rows.some((r) => r.type === "FULL_MENU")) {
+    writes.push((b) =>
+      b.set(db.collection(C.homeSections).doc(), {
+        type: "FULL_MENU", title: "Our menu", titleHi: "हमारा मेनू", subtitle: "Everything we make, in one place — tap Add to order",
+        collectionId: null, categoryId: null, sortOrder: 0, limit: 30, isActive: true, createdAt: now(), updatedAt: now(),
+      }),
+    );
+  }
+  rows.filter((r) => r.type !== "FULL_MENU").forEach((r, i) =>
+    writes.push((b) => b.update(r.ref, { sortOrder: i + 1, ...(MENU_DUPLICATES.has(r.type) ? { isActive: false } : {}), updatedAt: now() })),
+  );
+  await commitInChunks(writes);
+  console.log(`  ${writes.length} home section(s) updated`);
+}
 
 /**
  * Real photographs replace the drawn artwork wherever the owner hasn't uploaded their own: products

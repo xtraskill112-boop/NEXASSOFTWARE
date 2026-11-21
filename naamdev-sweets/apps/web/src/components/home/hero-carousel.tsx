@@ -25,7 +25,7 @@ export function HeroCarousel({ banners }: { banners: Banner[] }) {
 
   return (
     <section aria-roledescription="carousel" aria-label="Featured offers" className="mx-auto max-w-7xl px-4 pt-2 sm:px-6 sm:pt-4" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      <div className="relative h-[300px] overflow-hidden rounded-[2rem] shadow-lift sm:h-[360px] lg:h-[420px]">
+      <div className="relative h-[230px] overflow-hidden rounded-[1.6rem] shadow-lift sm:h-[360px] sm:rounded-[2rem] lg:h-[420px]">
         <AnimatePresence initial={false} mode="popLayout">
           <motion.div
             key={b.id}
@@ -40,30 +40,30 @@ export function HeroCarousel({ banners }: { banners: Banner[] }) {
           >
             <div className="nd-pattern pointer-events-none absolute inset-0 opacity-25" />
             <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-white/10 blur-2xl" />
-            <div className="relative z-10 flex w-full flex-col justify-center gap-3 p-6 sm:w-3/5 sm:p-10 lg:p-14">
+            <div className="relative z-10 flex w-full flex-col justify-center gap-2 p-5 sm:w-3/5 sm:gap-3 sm:p-10 lg:p-14">
               {b.eyebrow && (
                 <motion.span initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="w-fit rounded-full bg-white/20 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] backdrop-blur">
                   {b.eyebrow}
                 </motion.span>
               )}
-              <motion.h2 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="max-w-[16ch] font-display text-[32px] font-semibold leading-[1.05] tracking-[-0.02em] sm:text-5xl lg:text-6xl">
+              <motion.h2 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="max-w-[14ch] font-display text-[26px] font-semibold leading-[1.05] tracking-[-0.02em] sm:text-5xl lg:text-6xl">
                 {L(b, "title")}
               </motion.h2>
               {b.subtitle && (
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.9 }} transition={{ delay: 0.32 }} className="line-clamp-2 max-w-md text-sm sm:text-base">
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.9 }} transition={{ delay: 0.32 }} className="line-clamp-2 max-w-[60%] text-[13px] sm:max-w-md sm:text-base">
                   {b.subtitle}
                 </motion.p>
               )}
               {b.ctaLink && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                  <Link href={b.ctaLink} className="mt-2 inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-6 text-sm font-bold text-maroon-800 shadow-lg transition hover:gap-3 hover:bg-cream-100">
+                  <Link href={b.ctaLink} className="mt-1 inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm sm:mt-2 sm:h-12 sm:rounded-2xl sm:px-6 font-bold text-maroon-800 shadow-lg transition hover:gap-3 hover:bg-cream-100">
                     {b.ctaLabel ?? "Shop now"} <ArrowRight className="h-4 w-4" />
                   </Link>
                 </motion.div>
               )}
             </div>
             {b.imageUrl && (
-              <motion.div initial={{ opacity: 0, scale: 0.9, rotate: -4 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ delay: 0.15, type: "spring", damping: 18 }} className="pointer-events-none absolute -bottom-10 -right-16 w-[62%] max-w-[520px] sm:-right-6 sm:bottom-auto sm:top-1/2 sm:w-[46%] sm:-translate-y-1/2">
+              <motion.div initial={{ opacity: 0, scale: 0.9, rotate: -4 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ delay: 0.15, type: "spring", damping: 18 }} className="pointer-events-none absolute -bottom-8 -right-12 w-[52%] max-w-[520px] sm:-right-6 sm:bottom-auto sm:top-1/2 sm:w-[46%] sm:-translate-y-1/2">
                 <div className="animate-float">
                   <ProductImage src={b.imageUrl} alt="" priority className="aspect-square w-full rounded-full shadow-[0_40px_80px_-30px_rgba(0,0,0,0.55)] ring-8 ring-white/15" sizes={600} />
                 </div>

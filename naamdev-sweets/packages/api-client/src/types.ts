@@ -29,7 +29,14 @@ export interface PublicCoupon { code: string; title: string; description: string
 export interface HomeSection {
   id: string; type: string; title: string; titleHi: string | null; subtitle: string | null;
   products?: ProductCard[]; categories?: Category[]; coupons?: PublicCoupon[]; clientSide?: boolean;
+  /** FULL_MENU: every live product, grouped by category in menu order. */
+  groups?: MenuGroup[];
   collection?: { slug: string; name: string; description: string | null; theme: string; bannerImageUrl: string | null };
+}
+
+export interface MenuGroup {
+  category: { id: string; slug: string; name: string; nameHi: string | null };
+  products: ProductCard[];
 }
 
 export interface HomeFeed {

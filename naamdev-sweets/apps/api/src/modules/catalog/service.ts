@@ -189,6 +189,35 @@ async function recommendedFor(userId: string | null, limit: number) {
   return cards((p) => p.isFeatured, by((p) => p.soldCount), limit);
 }
 
+/**
+ * The whole menu on one page: every live product, grouped under its top-level category (in the
+ * categories' own order). Within a category, items in stock come first, then bestsellers, then the
+ * most ordered; names break ties so the order stays put between visits.
+ */
+export function fullMenu(snap: CatalogSnapshot) {
+  const topOf = (id: string) => {
+    const c = snap.categoryById.get(id);
+    return c?.parentId ? snap.categoryById.get(c.parentId) ?? c : c;
+  };
+  const byCategory = new Map<string, ProductCard[]>();
+  for (const p of snap.products) {
+    if (!isLive(p, snap)) continue;
+    const top = topOf(p.categoryId);
+    if (!top?.isActive) continue;
+    const list = byCategory.get(top.id) ?? [];
+    list.push(toCard(p, snap));
+    byCategory.set(top.id, list);
+  }
+  return snap.categories
+    .filter((c) => byCategory.has(c.id))
+    .map((c) => ({
+      category: { id: c.id, slug: c.slug, name: c.name, nameHi: c.nameHi },
+      products: byCategory.get(c.id)!.sort(
+        (a, b) => Number(b.inStock) - Number(a.inStock) || Number(b.isBestseller) - Number(a.isBestseller) || b.soldCount - a.soldCount || a.name.localeCompare(b.name),
+      ),
+    }));
+}
+
 const isCurrent = (x: { isActive: boolean; startsAt: Date | null; endsAt: Date | null }, now = new Date()) =>
   x.isActive && (!x.startsAt || x.startsAt <= now) && (!x.endsAt || x.endsAt >= now);
 
@@ -220,6 +249,10 @@ export async function homeFeed(userId: string | null) {
       const base = { id: s.id, type: s.type, title: s.title, titleHi: s.titleHi, subtitle: s.subtitle };
       const n = s.limit;
       switch (s.type) {
+        case "FULL_MENU": {
+          const groups = fullMenu(snap);
+          return groups.length ? { ...base, groups } : null;
+        }
         case "CATEGORY_GRID":
           return { ...base, categories: categories.map((c) => ({ id: c.id, slug: c.slug, name: c.name, nameHi: c.nameHi, imageUrl: c.imageUrl, accentColor: c.accentColor })) };
         case "OFFERS":

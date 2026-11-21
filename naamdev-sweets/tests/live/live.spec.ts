@@ -50,9 +50,11 @@ test("API is up and Firestore answers", async ({ request }) => {
   const text = await home.text();
   console.log(`catalog/home → ${home.status()}`);
   expect(home.status(), text.slice(0, 500)).toBe(200);
-  const feed = JSON.parse(text) as { sections: { type: string; title: string; products?: unknown[] }[] };
-  console.log(feed.sections.map((s) => `${s.type}=${s.products?.length ?? "-"}`).join(" "));
-  expect(feed.sections.find((s) => s.type === "BESTSELLERS")?.products?.length ?? 0).toBeGreaterThan(0);
+  const feed = JSON.parse(text) as { sections: { type: string; title: string; products?: unknown[]; groups?: { category: { name: string }; products: unknown[] }[] }[] };
+  console.log(feed.sections.map((s) => `${s.type}=${s.groups ? s.groups.map((g) => `${g.category.name}:${g.products.length}`).join(",") : s.products?.length ?? "-"}`).join(" "));
+  const menu = feed.sections.find((s) => s.type === "FULL_MENU");
+  const rails = feed.sections.filter((s) => s.products?.length);
+  expect((menu?.groups?.length ?? 0) + rails.length, "the home page has products to show").toBeGreaterThan(0);
 });
 
 test("storefront shows the catalogue from the API", async ({ page }) => {
@@ -60,7 +62,8 @@ test("storefront shows the catalogue from the API", async ({ page }) => {
   await noSplash(page);
   await page.goto(WEB);
   try {
-    await expect(page.getByRole("heading", { name: "Bestselling sweets" })).toBeVisible();
+    // The full menu (or, if the owner hides it, the bestseller rail) — either way products show.
+    await expect(page.getByRole("heading", { name: /^(Our menu|Bestselling sweets)$/ }).first()).toBeVisible();
   } catch (e) {
     throw new Error(`${(e as Error).message}\n\nThe page shows: ${await bodyText(page)}\nProblems: ${problems.join(" | ") || "none"}`);
   }

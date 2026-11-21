@@ -36,7 +36,7 @@ export default function HomeSectionsPage() {
           {data.sections.map((s, i) => (
             <Card key={s.id} className="flex items-center gap-3 p-3">
               <div className="flex flex-col"><button type="button" aria-label="Move up" disabled={i === 0} onClick={() => void move(i, -1)} className="p-1 text-muted disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button><button type="button" aria-label="Move down" disabled={i === data.sections.length - 1} onClick={() => void move(i, 1)} className="p-1 text-muted disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button></div>
-              <button type="button" onClick={() => setE(s)} className="min-w-0 flex-1 text-left"><p className="font-semibold text-ink">{s.title}</p><p className="text-xs text-muted">{label(s.type)}{s.collection ? ` · ${s.collection.name}` : ""}{s.category ? ` · ${s.category.name}` : ""} · up to {s.limit}</p></button>
+              <button type="button" onClick={() => setE(s)} className="min-w-0 flex-1 text-left"><p className="font-semibold text-ink">{s.title}</p><p className="text-xs text-muted">{label(s.type)}{s.collection ? ` · ${s.collection.name}` : ""}{s.category ? ` · ${s.category.name}` : ""} · {s.type === "FULL_MENU" ? "every product, by category" : `up to ${s.limit}`}</p></button>
               <Badge tone={s.isActive ? "success" : "neutral"}>{s.isActive ? "Visible" : "Hidden"}</Badge>
               <Switch checked={s.isActive} onChange={async (v) => { await api.put(`/admin/marketing/home-sections/${s.id}`, body({ ...s, isActive: v })); void reload(); }} label="Visible" />
               <button type="button" aria-label="Delete section" className="p-2 text-muted hover:text-maroon-600" onClick={async () => { if (confirmAction("Remove this section?")) { await api.del(`/admin/marketing/home-sections/${s.id}`); void reload(); } }}><Trash2 className="h-4 w-4" /></button>
@@ -52,7 +52,8 @@ export default function HomeSectionsPage() {
           <Field label="Subtitle">{(p) => <Input {...p} value={e.subtitle ?? ""} onChange={(x) => setE({ ...e, subtitle: x.target.value })} />}</Field>
           {e.type === "FESTIVAL_COLLECTION" && <Field label="Collection">{(p) => <Select {...p} value={e.collectionId ?? ""} onChange={(x) => setE({ ...e, collectionId: x.target.value })}><option value="">Choose…</option>{cols.data?.collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}</Field>}
           {e.type === "GIFT_HAMPERS" && <Field label="Category">{(p) => <Select {...p} value={e.categoryId ?? ""} onChange={(x) => setE({ ...e, categoryId: x.target.value })}><option value="">Gift hampers (default)</option>{cats.data?.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}</Field>}
-          <Field label="Max items">{(p) => <Input {...p} type="number" value={e.limit ?? 10} onChange={(x) => setE({ ...e, limit: Number(x.target.value) })} />}</Field>
+          {e.type !== "FULL_MENU" && <Field label="Max items">{(p) => <Input {...p} type="number" value={e.limit ?? 10} onChange={(x) => setE({ ...e, limit: Number(x.target.value) })} />}</Field>}
+          {e.type === "FULL_MENU" && <p className="text-xs text-muted">Shows every live product, grouped by category in the order set on the Categories page. Out-of-stock items show as sold out at the end of their category.</p>}
           <Checkbox checked={e.isActive ?? true} onChange={(v) => setE({ ...e, isActive: v })} label="Visible" />
         </div>}
       </Modal>

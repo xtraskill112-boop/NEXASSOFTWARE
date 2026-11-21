@@ -37,7 +37,7 @@ export type LoyaltyTxnType = "EARN" | "REDEEM" | "SIGNUP_BONUS" | "REFERRAL_BONU
 export type ReferralStatus = "PENDING" | "COMPLETED" | "CANCELLED";
 export type BannerPlacement = "HERO" | "OFFER_STRIP" | "PROMO_GRID";
 export type HomeSectionType =
-  | "CATEGORY_GRID" | "BESTSELLERS" | "POPULAR" | "NEW_ARRIVALS" | "TRENDING" | "RECOMMENDED" | "FAVOURITES"
+  | "FULL_MENU" | "CATEGORY_GRID" | "BESTSELLERS" | "POPULAR" | "NEW_ARRIVALS" | "TRENDING" | "RECOMMENDED" | "FAVOURITES"
   | "GIFT_HAMPERS" | "FESTIVAL_COLLECTION" | "RECENTLY_VIEWED" | "FREQUENTLY_PURCHASED" | "OFFERS";
 
 /** roles/{key} */

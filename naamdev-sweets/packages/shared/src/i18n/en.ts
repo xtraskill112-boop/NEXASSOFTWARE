@@ -61,6 +61,8 @@ export const en = {
     trustHygiene: "FSSAI certified kitchen",
     trustDelivery: "Delivered in sealed boxes",
     trustGhee: "Pure desi ghee",
+    menuItems: "{n} items",
+    menuJump: "Jump to a category",
   },
   product: {
     illustrationPhoto: "Photo for illustration purposes only",

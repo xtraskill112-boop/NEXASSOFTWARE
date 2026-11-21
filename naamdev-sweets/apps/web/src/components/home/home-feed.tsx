@@ -3,6 +3,7 @@ import type { HomeFeed } from "@naamdev/api-client";
 import { localized } from "@naamdev/shared/i18n";
 import { BrandLoader, ErrorState } from "@naamdev/ui";
 import { CategoryGrid } from "@/components/home/category-grid";
+import { FullMenu } from "@/components/home/full-menu";
 import { HeroCarousel } from "@/components/home/hero-carousel";
 import { CollectionShowcase, CouponsRail, OfferStrip, PersonalRail, PromoGrid, RecentlyViewed, TrustStrip } from "@/components/home/sections";
 import { ProductRail } from "@/components/product/product-rail";
@@ -31,15 +32,24 @@ export function HomeFeedView() {
     );
   const title = (s: HomeFeed["sections"][number]) => localized(s, "title", locale);
   let promoShown = false;
+  const hasMenu = feed.sections.some((s) => s.type === "FULL_MENU");
 
   return (
     <div className="pb-4">
       <HeroCarousel banners={feed.banners.hero} />
       <TrustStrip />
-      <OfferStrip banners={feed.banners.strip} />
+      {/* With the full menu on the page, products come first and the offer cards follow them. */}
+      {!hasMenu && <OfferStrip banners={feed.banners.strip} />}
       {feed.sections.map((s, idx) => {
         const node = (() => {
           switch (s.type) {
+            case "FULL_MENU":
+              return (
+                <>
+                  <FullMenu section={s} />
+                  <OfferStrip banners={feed.banners.strip} />
+                </>
+              );
             case "CATEGORY_GRID":
               return <CategoryGrid title={title(s)} categories={s.categories ?? []} />;
             case "OFFERS":

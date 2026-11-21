@@ -66,7 +66,23 @@ describe("catalog & search", () => {
     const c = await client();
     const r = await c.get("/api/v1/catalog/home");
     expect(r.body.banners.hero.length).toBeGreaterThan(0);
-    expect(r.body.sections.find((s: { type: string }) => s.type === "BESTSELLERS").products.length).toBeGreaterThan(0);
+    type Card = { slug: string; inStock: boolean; category: { slug: string } };
+    const sections = r.body.sections as { type: string; groups?: { category: { slug: string }; products: Card[] }[] }[];
+    // The full menu leads the page and the rails that would repeat it are hidden.
+    expect(sections[0]!.type).toBe("FULL_MENU");
+    expect(sections.some((s) => s.type === "BESTSELLERS" || s.type === "CATEGORY_GRID")).toBe(false);
+    const groups = sections[0]!.groups!;
+    const all = groups.flatMap((g) => g.products);
+    const list = await c.get("/api/v1/catalog/products?pageSize=100");
+    expect(all.length).toBe(list.body.meta.total); // every live product, exactly once
+    expect(new Set(all.map((p) => p.slug)).size).toBe(all.length);
+    for (const g of groups) {
+      expect(g.products.every((p) => p.category.slug === g.category.slug)).toBe(true);
+      // Sold-out items sit at the end of their category.
+      const firstOut = g.products.findIndex((p) => !p.inStock);
+      if (firstOut >= 0) expect(g.products.slice(firstOut).every((p) => !p.inStock)).toBe(true);
+    }
+    expect(groups.find((g) => g.category.slug === "kaju-sweets")?.products.some((p) => p.slug === "kaju-katli")).toBe(true);
   });
 
   it("estimates delivery for serviceable pincodes only", async () => {

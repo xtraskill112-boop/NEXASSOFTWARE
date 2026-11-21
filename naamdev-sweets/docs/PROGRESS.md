@@ -7,6 +7,7 @@ Status of every area in the original brief. ✅ built and covered by automated t
 ## Customer storefront (`apps/web`)
 
 - ✅ Home feed configurable from the console (hero banners, categories, bestsellers, collections, offers, announcement bar)
+- ✅ Full menu on the home page: every product grouped by category, with a sticky category bar to jump between sections (a "Full menu" home section — the owner can move or hide it in Content → Home page)
 - ✅ Categories, category pages with filters (veg/egg, price, in stock, offers) and sorting
 - ✅ Typo-tolerant search with suggestions, trending searches, ingredient/category matching
 - ✅ Product page: variants (weight/pack) with server prices, MRP savings, stock, ingredients, shelf life, allergens, reviews, JSON-LD

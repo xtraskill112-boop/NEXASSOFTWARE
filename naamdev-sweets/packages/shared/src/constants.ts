@@ -93,6 +93,7 @@ export const DOCUMENT_TYPES = ["AADHAAR", "PAN", "DRIVING_LICENSE", "VEHICLE_RC"
 export const REQUIRED_PARTNER_DOCUMENTS = ["AADHAAR", "DRIVING_LICENSE", "PROFILE_PHOTO"] as const;
 export const BANNER_THEMES = ["saffron", "maroon", "royal", "pistachio", "rose", "midnight", "gold"] as const;
 export const HOME_SECTION_TYPES = [
+  "FULL_MENU",
   "CATEGORY_GRID",
   "BESTSELLERS",
   "POPULAR",
