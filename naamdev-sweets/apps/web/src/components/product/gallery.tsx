@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Expand, PlayCircle, X } from "lucide-react";
 import { cn } from "@naamdev/ui";
+import { useI18n } from "@/lib/i18n";
+import { isCatalogPhoto } from "@/lib/photos";
 import { ProductImage } from "../common/product-image";
 
 /** Image gallery with hover-zoom (desktop), swipe (mobile), full-screen lightbox and optional video. */
@@ -13,6 +15,7 @@ export function Gallery({ images, name, videoUrl }: { images: { url: string; alt
   const [showVideo, setShowVideo] = useState(false);
   const items = images.length ? images : [{ url: "", alt: name }];
   const cur = items[i]!;
+  const { t } = useI18n();
   return (
     <div className="lg:sticky lg:top-24">
       <div className="relative overflow-hidden rounded-[2rem] bg-surface-2 shadow-card ring-1 ring-line-soft">
@@ -41,6 +44,8 @@ export function Gallery({ images, name, videoUrl }: { images: { url: string; alt
           <span className="pointer-events-none absolute bottom-4 right-4 grid h-10 w-10 place-items-center rounded-full bg-white/85 text-ink shadow backdrop-blur dark:bg-black/50 dark:text-white"><Expand className="h-4 w-4" /></span>
         </div>
       </div>
+      {/* Catalogue photos are representative (not this shop's own); uploaded photos carry no note. */}
+      {!showVideo && isCatalogPhoto(cur.url) && <p className="mt-2 px-1 text-[11px] text-muted">{t("product.illustrationPhoto")}</p>}
       {(items.length > 1 || videoUrl) && (
         <div className="mt-3 flex gap-2.5">
           {items.map((im, k) => (

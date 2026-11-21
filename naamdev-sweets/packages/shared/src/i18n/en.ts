@@ -63,6 +63,7 @@ export const en = {
     trustGhee: "Pure desi ghee",
   },
   product: {
+    illustrationPhoto: "Photo for illustration purposes only",
     selectWeight: "Select weight",
     quantity: "Quantity",
     description: "Description",

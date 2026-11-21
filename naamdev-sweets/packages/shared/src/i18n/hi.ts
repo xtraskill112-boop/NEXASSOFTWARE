@@ -65,6 +65,7 @@ export const hi: Dictionary = {
     trustGhee: "शुद्ध देसी घी",
   },
   product: {
+    illustrationPhoto: "फ़ोटो केवल उदाहरण के लिए है",
     selectWeight: "वज़न चुनें",
     quantity: "मात्रा",
     description: "विवरण",
