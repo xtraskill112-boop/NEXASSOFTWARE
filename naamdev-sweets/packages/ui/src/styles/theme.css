@@ -194,7 +194,7 @@
     display: none;
   }
   .nd-glass {
-    background: color-mix(in srgb, var(--nd-bg-elevated) 78%, transparent);
+    background: color-mix(in srgb, var(--nd-bg-elevated) 90%, transparent);
     backdrop-filter: saturate(1.6) blur(18px);
     -webkit-backdrop-filter: saturate(1.6) blur(18px);
   }

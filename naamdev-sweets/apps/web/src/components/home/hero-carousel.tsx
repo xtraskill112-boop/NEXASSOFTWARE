@@ -50,7 +50,7 @@ export function HeroCarousel({ banners }: { banners: Banner[] }) {
                 {L(b, "title")}
               </motion.h2>
               {b.subtitle && (
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.9 }} transition={{ delay: 0.32 }} className="line-clamp-2 max-w-[60%] text-[13px] sm:max-w-md sm:text-base">
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.9 }} transition={{ delay: 0.32 }} className="line-clamp-1 max-w-[60%] text-[13px] sm:line-clamp-2 sm:max-w-md sm:text-base">
                   {b.subtitle}
                 </motion.p>
               )}
@@ -72,7 +72,7 @@ export function HeroCarousel({ banners }: { banners: Banner[] }) {
           </motion.div>
         </AnimatePresence>
         {n > 1 && (
-          <div className="absolute bottom-4 left-6 z-20 flex gap-1.5 sm:left-10">
+          <div className="absolute bottom-3 left-5 z-20 flex gap-1.5 sm:bottom-4 sm:left-10">
             {banners.map((x, k) => (
               <button key={x.id} type="button" aria-label={`Show slide ${k + 1}`} aria-current={k === i} onClick={() => setI(k)} className="h-2 overflow-hidden rounded-full bg-white/35 transition-all" style={{ width: k === i ? 28 : 8 }}>
                 {k === i && !paused && <motion.span key={i} className="block h-full bg-white" initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 5.5, ease: "linear" }} />}
