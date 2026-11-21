@@ -455,6 +455,7 @@ async function removeDemoAccounts() {
 const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
   { id: "2026-11-21-owner-catalogue", run: () => applyOwnerCatalogue() },
   { id: "2026-11-21-menu-home", run: () => menuHome() },
+  { id: "2026-11-21-archive-old-products", run: () => archiveOldProducts() },
   {
     // No GST; ₹20 delivery below ₹100, free from ₹100; no minimum order.
     id: "2026-11-20-no-gst-flat-delivery",
@@ -501,6 +502,106 @@ async function menuHome() {
   );
   await commitInChunks(writes);
   console.log(`  ${writes.length} home section(s) updated`);
+}
+
+/** Seeded banners about sample products the shop doesn't sell (matched by their seeded title). */
+const OLD_BANNERS = new Set(["Winter mithaas is here", "Wedding season gifting", "Eggless fusion cakes"]);
+const SEED_KAJU_SUBTITLE = "Hand-sorted W240 cashews, silver vark, made fresh every morning.";
+
+/**
+ * The owner asked for the old sample products to go. Every sample product they don't sell (already
+ * hidden by the owner-catalogue migration) is archived — out of the storefront, the console's product
+ * and stock lists and the stock alerts, but restorable from Products → Archived; past orders keep
+ * their lines. Their leftover sample stock is written off in the stock ledger, the sample collections
+ * and the banners about those products are switched off, and the hero shows the owner's own products.
+ * Products the owner added or switched back on are never touched.
+ */
+async function archiveOldProducts(): Promise<void | false> {
+  const applied = ((await db.collection("meta").doc("migrations").get()).data()?.applied ?? {}) as Record<string, unknown>;
+  if (!applied["2026-11-21-owner-catalogue"]) return false;
+  const owner = new Set<string>([...KEEP, ...NEW_PRODUCTS.map((p) => p.slug)]);
+  const sample = new Set<string>(PRODUCTS.map((p) => p.slug));
+  const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+
+  const archived = new Set<string>();
+  for (const d of (await db.collection(C.products).get()).docs) {
+    const p = d.data() as { slug: string; isActive?: boolean; deletedAt?: unknown };
+    if (!sample.has(p.slug) || owner.has(p.slug) || p.isActive !== false || p.deletedAt) continue;
+    archived.add(d.id);
+    writes.push((b) => b.update(d.ref, { deletedAt: now(), isActive: false, isFeatured: false, updatedAt: now() }));
+  }
+
+  // Write off their remaining sample stock so it no longer counts or raises expiry alerts.
+  let units = 0;
+  const batches = (await db.collection(C.batches).where("status", "==", "ACTIVE").get()).docs.filter((d) => archived.has(d.data().productId));
+  const byVariant = new Map<string, typeof batches>();
+  for (const d of batches) byVariant.set(d.data().variantId, [...(byVariant.get(d.data().variantId) ?? []), d]);
+  for (const [variantId, list] of byVariant) {
+    const invRef = db.collection(C.inventory).doc(variantId);
+    let available = ((await invRef.get()).data()?.available as number | undefined) ?? 0;
+    for (const d of list) {
+      const { remaining, productId } = d.data() as { remaining: number; productId: string };
+      writes.push((b) => b.update(d.ref, { status: "DISCARDED", remaining: 0, updatedAt: now() }));
+      if (remaining <= 0) continue;
+      available = Math.max(0, available - remaining);
+      units += remaining;
+      const balanceAfter = available;
+      writes.push((b) =>
+        b.set(db.collection(C.stockTransactions).doc(), {
+          variantId, productId, batchId: d.id, type: "ADJUSTMENT", quantity: -remaining, balanceAfter,
+          reason: "Sample product removed from the catalogue", orderId: null, createdById: null, createdAt: now(),
+        }),
+      );
+    }
+    const finalAvailable = available;
+    writes.push((b) => b.update(invRef, { available: finalAvailable, updatedAt: now() }));
+  }
+
+  // Sample collections go; any other collection just drops the archived products.
+  const offCollections = new Set<string>();
+  const sampleCollections = new Set<string>(COLLECTIONS.map((c) => c.slug));
+  for (const d of (await db.collection(C.collections).get()).docs) {
+    const c = d.data() as { slug: string; isActive?: boolean; products?: { productId: string }[] };
+    if (sampleCollections.has(c.slug)) {
+      offCollections.add(d.id);
+      if (c.isActive !== false) writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+    } else if ((c.products ?? []).some((x) => archived.has(x.productId))) {
+      writes.push((b) => b.update(d.ref, { products: c.products!.filter((x) => !archived.has(x.productId)), updatedAt: now() }));
+    }
+  }
+  for (const d of (await db.collection(C.homeSections).where("type", "==", "FESTIVAL_COLLECTION").get()).docs)
+    if (offCollections.has(d.data().collectionId) && d.data().isActive !== false) writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+
+  // Banners: the sample ones about old products go; the hero shows the owner's own products.
+  const bannerDocs = (await db.collection(C.banners).get()).docs;
+  const titles = new Set(bannerDocs.map((d) => d.data().title as string));
+  for (const d of bannerDocs) {
+    const bn = d.data() as { title: string; subtitle?: string | null; isActive?: boolean };
+    if (OLD_BANNERS.has(bn.title) && bn.isActive !== false) writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+    if (bn.subtitle === SEED_KAJU_SUBTITLE)
+      writes.push((b) => b.update(d.ref, { subtitle: "Our cashew katli, packed fresh and delivered to your door.", sortOrder: 0, updatedAt: now() }));
+  }
+  const heroes = [
+    {
+      title: "Motichoor laddu & barfi", titleHi: "मोतीचूर लड्डू और बर्फी", eyebrow: "Sweets by the kg",
+      subtitle: "Motichoor, boondi, chocolate, vanilla and white barfi — order by weight.", ctaLabel: "See all sweets", ctaLink: "/#menu",
+      theme: "rose", sortOrder: 1, imageUrl: photoUrl("motichoor-laddu"),
+    },
+    {
+      title: "Namkeen for every chai break", titleHi: "हर चाय के साथ नमकीन", eyebrow: "Kolhapuri · Ratlami · Moth Bhujia",
+      subtitle: "Spicy or mild — freshly packed namkeen by the kg.", ctaLabel: "Shop namkeen", ctaLink: "/category/namkeen",
+      theme: "saffron", sortOrder: 2, imageUrl: photoUrl("kolhapuri-namkeen"),
+    },
+  ];
+  for (const h of heroes) {
+    if (titles.has(h.title)) continue;
+    writes.push((b) =>
+      b.set(db.collection(C.banners).doc(), { ...h, placement: "HERO", startsAt: null, endsAt: null, isActive: true, createdAt: now(), updatedAt: now() }),
+    );
+  }
+
+  await commitInChunks(writes);
+  console.log(`  ${archived.size} old product(s) archived, ${units} unit(s) of their sample stock written off`);
 }
 
 /**

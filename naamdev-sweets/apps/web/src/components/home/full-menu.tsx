@@ -73,7 +73,7 @@ export function FullMenu({ section }: { section: HomeSection }) {
 
   if (!groups.length) return null;
   return (
-    <div id="menu">
+    <div id="menu" style={{ scrollMarginTop: headerHeight }}>
       <div className="mx-auto flex max-w-7xl items-end justify-between gap-3 px-4 pt-6 sm:px-6">
         <div className="min-w-0">
           <h2 className="font-display text-[26px] font-semibold leading-tight text-ink sm:text-3xl">{L(section, "title")}</h2>

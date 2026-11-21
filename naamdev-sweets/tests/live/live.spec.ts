@@ -50,8 +50,9 @@ test("API is up and Firestore answers", async ({ request }) => {
   const text = await home.text();
   console.log(`catalog/home → ${home.status()}`);
   expect(home.status(), text.slice(0, 500)).toBe(200);
-  const feed = JSON.parse(text) as { sections: { type: string; title: string; products?: unknown[]; groups?: { category: { name: string }; products: unknown[] }[] }[] };
+  const feed = JSON.parse(text) as { banners?: { hero: { title: string }[] }; sections: { type: string; title: string; products?: unknown[]; groups?: { category: { name: string }; products: unknown[] }[] }[] };
   console.log(feed.sections.map((s) => `${s.type}=${s.groups ? s.groups.map((g) => `${g.category.name}:${g.products.length}`).join(",") : s.products?.length ?? "-"}`).join(" "));
+  console.log(`hero banners: ${feed.banners?.hero.map((b) => b.title).join(" | ") || "none"}`);
   const menu = feed.sections.find((s) => s.type === "FULL_MENU");
   const rails = feed.sections.filter((s) => s.products?.length);
   expect((menu?.groups?.length ?? 0) + rails.length, "the home page has products to show").toBeGreaterThan(0);
