@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Staff console for NAAMDEV SWEETS: orders, kitchen, stock, products and reports.",
     start_url: "/",
     display: "standalone",
-    background_color: "#FFFBF3",
+    background_color: "#FAF6EF",
     theme_color: "#6E1528",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },

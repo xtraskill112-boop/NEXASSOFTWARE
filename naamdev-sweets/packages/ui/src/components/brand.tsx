@@ -49,9 +49,9 @@ export function Logo({ size = "md", className, tone = "auto", subtitle }: { size
   const sub = tone === "light" ? "text-cream-200/80" : tone === "dark" ? "text-saffron-700" : "text-saffron-700 dark:text-cream-300/80";
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <Emblem size={s.e} className="shrink-0 drop-shadow-sm" />
+      <Emblem size={s.e} className="shrink-0" />
       <span className="flex flex-col leading-none">
-        <span className={cn("font-display font-bold tracking-[0.08em]", s.t, word)}>NAAMDEV</span>
+        <span className={cn("font-display font-extrabold tracking-[0.06em]", s.t, word)}>NAAMDEV</span>
         <span className={cn("mt-1 font-sans font-bold uppercase", s.st, sub)}>{subtitle ?? "Sweets"}</span>
       </span>
     </span>
@@ -62,18 +62,16 @@ export function Logo({ size = "md", className, tone = "auto", subtitle }: { size
 export function BrandLoader({ label = "Loading", className }: { label?: string; className?: string }) {
   return (
     <div role="status" aria-label={label} className={cn("flex flex-col items-center justify-center gap-4", className)}>
-      <div className="relative h-20 w-20">
-        <motion.div className="absolute inset-0 rounded-full border-[3px] border-saffron-200 border-t-saffron-500 dark:border-saffron-500/20 dark:border-t-saffron-400" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.1, ease: "linear" }} />
-        <div className="absolute inset-[10px] grid place-items-center">
-          <Emblem size={52} />
-        </div>
+      <Emblem size={44} />
+      <div className="h-0.5 w-24 overflow-hidden rounded-full bg-line">
+        <motion.div className="h-full w-1/3 rounded-full bg-maroon-700 dark:bg-maroon-300" animate={{ x: ["-100%", "300%"] }} transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }} />
       </div>
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted">{label}</p>
+      <p className="text-sm text-muted">{label}…</p>
     </div>
   );
 }
 
-/** First-visit splash screen (once per browser session). */
+/** First-visit splash screen (once per browser session): the logo on the shop's paper colour. */
 export function SplashScreen({ tagline = "Mithaas that feels like home", storageKey = "nd_splash" }: { tagline?: string; storageKey?: string }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
@@ -84,25 +82,16 @@ export function SplashScreen({ tagline = "Mithaas that feels like home", storage
       return;
     }
     setShow(true);
-    const t = setTimeout(() => setShow(false), 1900);
+    const t = setTimeout(() => setShow(false), 1100);
     return () => clearTimeout(t);
   }, [storageKey]);
   return (
     <AnimatePresence>
       {show && (
-        <motion.div className="fixed inset-0 z-[200] grid place-items-center nd-gradient-royal" initial={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.5 } }} onClick={() => setShow(false)}>
-          <div className="nd-pattern absolute inset-0 opacity-40" />
-          <div className="relative flex flex-col items-center">
-            <motion.div initial={{ scale: 0.6, opacity: 0, rotate: -8 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} transition={{ type: "spring", damping: 14, stiffness: 140 }}>
-              <Emblem size={128} className="drop-shadow-[0_20px_40px_rgba(245,127,14,0.45)]" />
-            </motion.div>
-            <motion.div className="mt-6 text-center" initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.35, duration: 0.5 }}>
-              <p className="font-display text-4xl font-bold tracking-[0.12em] text-saffron-200">NAAMDEV</p>
-              <p className="mt-2 text-xs font-bold uppercase tracking-[0.7em] text-cream-200/80">Sweets</p>
-            </motion.div>
-            <motion.p className="mt-8 font-display text-lg italic text-cream-200/90" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>
-              {tagline}
-            </motion.p>
+        <motion.div className="fixed inset-0 z-[200] grid place-items-center bg-bg" initial={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.3 } }} onClick={() => setShow(false)}>
+          <div className="flex flex-col items-center gap-4">
+            <Logo size="lg" />
+            <p className="text-sm text-muted">{tagline}</p>
           </div>
         </motion.div>
       )}

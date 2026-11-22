@@ -34,7 +34,7 @@ export default function VariantStock() {
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Available" value={v.inventory?.available ?? 0} />
         <StatCard label="Reserved in orders" value={v.inventory?.reserved ?? 0} />
-        <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wider text-muted">Low-stock alert at</p>
+        <Card className="p-5"><p className="text-[12px] font-semibold text-muted">Low-stock alert at</p>
           <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); void run(() => api.patch(`/admin/inventory/variants/${variantId}/threshold`, { lowStockThreshold: Number(threshold) }), "Threshold updated"); }}>
             <Input type="number" className="h-10" defaultValue={v.inventory?.lowStockThreshold ?? 10} onChange={(e) => setThreshold(e.target.value)} aria-label="Threshold" />
             <Can any={["inventory.manage"]}><Button size="sm" type="submit" disabled={!threshold}>Save</Button></Can>
@@ -57,7 +57,7 @@ export default function VariantStock() {
         { key: "t", header: "Type", cell: (t) => <Badge tone={t.quantity > 0 ? "success" : t.type === "DAMAGED" || t.type === "EXPIRED" ? "danger" : "neutral"}>{t.type.replace("_", " ").toLowerCase()}</Badge> },
         { key: "q", header: "Change", align: "right", cell: (t) => <b className={t.quantity > 0 ? "text-pista-600" : t.quantity < 0 ? "text-maroon-600" : ""}>{t.quantity > 0 ? "+" : ""}{t.quantity}</b> },
         { key: "b", header: "Balance", align: "right", cell: (t) => t.balanceAfter },
-        { key: "r", header: "Details", cell: (t) => <span className="text-xs">{t.batch ? `Batch ${t.batch.batchNumber} · ` : ""}{t.reason}{t.orderId ? <> · <Link className="text-saffron-700" href={`/orders/${t.orderId}`}>order</Link></> : ""}{t.createdBy ? ` · ${t.createdBy.name}` : ""}</span> },
+        { key: "r", header: "Details", cell: (t) => <span className="text-xs">{t.batch ? `Batch ${t.batch.batchNumber} · ` : ""}{t.reason}{t.orderId ? <> · <Link className="text-maroon-700" href={`/orders/${t.orderId}`}>order</Link></> : ""}{t.createdBy ? ` · ${t.createdBy.name}` : ""}</span> },
       ]} />
       <Modal open={batchOpen} onClose={() => setBatchOpen(false)} title="Add stock batch" footer={<div className="flex justify-end"><Button loading={busy} onClick={async () => { if (await run(() => api.post("/admin/inventory/batches", { variantId, batchNumber: b.batchNumber, quantity: Number(b.quantity), manufacturedAt: new Date(b.manufacturedAt).toISOString(), expiresAt: new Date(b.expiresAt + "T23:59:00").toISOString(), costPricePaise: toPaise(b.cost), supplierId: b.supplierId || null }), "Batch added")) setBatchOpen(false); }}>Add batch</Button></div>}>
         <div className="grid gap-4 sm:grid-cols-2">

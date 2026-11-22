@@ -20,10 +20,10 @@ export function ProductRail({ title, subtitle, products, href, eyebrow }: { titl
         eyebrow={eyebrow}
         action={
           <div className="flex items-center gap-2">
-            {href && <Link href={href} className="text-sm font-bold text-saffron-700 hover:underline dark:text-saffron-300">{t("common.viewAll")}</Link>}
+            {href && <Link href={href} className="text-[14px] font-semibold text-maroon-700 underline-offset-4 hover:underline dark:text-maroon-200">{t("common.viewAll")}</Link>}
             <div className="hidden gap-1.5 md:flex">
-              <button type="button" aria-label="Scroll left" onClick={() => scroll(-1)} className="grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-ink-soft transition hover:border-saffron-300"><ChevronLeft className="h-4 w-4" /></button>
-              <button type="button" aria-label="Scroll right" onClick={() => scroll(1)} className="grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-ink-soft transition hover:border-saffron-300"><ChevronRight className="h-4 w-4" /></button>
+              <button type="button" aria-label="Scroll left" onClick={() => scroll(-1)} className="grid h-9 w-9 place-items-center rounded-md border border-line bg-surface text-ink-soft transition-colors hover:bg-surface-2"><ChevronLeft className="h-4 w-4" /></button>
+              <button type="button" aria-label="Scroll right" onClick={() => scroll(1)} className="grid h-9 w-9 place-items-center rounded-md border border-line bg-surface text-ink-soft transition-colors hover:bg-surface-2"><ChevronRight className="h-4 w-4" /></button>
             </div>
           </div>
         }
@@ -39,7 +39,7 @@ export function ProductRail({ title, subtitle, products, href, eyebrow }: { titl
 
 export function ProductGrid({ products, className }: { products: Product[]; className?: string }) {
   return (
-    <div className={className ?? "grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"}>
+    <div className={className ?? "grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-4 xl:grid-cols-5"}>
       {products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
     </div>
   );

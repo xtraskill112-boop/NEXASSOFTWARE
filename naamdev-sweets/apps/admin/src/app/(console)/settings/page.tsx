@@ -157,7 +157,7 @@ function StoreForm() {
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Button variant="outline" size="sm" loading={locating} onClick={useMyLocation}><MapPin className="h-4 w-4" />Use my current location</Button>
-        {validPoint && <a href={`https://www.google.com/maps?q=${lat},${lng}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-saffron-700 hover:underline">Check on Google Maps<ExternalLink className="h-3.5 w-3.5" /></a>}
+        {validPoint && <a href={`https://www.google.com/maps?q=${lat},${lng}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-maroon-700 hover:underline">Check on Google Maps<ExternalLink className="h-3.5 w-3.5" /></a>}
       </div>
       <Button className="mt-6" loading={saving} onClick={() => void save()}>Save store</Button>
     </Card>
@@ -207,7 +207,7 @@ function Integrations({ status }: { status: Record<string, boolean | string | nu
   ];
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{rows.map(([l, st, h]) => <Card key={l} className="flex items-start gap-3 p-4">{st === "ok" ? <CheckCircle2 className="h-5 w-5 shrink-0 text-pista-600" /> : st === "dev" ? <AlertTriangle className="h-5 w-5 shrink-0 text-saffron-600" /> : <XCircle className="h-5 w-5 shrink-0 text-maroon-500" />}<div><p className="font-semibold text-ink">{l}{st === "dev" && <span className="ml-2 text-xs font-medium text-saffron-700">dev only</span>}</p><p className="text-xs text-muted">{h}</p></div></Card>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{rows.map(([l, st, h]) => <Card key={l} className="flex items-start gap-3 p-4">{st === "ok" ? <CheckCircle2 className="h-5 w-5 shrink-0 text-pista-600" /> : st === "dev" ? <AlertTriangle className="h-5 w-5 shrink-0 text-maroon-700" /> : <XCircle className="h-5 w-5 shrink-0 text-maroon-500" />}<div><p className="font-semibold text-ink">{l}{st === "dev" && <span className="ml-2 text-xs font-medium text-maroon-700">dev only</span>}</p><p className="text-xs text-muted">{h}</p></div></Card>)}</div>
       <p className="text-xs text-muted">Credentials are configured as server environment variables (never in this console). See docs/INTEGRATIONS.md.</p>
       <h2 className="font-display text-xl font-semibold text-ink">Notification delivery log</h2>
       <DataTable loading={logs.loading} rows={logs.data?.items} columns={[

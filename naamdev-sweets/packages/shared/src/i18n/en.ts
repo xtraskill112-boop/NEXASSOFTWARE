@@ -28,6 +28,7 @@ export const en = {
     remove: "Remove",
     deliverTo: "Deliver to",
     selectLocation: "Select location",
+    location: "Location",
     language: "भाषा: हिन्दी",
     darkMode: "Dark mode",
     somethingWrong: "Something went wrong",

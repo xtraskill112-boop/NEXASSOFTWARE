@@ -6,7 +6,7 @@ import { cn } from "../cn";
 export function Segmented<T extends string>({ value, onChange, options, className, size = "md" }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode; count?: number }[]; className?: string; size?: "sm" | "md" }) {
   const id = useId();
   return (
-    <div role="tablist" className={cn("nd-scrollbar-none inline-flex max-w-full gap-1 overflow-x-auto rounded-2xl bg-surface-2 p-1", className)}>
+    <div role="tablist" className={cn("nd-scrollbar-none inline-flex max-w-full gap-1 overflow-x-auto rounded-lg bg-surface-2 p-1", className)}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -16,12 +16,12 @@ export function Segmented<T extends string>({ value, onChange, options, classNam
             aria-selected={active}
             type="button"
             onClick={() => onChange(o.value)}
-            className={cn("relative shrink-0 whitespace-nowrap rounded-xl font-semibold transition-colors", size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm", active ? "text-ink" : "text-muted hover:text-ink-soft")}
+            className={cn("relative shrink-0 whitespace-nowrap rounded-md font-semibold transition-colors", size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm", active ? "text-ink" : "text-muted hover:text-ink-soft")}
           >
-            {active && <motion.span layoutId={`seg-${id}`} className="absolute inset-0 rounded-xl bg-surface shadow-card" transition={{ type: "spring", damping: 30, stiffness: 400 }} />}
+            {active && <motion.span layoutId={`seg-${id}`} className="absolute inset-0 rounded-md bg-surface shadow-[0_1px_2px_rgb(31_26_23/0.1)]" transition={{ duration: 0.18, ease: "easeOut" }} />}
             <span className="relative inline-flex items-center gap-1.5">
               {o.label}
-              {o.count != null && <span className={cn("rounded-full px-1.5 text-[10px]", active ? "bg-saffron-100 text-saffron-800 dark:bg-saffron-500/20 dark:text-saffron-200" : "bg-line text-muted")}>{o.count}</span>}
+              {o.count != null && <span className={cn("rounded-full px-1.5 text-[10px]", active ? "bg-maroon-50 text-maroon-800 dark:bg-maroon-500/20 dark:text-maroon-100" : "bg-line text-muted")}>{o.count}</span>}
             </span>
           </button>
         );
@@ -37,7 +37,7 @@ export function Pagination({ page, totalPages, onChange, className }: { page: nu
     if (p === 1 || p === totalPages || Math.abs(p - page) <= 1) pages.push(p);
     else if (pages[pages.length - 1] !== "…") pages.push("…");
   }
-  const btn = "grid h-9 min-w-9 place-items-center rounded-xl px-2 text-sm font-semibold transition";
+  const btn = "grid h-9 min-w-9 place-items-center rounded-md px-2 text-sm font-semibold transition-colors";
   return (
     <nav aria-label="Pagination" className={cn("flex items-center justify-center gap-1", className)}>
       <button type="button" className={cn(btn, "text-ink-soft hover:bg-surface-2 disabled:opacity-40")} disabled={page <= 1} onClick={() => onChange(page - 1)} aria-label="Previous page">‹</button>
@@ -45,7 +45,7 @@ export function Pagination({ page, totalPages, onChange, className }: { page: nu
         p === "…" ? (
           <span key={`e${i}`} className="px-1 text-muted">…</span>
         ) : (
-          <button key={p} type="button" aria-current={p === page ? "page" : undefined} onClick={() => onChange(p)} className={cn(btn, p === page ? "nd-gradient-saffron text-white shadow-glow" : "text-ink-soft hover:bg-surface-2")}>
+          <button key={p} type="button" aria-current={p === page ? "page" : undefined} onClick={() => onChange(p)} className={cn(btn, p === page ? "bg-maroon-700 text-white" : "text-ink-soft hover:bg-surface-2")}>
             {p}
           </button>
         ),

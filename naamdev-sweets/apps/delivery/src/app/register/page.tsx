@@ -67,7 +67,7 @@ function Register() {
         {err && <InlineAlert tone="danger">{err}</InlineAlert>}
         <Button type="submit" size="xl" block loading={busy} disabled={f.name.trim().length < 2 || f.phone.replace(/\D/g, "").length < 10 || (!completing && (!f.email || f.password.length < 8))}>Create partner account</Button>
       </form>
-      <p className="mt-6 text-center text-sm text-muted">Already registered? <Link href="/login" className="font-bold text-saffron-700">Log in</Link></p>
+      <p className="mt-6 text-center text-sm text-muted">Already registered? <Link href="/login" className="font-bold text-maroon-700">Log in</Link></p>
     </div>
   );
 }

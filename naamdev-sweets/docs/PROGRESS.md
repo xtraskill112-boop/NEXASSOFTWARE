@@ -8,6 +8,7 @@ Status of every area in the original brief. ✅ built and covered by automated t
 
 - ✅ Home feed configurable from the console (hero banners, categories, bestsellers, collections, offers, announcement bar)
 - ✅ Full menu on the home page: every product grouped by category, with a sticky category bar to jump between sections (a "Full menu" home section — the owner can move or hide it in Content → Home page)
+- ✅ Design system: Martel (headings) + Mukta (text) with matching Devanagari, flat brand colours, small radii, borders instead of shadows, no gradients/glass/float effects — shared by the storefront, console and partner app (`packages/ui/src/styles/theme.css`)
 - ✅ Categories, category pages with filters (veg/egg, price, in stock, offers) and sorting
 - ✅ Typo-tolerant search with suggestions, trending searches, ingredient/category matching
 - ✅ Product page: variants (weight/pack) with server prices, MRP savings, stock, ingredients, shelf life, allergens, reviews, JSON-LD

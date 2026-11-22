@@ -110,7 +110,7 @@ export default function CheckoutPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-20 text-center">
         <p className="font-display text-2xl text-ink">Your cart is empty</p>
-        <Link href="/" className="mt-4 inline-block font-semibold text-saffron-700">Continue shopping</Link>
+        <Link href="/" className="mt-4 inline-block font-semibold text-maroon-700">Continue shopping</Link>
       </div>
     );
 
@@ -135,18 +135,18 @@ export default function CheckoutPage() {
           {/* Address */}
           <Card className="p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 font-display text-xl font-semibold text-ink"><span className="grid h-7 w-7 place-items-center rounded-full bg-saffron-500 text-xs font-bold text-white">1</span>{t("checkout.deliveryAddress")}</h2>
+              <h2 className="flex items-center gap-2 font-display text-xl font-semibold text-ink"><span className="grid h-7 w-7 place-items-center rounded-full bg-maroon-700 text-xs font-bold text-white">1</span>{t("checkout.deliveryAddress")}</h2>
               <Button variant="ghost" size="sm" onClick={() => setAddOpen(true)}><Plus className="h-4 w-4" />{t("checkout.addAddress")}</Button>
             </div>
             <div role="radiogroup" className="grid gap-3 sm:grid-cols-2">
               {addresses.map((a) => (
                 <button key={a.id} type="button" role="radio" aria-checked={a.id === addressId} onClick={() => setAddressId(a.id)}
-                  className={cn("relative rounded-2xl border-2 p-4 text-left transition", a.id === addressId ? "border-saffron-500 bg-saffron-50/60 dark:bg-saffron-500/10" : "border-line hover:border-saffron-200")}>
-                  <span className="flex items-center gap-2 text-sm font-bold text-ink"><MapPin className="h-4 w-4 text-saffron-600" />{a.type === "OTHER" ? a.label ?? "Other" : a.type === "HOME" ? "Home" : "Office"}{a.isDefault && <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase text-muted">Default</span>}</span>
+                  className={cn("relative rounded-2xl border-2 p-4 text-left transition", a.id === addressId ? "border-maroon-700 bg-surface-2/60 " : "border-line hover:border-ink-soft/40")}>
+                  <span className="flex items-center gap-2 text-sm font-bold text-ink"><MapPin className="h-4 w-4 text-maroon-700" />{a.type === "OTHER" ? a.label ?? "Other" : a.type === "HOME" ? "Home" : "Office"}{a.isDefault && <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[12px] text-muted">Default</span>}</span>
                   <span className="mt-1.5 block text-sm text-ink-soft">{a.fullName} · {a.phone}</span>
                   <span className="mt-0.5 line-clamp-2 block text-sm text-muted">{[a.line1, a.line2, a.landmark, a.city, a.pincode].filter(Boolean).join(", ")}</span>
                   {a.serviceable === false && <span className="mt-2 block text-xs font-semibold text-maroon-600">Not deliverable yet</span>}
-                  {a.id === addressId && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-saffron-600" />}
+                  {a.id === addressId && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-maroon-700" />}
                 </button>
               ))}
             </div>
@@ -157,7 +157,7 @@ export default function CheckoutPage() {
 
           {/* Items */}
           <Card className="p-5">
-            <h2 className="mb-3 flex items-center gap-2 font-display text-xl font-semibold text-ink"><span className="grid h-7 w-7 place-items-center rounded-full bg-saffron-500 text-xs font-bold text-white">2</span>{t("checkout.orderSummary")}</h2>
+            <h2 className="mb-3 flex items-center gap-2 font-display text-xl font-semibold text-ink"><span className="grid h-7 w-7 place-items-center rounded-full bg-maroon-700 text-xs font-bold text-white">2</span>{t("checkout.orderSummary")}</h2>
             <ul className="divide-y divide-line-soft">
               {cart?.items.map((i) => (
                 <li key={i.id} className="flex items-center gap-3 py-3">
@@ -172,14 +172,14 @@ export default function CheckoutPage() {
 
           {/* Payment */}
           <Card className="p-5">
-            <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold text-ink"><span className="grid h-7 w-7 place-items-center rounded-full bg-saffron-500 text-xs font-bold text-white">3</span>{t("checkout.payment")}</h2>
+            <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-semibold text-ink"><span className="grid h-7 w-7 place-items-center rounded-full bg-maroon-700 text-xs font-bold text-white">3</span>{t("checkout.payment")}</h2>
             <div className="flex flex-wrap gap-2">
               {([
                 ["UPI", t("checkout.payUpi"), Smartphone, options?.upi],
                 ["COD", t("checkout.cod"), Banknote, options?.cod],
                 ["ONLINE", t("checkout.payOnline"), CreditCard, options?.online],
               ] as const).filter(([, , , opt]) => opt?.available).map(([value, label, Icon]) => (
-                <span key={value} className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-sm font-semibold text-ink-soft"><Icon className="h-4 w-4 text-maroon-700 dark:text-saffron-300" />{label}</span>
+                <span key={value} className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-sm font-semibold text-ink-soft"><Icon className="h-4 w-4 text-maroon-700 dark:text-maroon-200" />{label}</span>
               ))}
             </div>
             <p className="mt-3 text-xs text-muted">{anyMethod || !options ? t("checkout.paymentNext") : options.upi.reason ?? options.cod.reason ?? "Payments are unavailable right now"}</p>

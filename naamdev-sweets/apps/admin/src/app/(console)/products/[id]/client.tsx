@@ -91,7 +91,7 @@ export default function ProductEditor() {
       <PageHeader
         back={<Link href="/products" className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-muted hover:text-ink"><ArrowLeft className="h-3.5 w-3.5" />Products</Link>}
         title={isNew ? "New product" : f.name || "Product"}
-        subtitle={meta?.deletedAt ? <Badge tone="danger">Archived</Badge> : !isNew ? <a href={`${STOREFRONT_URL}/product/${meta?.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-saffron-700">View on store <ExternalLink className="h-3 w-3" /></a> : undefined}
+        subtitle={meta?.deletedAt ? <Badge tone="danger">Archived</Badge> : !isNew ? <a href={`${STOREFRONT_URL}/product/${meta?.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-maroon-700">View on store <ExternalLink className="h-3 w-3" /></a> : undefined}
         actions={editable && <>
           {!isNew && (meta?.deletedAt
             ? <Button variant="outline" onClick={async () => { await api.post(`/admin/catalog/products/${id}/restore`); toast.success("Restored"); location.reload(); }}><RotateCcw className="h-4 w-4" />Restore</Button>
@@ -135,7 +135,7 @@ export default function ProductEditor() {
                     </div>
                   </div>
                   <div className="mt-2 flex items-center justify-between text-xs text-muted">
-                    <span>{v.id ? <>In stock: <b className="text-ink">{v.available ?? 0}</b> · <Link href={`/inventory/${v.id}`} className="font-semibold text-saffron-700">Manage stock & batches</Link></> : "Add stock from Inventory after saving."}</span>
+                    <span>{v.id ? <>In stock: <b className="text-ink">{v.available ?? 0}</b> · <Link href={`/inventory/${v.id}`} className="font-semibold text-maroon-700">Manage stock & batches</Link></> : "Add stock from Inventory after saving."}</span>
                     {f.variants.length > 1 && <button type="button" onClick={() => set("variants", f.variants.filter((_, k) => k !== i))} className="inline-flex items-center gap-1 font-semibold text-maroon-600"><Trash2 className="h-3.5 w-3.5" />Remove</button>}
                   </div>
                 </div>
@@ -185,7 +185,7 @@ export default function ProductEditor() {
             <h2 className="font-display text-lg font-semibold">Media</h2>
             <ImageUploader value={f.images} onChange={(u) => set("images", u)} />
             <Field label="Product video URL" hint="Upload an MP4/WebM or paste a hosted video link">{(p) => <Input {...p} value={f.videoUrl} onChange={(e) => set("videoUrl", e.target.value)} placeholder="https://…" />}</Field>
-            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-saffron-700">{videoBusy ? <Spinner className="h-4 w-4" /> : <Upload className="h-4 w-4" />}Upload video<input type="file" accept="video/mp4,video/webm" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadVideo(e.target.files[0])} /></label>
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-maroon-700">{videoBusy ? <Spinner className="h-4 w-4" /> : <Upload className="h-4 w-4" />}Upload video<input type="file" accept="video/mp4,video/webm" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadVideo(e.target.files[0])} /></label>
           </Card>
           <Card className="space-y-4 p-6">
             <h2 className="font-display text-lg font-semibold">SEO</h2>

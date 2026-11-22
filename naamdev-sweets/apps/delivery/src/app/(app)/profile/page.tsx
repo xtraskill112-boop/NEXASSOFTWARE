@@ -48,7 +48,7 @@ export default function ProfilePage() {
                 <div className="min-w-0"><p className="text-sm font-semibold capitalize text-ink">{t.replace("_", " ").toLowerCase()}{required && <span className="text-maroon-600"> *</span>}</p>
                   {d ? <p className="text-xs"><Badge tone={d.status === "VERIFIED" ? "success" : d.status === "REJECTED" ? "danger" : "warning"}>{d.status.toLowerCase()}</Badge>{d.rejectionReason && <span className="ml-1 text-maroon-600">{d.rejectionReason}</span>}</p> : <p className="text-xs text-muted">Not uploaded</p>}</div>
                 {d?.status !== "VERIFIED" && (
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-saffron-50 px-3 py-2 text-xs font-bold text-saffron-800 dark:bg-saffron-500/10 dark:text-saffron-200">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-surface-2 px-3 py-2 text-xs font-bold text-maroon-800 dark:text-maroon-200">
                     {uploading === t ? <Spinner className="h-4 w-4" /> : <FileUp className="h-4 w-4" />}{d ? "Replace" : "Upload"}
                     <input type="file" accept="image/*,application/pdf" capture={t === "PROFILE_PHOTO" ? "user" : "environment"} className="hidden" onChange={(e) => e.target.files?.[0] && void upload(t, e.target.files[0])} />
                   </label>
@@ -78,7 +78,7 @@ export default function ProfilePage() {
       </Card>
 
       <Card className="space-y-2 p-5">
-        {support && <a href={`tel:${support}`} className="flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-semibold text-ink hover:bg-surface-2"><LifeBuoy className="h-5 w-5 text-saffron-600" />Call partner support</a>}
+        {support && <a href={`tel:${support}`} className="flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-semibold text-ink hover:bg-surface-2"><LifeBuoy className="h-5 w-5 text-maroon-700" />Call partner support</a>}
         <p className="px-2 text-xs text-muted">Signed in as {me?.email ?? me?.phone}</p>
         <Button variant="ghost" block className="text-maroon-700" onClick={() => void logout()}><LogOut className="h-4 w-4" />Log out</Button>
       </Card>

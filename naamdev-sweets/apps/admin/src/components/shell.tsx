@@ -63,18 +63,18 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { canAny } = useAdmin();
   return (
     <nav aria-label="Console" className="flex h-full flex-col">
-      <div className="px-5 pb-4 pt-5"><Logo size="sm" tone="light" subtitle="Console" /></div>
+      <div className="border-b border-line px-5 py-4"><Logo size="sm" subtitle="Console" /></div>
       <div className="flex-1 overflow-y-auto px-3 pb-6">
         {NAV.map((g) => {
           const items = g.items.filter((i) => canAny(...i.any));
           if (!items.length) return null;
           return (
             <div key={g.group} className="mt-4">
-              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-cream-200/45">{g.group}</p>
+              <p className="px-3 pb-1 text-[12px] font-semibold text-muted">{g.group}</p>
               {items.map(({ href, label, icon: Icon }) => {
                 const active = href === "/" ? pathname === "/" : pathname === href || (pathname.startsWith(href + "/") && !NAV.some((x) => x.items.some((y) => y.href !== href && y.href.startsWith(href + "/") && pathname.startsWith(y.href))));
                 return (
-                  <Link key={href} href={href} onClick={onNavigate} className={cn("group flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-semibold transition", active ? "bg-gradient-to-r from-saffron-500/90 to-saffron-600/80 text-white shadow-glow" : "text-cream-200/75 hover:bg-white/8 hover:text-white")}>
+                  <Link key={href} href={href} onClick={onNavigate} className={cn("group relative flex items-center gap-3 rounded-md px-3 py-[7px] text-[14px] font-medium transition-colors", active ? "bg-surface-2 font-semibold text-ink before:absolute before:inset-y-1.5 before:-left-3 before:w-[3px] before:rounded-r before:bg-maroon-700" : "text-ink-soft hover:bg-surface-2 hover:text-ink")}>
                     <Icon className="h-[17px] w-[17px]" />{label}
                   </Link>
                 );
@@ -101,26 +101,26 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
   if (!me) return <BrandLoader className="min-h-dvh" label="Opening console" />;
   return (
     <div className="min-h-dvh lg:pl-64">
-      <aside className="nd-gradient-royal fixed inset-y-0 left-0 z-40 hidden w-64 lg:block no-print"><Sidebar /></aside>
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-line bg-surface lg:block no-print"><Sidebar /></aside>
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <aside className="nd-gradient-royal absolute inset-y-0 left-0 w-72"><button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="absolute right-3 top-4 text-cream-100"><X /></button><Sidebar onNavigate={() => setOpen(false)} /></aside>
+          <aside className="absolute inset-y-0 left-0 w-72 border-r border-line bg-surface"><button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="absolute right-3 top-4 text-ink-soft"><X /></button><Sidebar onNavigate={() => setOpen(false)} /></aside>
         </div>
       )}
-      <header className="nd-glass sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line-soft px-4 sm:px-6 no-print">
-        <button type="button" className="grid h-10 w-10 place-items-center rounded-xl hover:bg-surface-2 lg:hidden" aria-label="Open menu" onClick={() => setOpen(true)}><Menu className="h-5 w-5" /></button>
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg-elevated px-4 sm:px-6 no-print">
+        <button type="button" className="grid h-9 w-9 place-items-center rounded-md hover:bg-surface-2 lg:hidden" aria-label="Open menu" onClick={() => setOpen(true)}><Menu className="h-5 w-5" /></button>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-ink">Namaste, {me.name.split(" ")[0]} 🙏</p>
+          <p className="truncate text-sm font-semibold text-ink">Namaste, {me.name.split(" ")[0]}</p>
           <p className="truncate text-xs text-muted">{me.role.name}{me.staff ? ` · ${me.staff.designation}` : ""}</p>
         </div>
         <div className="ml-auto flex items-center gap-1">
-          <a href={STOREFRONT_URL} target="_blank" rel="noreferrer" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-ink-soft hover:bg-surface-2 sm:block">View store ↗</a>
-          <button type="button" aria-label="Toggle theme" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="grid h-10 w-10 place-items-center rounded-xl text-ink-soft hover:bg-surface-2">{mounted && resolvedTheme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}</button>
-          <Link href="/notifications" aria-label="Notifications" className="relative grid h-10 w-10 place-items-center rounded-xl text-ink-soft hover:bg-surface-2"><Bell className="h-5 w-5" />{unread > 0 && <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-maroon-700 px-1 text-[9px] font-bold text-white">{unread}</span>}</Link>
+          <a href={STOREFRONT_URL} target="_blank" rel="noreferrer" className="hidden rounded-md px-3 py-2 text-sm font-semibold text-ink-soft hover:bg-surface-2 sm:block">View store ↗</a>
+          <button type="button" aria-label="Toggle theme" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="grid h-9 w-9 place-items-center rounded-md text-ink-soft hover:bg-surface-2">{mounted && resolvedTheme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}</button>
+          <Link href="/notifications" aria-label="Notifications" className="relative grid h-9 w-9 place-items-center rounded-md text-ink-soft hover:bg-surface-2"><Bell className="h-5 w-5" />{unread > 0 && <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-maroon-700 px-1 text-[9px] font-bold text-white">{unread}</span>}</Link>
           <Avatar name={me.name} src={me.avatarUrl} size={36} className="ml-1" />
-          <button type="button" aria-label="Change password" title="Change password" onClick={() => setPwOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl text-ink-soft hover:bg-surface-2"><KeyRound className="h-5 w-5" /></button>
-          <button type="button" aria-label="Log out" onClick={() => void logout()} className="grid h-10 w-10 place-items-center rounded-xl text-ink-soft hover:bg-surface-2"><LogOut className="h-5 w-5" /></button>
+          <button type="button" aria-label="Change password" title="Change password" onClick={() => setPwOpen(true)} className="grid h-9 w-9 place-items-center rounded-md text-ink-soft hover:bg-surface-2"><KeyRound className="h-5 w-5" /></button>
+          <button type="button" aria-label="Log out" onClick={() => void logout()} className="grid h-9 w-9 place-items-center rounded-md text-ink-soft hover:bg-surface-2"><LogOut className="h-5 w-5" /></button>
         </div>
       </header>
       <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>

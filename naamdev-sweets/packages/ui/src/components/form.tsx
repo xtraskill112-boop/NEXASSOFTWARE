@@ -3,7 +3,7 @@ import { forwardRef, useId, useRef, type InputHTMLAttributes, type ReactNode, ty
 import { cn } from "../cn";
 
 const fieldBase =
-  "w-full rounded-2xl border border-line bg-surface px-4 text-[15px] text-ink placeholder:text-muted/80 transition-all duration-150 outline-none focus:border-saffron-400 focus:ring-4 focus:ring-saffron-400/15 disabled:opacity-60 aria-[invalid=true]:border-maroon-400 aria-[invalid=true]:ring-maroon-400/10";
+  "w-full rounded-lg border border-line bg-surface px-3.5 text-[15px] text-ink placeholder:text-muted/80 transition-colors duration-150 outline-none focus:border-ink-soft focus:ring-2 focus:ring-maroon-700/10 disabled:opacity-60 aria-[invalid=true]:border-maroon-400 aria-[invalid=true]:ring-maroon-400/10";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { leading?: ReactNode; trailing?: ReactNode }>(function Input({ className, leading, trailing, ...props }, ref) {
   if (!leading && !trailing) return <input ref={ref} className={cn(fieldBase, "h-12", className)} {...props} />;
@@ -68,7 +68,7 @@ export function Checkbox({ checked, onChange, label, description, disabled, clas
   return (
     <label htmlFor={id} className={cn("flex cursor-pointer items-start gap-3", disabled && "cursor-not-allowed opacity-60", className)}>
       <input id={id} type="checkbox" className="peer sr-only" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 border-line bg-surface transition peer-checked:border-saffron-500 peer-checked:bg-saffron-500 peer-focus-visible:ring-4 peer-focus-visible:ring-saffron-400/30">
+      <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-line bg-surface transition peer-checked:border-maroon-700 peer-checked:bg-maroon-700 peer-focus-visible:ring-2 peer-focus-visible:ring-maroon-700/30">
         <svg className={cn("h-3 w-3 text-white transition", checked ? "scale-100" : "scale-0")} viewBox="0 0 12 12" fill="none"><path d="M2 6.5l2.5 2.5L10 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </span>
       <span>
@@ -123,7 +123,7 @@ export function OtpInput({ value, onChange, length = 6, autoFocus, disabled }: {
           autoComplete={i === 0 ? "one-time-code" : "off"}
           aria-label={`Digit ${i + 1}`}
           maxLength={length}
-          className="h-14 w-full min-w-0 rounded-2xl border border-line bg-surface text-center font-display text-2xl font-semibold text-ink outline-none transition focus:border-saffron-400 focus:ring-4 focus:ring-saffron-400/15"
+          className="h-14 w-full min-w-0 rounded-lg border border-line bg-surface text-center text-2xl font-bold text-ink outline-none transition focus:border-ink-soft focus:ring-2 focus:ring-maroon-700/10"
           onChange={(e) => {
             const v = e.target.value.replace(/\D/g, "");
             if (v.length > 1) {

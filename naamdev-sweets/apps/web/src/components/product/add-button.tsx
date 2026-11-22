@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import { motion } from "framer-motion";
 import type { ProductCard } from "@naamdev/api-client";
 import { QuantityStepper, cn } from "@naamdev/ui";
 import { useCart } from "@/lib/cart";
@@ -19,7 +18,7 @@ export function AddButton({ product, className, size = "md" }: { product: Produc
   const totalQty = inCart.reduce((s, i) => s + i.quantity, 0);
 
   if (!product.inStock)
-    return <span className={cn("inline-flex h-9 items-center rounded-xl bg-surface-2 px-3 text-xs font-bold uppercase tracking-wide text-muted", className)}>{t("common.outOfStock")}</span>;
+    return <span className={cn("inline-flex h-9 items-center rounded-md bg-surface-2 px-2.5 text-[13px] font-semibold text-muted", className)}>{t("common.outOfStock")}</span>;
 
   const onAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -38,15 +37,14 @@ export function AddButton({ product, className, size = "md" }: { product: Produc
           onChange={(q) => {
             if (multi && q > totalQty) return setSheet(true);
             void setQuantity(inCart[0]!.variant.id, q);
-          }} className="bg-surface shadow-card" />
+          }} />
       ) : totalQty > 0 ? (
-        <button type="button" onClick={() => setSheet(true)} className="h-10 rounded-xl border border-saffron-300 bg-surface px-4 text-sm font-extrabold text-saffron-700 shadow-card">{totalQty} added +</button>
+        <button type="button" onClick={() => setSheet(true)} className="h-9 rounded-md border border-maroon-700 bg-surface px-3 text-[14px] font-bold text-maroon-700 dark:border-maroon-300 dark:text-maroon-100">{totalQty} added +</button>
       ) : (
-        <motion.button whileTap={{ scale: 0.92 }} type="button" disabled={busy} onClick={onAdd}
-          className={cn("relative rounded-xl border border-saffron-300 bg-surface font-extrabold uppercase tracking-wide text-saffron-700 shadow-card transition hover:bg-saffron-50 dark:border-saffron-500/40 dark:text-saffron-300 dark:hover:bg-saffron-500/10", size === "sm" ? "h-8 px-4 text-xs" : "h-10 px-6 text-sm")}>
+        <button type="button" disabled={busy} onClick={onAdd}
+          className={cn("inline-flex items-center gap-1 rounded-md border border-maroon-700 bg-surface font-bold text-maroon-700 transition-colors hover:bg-maroon-700 hover:text-white disabled:opacity-60 dark:border-maroon-300 dark:text-maroon-100 dark:hover:bg-maroon-300 dark:hover:text-ink", size === "sm" ? "h-9 px-4 text-[14px]" : "h-10 px-5 text-[15px]")}>
           {t("common.add")}
-          {multi && <span className="absolute -right-1 -top-1.5 rounded-md bg-saffron-500 px-1 text-[9px] text-white">+</span>}
-        </motion.button>
+        </button>
       )}
       {multi && <VariantSheet product={product} open={sheet} onClose={() => setSheet(false)} />}
     </div>

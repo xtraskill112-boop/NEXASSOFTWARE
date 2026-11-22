@@ -11,8 +11,8 @@ export function FreeDeliveryProgress({ pricing }: { pricing: PricingResult }) {
   const pct = Math.min(100, (pricing.subtotalPaise / Math.max(1, pricing.freeDeliveryThresholdPaise)) * 100);
   const unlocked = pricing.amountToFreeDeliveryPaise <= 0 || pricing.deliveryFeeWaived;
   return (
-    <div className="rounded-2xl bg-saffron-50 p-4 dark:bg-saffron-500/10">
-      <p className="flex items-center gap-2 text-sm font-semibold text-saffron-900 dark:text-saffron-100">
+    <div className="rounded-2xl bg-surface-2 p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-maroon-900 dark:text-maroon-100">
         <Truck className="h-4 w-4" />
         {unlocked ? t("cart.freeDeliveryUnlocked") : t("cart.freeDeliveryProgress", { amount: formatINR(pricing.amountToFreeDeliveryPaise) })}
       </p>

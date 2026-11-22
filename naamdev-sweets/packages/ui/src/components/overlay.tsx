@@ -65,7 +65,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center sm:items-center sm:p-6">
-          <motion.div className="absolute inset-0 bg-maroon-950/50 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <motion.div className="absolute inset-0 bg-black/45" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             ref={ref}
             role="dialog"
@@ -73,19 +73,19 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             aria-labelledby={title ? `${id}-t` : undefined}
             aria-label={title ? undefined : label}
             tabIndex={-1}
-            initial={{ opacity: 0, y: 40, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 30, scale: 0.98 }}
-            transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className={cn("relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-bg-elevated shadow-lift outline-none sm:rounded-[2rem]", width, className)}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className={cn("relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-bg-elevated shadow-lift outline-none sm:rounded-xl", width, className)}
           >
             {(title || description) && (
               <div className="flex items-start justify-between gap-4 border-b border-line-soft px-6 pb-4 pt-6">
                 <div>
-                  {title && <h2 id={`${id}-t`} className="font-display text-xl font-semibold text-ink">{title}</h2>}
+                  {title && <h2 id={`${id}-t`} className="font-display text-xl font-bold text-ink">{title}</h2>}
                   {description && <p className="mt-1 text-sm text-muted">{description}</p>}
                 </div>
-                <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 grid h-9 w-9 place-items-center rounded-full text-muted transition hover:bg-surface-2 hover:text-ink">
+                <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 grid h-9 w-9 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink">
                   <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
                 </button>
               </div>
@@ -107,13 +107,13 @@ export function Sheet({ open, onClose, title, children, footer, side = "right", 
   const ref = useFocusTrap(open);
   if (typeof document === "undefined") return null;
   const isBottom = side === "bottom";
-  const pos = isBottom ? "inset-x-0 bottom-0 max-h-[90dvh] rounded-t-[2rem]" : side === "right" ? "inset-y-0 right-0 w-full max-w-md sm:rounded-l-[2rem]" : "inset-y-0 left-0 w-full max-w-sm sm:rounded-r-[2rem]";
+  const pos = isBottom ? "inset-x-0 bottom-0 max-h-[90dvh] rounded-t-2xl" : side === "right" ? "inset-y-0 right-0 w-full max-w-md border-l border-line" : "inset-y-0 left-0 w-full max-w-sm border-r border-line";
   const from = isBottom ? { y: "100%" } : { x: side === "right" ? "100%" : "-100%" };
   return createPortal(
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[90]">
-          <motion.div className="absolute inset-0 bg-maroon-950/45 backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <motion.div className="absolute inset-0 bg-black/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.aside
             ref={ref}
             role="dialog"
@@ -122,14 +122,14 @@ export function Sheet({ open, onClose, title, children, footer, side = "right", 
             initial={from}
             animate={{ x: 0, y: 0 }}
             exit={from}
-            transition={{ type: "spring", damping: 32, stiffness: 320 }}
+            transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
             className={cn("absolute flex flex-col bg-bg-elevated shadow-lift outline-none", pos, className)}
           >
-            {isBottom && <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-line" />}
+            {isBottom && <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-line" />}
             {title && (
               <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
-                <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
-                <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-ink">
+                <h2 className="font-display text-lg font-bold text-ink">{title}</h2>
+                <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink">
                   <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
                 </button>
               </div>

@@ -119,7 +119,7 @@ export default function OrderDetailPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-ink">{i.name}</p>
                     <p className="text-xs text-muted">{i.variantLabel} × {i.quantity} · {formatINR(i.unitPricePaise)} each</p>
-                    {actions.canReview && (reviewed.has(i.productId) ? <p className="mt-1 text-xs font-semibold text-pista-600">✓ Reviewed</p> : <button type="button" onClick={() => setModal({ review: { productId: i.productId, name: i.name } })} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-saffron-700"><Star className="h-3.5 w-3.5" />Rate & review</button>)}
+                    {actions.canReview && (reviewed.has(i.productId) ? <p className="mt-1 text-xs font-semibold text-pista-600">✓ Reviewed</p> : <button type="button" onClick={() => setModal({ review: { productId: i.productId, name: i.name } })} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-maroon-700"><Star className="h-3.5 w-3.5" />Rate & review</button>)}
                   </div>
                   <span className="font-bold tabular-nums">{formatINR(i.lineTotalPaise)}</span>
                 </li>
@@ -132,7 +132,7 @@ export default function OrderDetailPage() {
             <ol className="relative space-y-5 border-l-2 border-line pl-6">
               {order.timeline.map((h, k) => (
                 <li key={k} className="relative">
-                  <span className="absolute -left-[33px] top-0.5 grid h-4 w-4 place-items-center rounded-full bg-saffron-500 ring-4 ring-surface" />
+                  <span className="absolute -left-[33px] top-0.5 grid h-4 w-4 place-items-center rounded-full bg-maroon-700 ring-4 ring-surface" />
                   <p className="text-sm font-semibold text-ink">{ORDER_STATUS_META[h.status].label}</p>
                   <p className="text-xs text-muted">{new Date(h.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}{h.note ? ` · ${h.note}` : ""}</p>
                 </li>
@@ -158,7 +158,7 @@ export default function OrderDetailPage() {
             {order.pointsEarned > 0 && <p className="mt-3 rounded-xl bg-gold-300/20 px-3 py-2 text-xs font-semibold text-gold-600">✨ You earned {order.pointsEarned} Mithaas points</p>}
           </Card>
           <Card className="p-5 text-sm">
-            <h3 className="mb-2 flex items-center gap-2 font-semibold text-ink"><MapPin className="h-4 w-4 text-saffron-600" />Delivery address</h3>
+            <h3 className="mb-2 flex items-center gap-2 font-semibold text-ink"><MapPin className="h-4 w-4 text-maroon-700" />Delivery address</h3>
             <p className="text-ink-soft">{order.address.fullName} · {order.address.phone}</p>
             <p className="text-muted">{[order.address.line1, order.address.line2, order.address.landmark, order.address.city, order.address.pincode].filter(Boolean).join(", ")}</p>
             <h3 className="mb-1 mt-4 font-semibold text-ink">Payment</h3>

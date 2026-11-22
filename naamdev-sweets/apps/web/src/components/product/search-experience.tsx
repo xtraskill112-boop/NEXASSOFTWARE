@@ -64,12 +64,12 @@ export function SearchExperience() {
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => router.back()} className="grid h-12 w-10 shrink-0 place-items-center text-ink-soft md:hidden" aria-label="Back"><ArrowLeft className="h-5 w-5" /></button>
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-saffron-600" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-maroon-700" />
             <input ref={inputRef} value={q} onChange={(e) => { setQ(e.target.value); setFocused(true); }} onFocus={() => setFocused(true)} autoFocus={!q0}
               placeholder={t("common.searchPlaceholder")} aria-label={t("common.search")} enterKeyHint="search"
-              className="h-14 w-full rounded-2xl border border-line bg-surface pl-12 pr-12 text-base text-ink shadow-card outline-none transition focus:border-saffron-400 focus:ring-4 focus:ring-saffron-400/15" />
+              className="h-14 w-full rounded-2xl border border-line bg-surface pl-12 pr-12 text-base text-ink shadow-card outline-none transition focus:border-ink-soft focus:ring-4 focus:ring-maroon-700/10" />
             <span className="absolute right-3 top-1/2 -translate-y-1/2">
-              {busy ? <Spinner className="h-5 w-5 text-saffron-500" /> : q && <button type="button" aria-label="Clear search" onClick={() => { setQ(""); setFocused(true); inputRef.current?.focus(); }} className="grid h-8 w-8 place-items-center rounded-full text-muted hover:bg-surface-2"><X className="h-4 w-4" /></button>}
+              {busy ? <Spinner className="h-5 w-5 text-maroon-600" /> : q && <button type="button" aria-label="Clear search" onClick={() => { setQ(""); setFocused(true); inputRef.current?.focus(); }} className="grid h-8 w-8 place-items-center rounded-full text-muted hover:bg-surface-2"><X className="h-4 w-4" /></button>}
             </span>
           </div>
         </div>
@@ -81,7 +81,7 @@ export function SearchExperience() {
             <div className="overflow-hidden rounded-3xl border border-line-soft bg-surface shadow-card">
               {sugg.categories.map((c) => (
                 <Link key={c.slug} href={`/category/${c.slug}`} className="flex items-center gap-3 border-b border-line-soft px-4 py-3 hover:bg-surface-2">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-saffron-50 text-saffron-700 dark:bg-saffron-500/10"><Search className="h-4 w-4" /></span>
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2 text-maroon-700"><Search className="h-4 w-4" /></span>
                   <span className="text-sm"><b className="text-ink">{c.name}</b> <span className="text-muted">· Category</span></span>
                 </Link>
               ))}
@@ -94,22 +94,22 @@ export function SearchExperience() {
                   </span>
                 </Link>
               ))}
-              <button type="button" onClick={() => submit(q)} className="flex w-full items-center gap-2 px-4 py-3 text-sm font-bold text-saffron-700 hover:bg-surface-2 dark:text-saffron-300"><Search className="h-4 w-4" />See all results for “{q}”</button>
+              <button type="button" onClick={() => submit(q)} className="flex w-full items-center gap-2 px-4 py-3 text-sm font-bold text-maroon-700 hover:bg-surface-2 dark:text-maroon-200"><Search className="h-4 w-4" />See all results for “{q}”</button>
             </div>
           ) : sugg && sugg.suggestion ? (
-            <p className="text-sm text-muted">No exact matches. Did you mean <button type="button" className="font-bold text-saffron-700" onClick={() => submit(sugg.suggestion!)}>{sugg.suggestion}</button>?</p>
+            <p className="text-sm text-muted">No exact matches. Did you mean <button type="button" className="font-bold text-maroon-700" onClick={() => submit(sugg.suggestion!)}>{sugg.suggestion}</button>?</p>
           ) : null}
 
           {recent.length > 0 && q.length < 2 && (
             <div>
-              <div className="mb-3 flex items-center justify-between"><h2 className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Recent searches</h2><button type="button" className="text-xs font-semibold text-maroon-700" onClick={() => { recentSearches.clear(); setRecent([]); }}>Clear</button></div>
-              <div className="flex flex-wrap gap-2">{recent.map((r) => <button key={r} type="button" onClick={() => submit(r)} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-sm font-medium text-ink-soft hover:border-saffron-300"><Clock className="h-3.5 w-3.5 text-muted" />{r}</button>)}</div>
+              <div className="mb-3 flex items-center justify-between"><h2 className="text-[13px] font-semibold text-muted">Recent searches</h2><button type="button" className="text-xs font-semibold text-maroon-700" onClick={() => { recentSearches.clear(); setRecent([]); }}>Clear</button></div>
+              <div className="flex flex-wrap gap-2">{recent.map((r) => <button key={r} type="button" onClick={() => submit(r)} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 py-2 text-sm font-medium text-ink-soft hover:border-ink-soft/40"><Clock className="h-3.5 w-3.5 text-muted" />{r}</button>)}</div>
             </div>
           )}
           {trending.length > 0 && q.length < 2 && (
             <div>
-              <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-muted">Trending searches</h2>
-              <div className="flex flex-wrap gap-2">{trending.map((r) => <button key={r} type="button" onClick={() => submit(r)} className="inline-flex items-center gap-1.5 rounded-full bg-saffron-50 px-3.5 py-2 text-sm font-semibold capitalize text-saffron-800 hover:bg-saffron-100 dark:bg-saffron-500/10 dark:text-saffron-200"><TrendingUp className="h-3.5 w-3.5" />{r}</button>)}</div>
+              <h2 className="mb-3 text-[13px] font-semibold text-muted">Trending searches</h2>
+              <div className="flex flex-wrap gap-2">{trending.map((r) => <button key={r} type="button" onClick={() => submit(r)} className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-sm font-semibold capitalize text-maroon-800 hover:bg-surface-2 dark:text-maroon-200"><TrendingUp className="h-3.5 w-3.5" />{r}</button>)}</div>
             </div>
           )}
         </div>

@@ -61,9 +61,9 @@ function Schematic({ tracking }: { tracking: Tracking }) {
         {pk && dr && <line x1={pk.x} y1={pk.y} x2={dr.x} y2={dr.y} stroke="var(--nd-line)" strokeWidth="3" strokeDasharray="8 8" />}
         {path.length > 1 && <polyline points={path.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#F57F0E" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />}
       </svg>
-      {pk && <Pin x={pk.x / W} y={pk.y / H} className="bg-maroon-700 text-saffron-100" label="Kitchen"><Store className="h-4 w-4" /></Pin>}
+      {pk && <Pin x={pk.x / W} y={pk.y / H} className="bg-maroon-700 text-cream-100" label="Kitchen"><Store className="h-4 w-4" /></Pin>}
       {dr && <Pin x={dr.x / W} y={dr.y / H} className="bg-pista-600 text-white" label="You"><Home className="h-4 w-4" /></Pin>}
-      {rd && <Pin x={rd.x / W} y={rd.y / H} className="bg-saffron-500 text-white" label="Rider" pulse><Bike className="h-4 w-4" /></Pin>}
+      {rd && <Pin x={rd.x / W} y={rd.y / H} className="bg-maroon-700 text-white" label="Rider" pulse><Bike className="h-4 w-4" /></Pin>}
       <span className="absolute bottom-2 right-3 text-[10px] text-muted">Route to scale · live GPS</span>
     </div>
   );
@@ -72,7 +72,7 @@ function Schematic({ tracking }: { tracking: Tracking }) {
 function Pin({ x, y, children, className, label, pulse }: { x: number; y: number; children: React.ReactNode; className: string; label: string; pulse?: boolean }) {
   return (
     <div className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-700" style={{ left: `${x * 100}%`, top: `${y * 100}%` }}>
-      {pulse && <span className="absolute inset-0 animate-pulse-ring rounded-full bg-saffron-400" />}
+      {pulse && <span className="absolute inset-0 animate-pulse-ring rounded-full bg-maroon-700" />}
       <span className={`relative grid h-9 w-9 place-items-center rounded-full shadow-lg ring-4 ring-white dark:ring-black/40 ${className}`} title={label}>{children}</span>
     </div>
   );

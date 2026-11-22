@@ -18,7 +18,7 @@ export default function PaymentsPage() {
       <PageHeader title="Payments" subtitle="Razorpay payments are verified server-side with signatures and webhooks. Direct UPI payments are confirmed by staff against the shop's UPI account." />
       <Segmented size="sm" className="mb-4" value={method} onChange={(v) => { setMethod(v); setPage(1); }} options={[{ value: "", label: "All" }, { value: "ONLINE", label: "Razorpay" }, { value: "UPI", label: "UPI (direct)" }, { value: "COD", label: "Cash on delivery" }]} />
       <DataTable<Pm> loading={loading} rows={data?.items} columns={[
-        { key: "o", header: "Order", cell: (p) => <Link href={`/orders/${p.orderId}`} className="font-mono font-bold text-saffron-700">{p.order.orderNumber}</Link> },
+        { key: "o", header: "Order", cell: (p) => <Link href={`/orders/${p.orderId}`} className="font-mono font-bold text-maroon-700">{p.order.orderNumber}</Link> },
         { key: "c", header: "Customer", cell: (p) => p.order.customerName },
         { key: "m", header: "Method", cell: (p) => p.method === "COD" ? "COD" : p.method === "UPI" ? "UPI (direct)" : `Razorpay${p.methodDetail ? ` · ${p.methodDetail}` : ""}` },
         { key: "g", header: "Reference", cell: (p) => <span className="font-mono text-[11px]">{p.gatewayPaymentId ?? p.gatewayOrderId ?? "—"}</span> },

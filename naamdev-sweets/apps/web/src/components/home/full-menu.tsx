@@ -74,18 +74,16 @@ export function FullMenu({ section }: { section: HomeSection }) {
   if (!groups.length) return null;
   return (
     <div id="menu" style={{ scrollMarginTop: headerHeight }}>
-      <div className="mx-auto flex max-w-7xl items-end justify-between gap-3 px-4 pt-6 sm:px-6">
-        <div className="min-w-0">
-          <h2 className="font-display text-[26px] font-semibold leading-tight text-ink sm:text-3xl">{L(section, "title")}</h2>
-          {section.subtitle && <p className="mt-1 text-sm text-muted">{section.subtitle}</p>}
+      <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 sm:pt-8">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-display text-[26px] font-extrabold leading-tight text-ink sm:text-[32px]">{L(section, "title")}</h2>
+          <span className="shrink-0 text-[14px] text-muted">{t("home.menuItems", { n: total })}</span>
         </div>
-        <span className="shrink-0 rounded-full bg-saffron-50 px-3 py-1 text-xs font-bold text-saffron-700 dark:bg-saffron-500/10 dark:text-saffron-300">
-          {t("home.menuItems", { n: total })}
-        </span>
+        {section.subtitle && <p className="mt-0.5 text-[15px] text-ink-soft">{section.subtitle}</p>}
       </div>
 
-      <div ref={barRef} style={{ top: headerHeight }} className="sticky z-40 mt-3 border-b border-line-soft bg-bg/95 backdrop-blur no-print">
-        <nav ref={chipsRef} aria-label={t("home.menuJump")} className="nd-scrollbar-none mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 py-2.5 sm:px-6">
+      <div ref={barRef} style={{ top: headerHeight }} className="sticky z-40 mt-3 border-b border-line bg-bg no-print">
+        <nav ref={chipsRef} aria-label={t("home.menuJump")} className="nd-scrollbar-none mx-auto flex max-w-7xl gap-1.5 overflow-x-auto px-4 py-2.5 sm:px-6">
           {groups.map((g) => {
             const on = g.category.slug === active;
             return (
@@ -99,12 +97,12 @@ export function FullMenu({ section }: { section: HomeSection }) {
                   jump(g.category.slug);
                 }}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition",
-                  on ? "border-maroon-700 bg-maroon-700 text-white shadow-sm" : "border-line bg-surface text-ink-soft hover:border-saffron-400 hover:text-ink",
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-[14px] font-semibold transition-colors",
+                  on ? "border-ink bg-ink text-bg" : "border-line bg-surface text-ink-soft hover:border-ink-soft/50 hover:text-ink",
                 )}
               >
                 {L(g.category, "name")}
-                <span className={cn("text-[11px] font-bold", on ? "text-saffron-200" : "text-muted")}>{g.products.length}</span>
+                <span className={cn("text-[12px] font-medium", on ? "opacity-70" : "text-muted")}>{g.products.length}</span>
               </a>
             );
           })}
@@ -113,12 +111,12 @@ export function FullMenu({ section }: { section: HomeSection }) {
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         {groups.map((g, gi) => (
-          <section key={g.category.id} id={anchor(g.category.slug)} aria-labelledby={`${anchor(g.category.slug)}-title`} className="pt-6">
-            <h3 id={`${anchor(g.category.slug)}-title`} className="mb-4 flex items-baseline gap-2 font-display text-xl font-semibold text-ink sm:text-2xl">
+          <section key={g.category.id} id={anchor(g.category.slug)} aria-labelledby={`${anchor(g.category.slug)}-title`} className="border-b border-line pb-6 pt-6 last:border-b-0">
+            <h3 id={`${anchor(g.category.slug)}-title`} className="mb-4 flex items-baseline gap-2 font-display text-[20px] font-extrabold text-ink sm:text-[24px]">
               {L(g.category, "name")}
-              <span className="font-sans text-sm font-medium text-muted">({g.products.length})</span>
+              <span className="font-sans text-[14px] font-normal text-muted">({g.products.length})</span>
             </h3>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-9 pb-4 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-4 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-4 xl:grid-cols-5">
               {g.products.map((p, i) => (
                 <ProductCard key={p.id} product={p} priority={gi === 0 && i < 2} />
               ))}

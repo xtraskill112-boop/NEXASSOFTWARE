@@ -20,7 +20,7 @@ export default function ReturnsPage() {
       <Segmented value={tab} onChange={setTab} className="mb-4" options={[{ value: "returns", label: "Return requests" }, { value: "refunds", label: "Refunds" }]} />
       {tab === "returns" ? (
         <DataTable<Rr> loading={returns.loading} rows={returns.data?.items} columns={[
-          { key: "o", header: "Order", cell: (r) => <Link href={`/orders/${r.orderId}`} className="font-mono font-bold text-saffron-700">{r.order.orderNumber}</Link> },
+          { key: "o", header: "Order", cell: (r) => <Link href={`/orders/${r.orderId}`} className="font-mono font-bold text-maroon-700">{r.order.orderNumber}</Link> },
           { key: "c", header: "Customer", cell: (r) => r.user.name }, { key: "r", header: "Reason", cell: (r) => r.reason },
           { key: "v", header: "Order value", align: "right", cell: (r) => `${formatINR(r.order.totalPaise)} · ${r.order.paymentMethod}` },
           { key: "d", header: "Requested", cell: (r) => dt(r.createdAt) },
@@ -28,7 +28,7 @@ export default function ReturnsPage() {
         ]} />
       ) : (
         <DataTable<Rf> loading={refunds.loading} rows={refunds.data?.items} columns={[
-          { key: "o", header: "Order", cell: (r) => <Link href={`/orders/${r.orderId}`} className="font-mono font-bold text-saffron-700">{r.order.orderNumber}</Link> },
+          { key: "o", header: "Order", cell: (r) => <Link href={`/orders/${r.orderId}`} className="font-mono font-bold text-maroon-700">{r.order.orderNumber}</Link> },
           { key: "c", header: "Customer", cell: (r) => r.order.customerName }, { key: "a", header: "Amount", align: "right", cell: (r) => formatINR(r.amountPaise) },
           { key: "m", header: "Method", cell: (r) => r.method.toLowerCase() }, { key: "r", header: "Reason", cell: (r) => <span className="text-xs">{r.reason}</span> },
           { key: "b", header: "By", cell: (r) => r.initiatedBy?.name ?? "System" }, { key: "d", header: "Date", cell: (r) => dt(r.createdAt) },

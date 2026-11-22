@@ -22,7 +22,7 @@ export default function TicketPage() {
       <PageTitle title={t.subject} subtitle={`${t.ticketNumber}${t.order ? ` · Order ${t.order.orderNumber}` : ""}`} action={<Badge tone="info">{t.status.replace(/_/g, " ").toLowerCase()}</Badge>} />
       <Card className="space-y-4 p-5">
         {t.messages.map((m) => (
-          <div key={m.id} className={cn("max-w-[85%] rounded-2xl px-4 py-3", m.authorType === "CUSTOMER" ? "ml-auto bg-saffron-50 dark:bg-saffron-500/10" : "bg-surface-2")}>
+          <div key={m.id} className={cn("max-w-[85%] rounded-2xl px-4 py-3", m.authorType === "CUSTOMER" ? "ml-auto bg-surface-2 " : "bg-surface-2")}>
             <p className="text-xs font-semibold text-muted">{m.authorType === "CUSTOMER" ? "You" : `${m.author?.name ?? "NAAMDEV"} · Support`} · {new Date(m.createdAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
             <p className="mt-1 whitespace-pre-line text-sm text-ink">{m.body}</p>
           </div>

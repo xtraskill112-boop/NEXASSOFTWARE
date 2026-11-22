@@ -4,7 +4,7 @@ import { cn } from "../cn";
 
 export function Card({ className, children, interactive, ...props }: HTMLAttributes<HTMLDivElement> & { interactive?: boolean }) {
   return (
-    <div className={cn("rounded-3xl border border-line-soft bg-surface shadow-card", interactive && "transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift", className)} {...props}>
+    <div className={cn("rounded-xl border border-line bg-surface", interactive && "transition-colors duration-150 hover:border-ink-soft/40", className)} {...props}>
       {children}
     </div>
   );
@@ -21,7 +21,7 @@ const toneStyles: Record<Tone, string> = {
 
 export function Badge({ tone = "neutral", children, className, dot }: { tone?: Tone; children: ReactNode; className?: string; dot?: boolean }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ring-1 ring-inset", toneStyles[tone], className)}>
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset", toneStyles[tone], className)}>
       {dot && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
       {children}
     </span>
@@ -96,7 +96,7 @@ export function Avatar({ name, src, size = 40, className }: { name: string; src?
     // eslint-disable-next-line @next/next/no-img-element
     <img src={src} alt={name} width={size} height={size} className={cn("rounded-full object-cover", className)} style={{ width: size, height: size }} />
   ) : (
-    <span className={cn("inline-grid shrink-0 place-items-center rounded-full nd-gradient-maroon font-semibold text-saffron-200", className)} style={{ width: size, height: size, fontSize: size * 0.38 }} aria-label={name}>
+    <span className={cn("inline-grid shrink-0 place-items-center rounded-full bg-maroon-800 font-semibold text-cream-100", className)} style={{ width: size, height: size, fontSize: size * 0.38 }} aria-label={name}>
       {initials || "N"}
     </span>
   );
@@ -106,8 +106,8 @@ export function SectionHeading({ title, subtitle, action, className, eyebrow }: 
   return (
     <div className={cn("mb-4 flex items-end justify-between gap-4", className)}>
       <div className="min-w-0">
-        {eyebrow && <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-saffron-600 dark:text-saffron-300">{eyebrow}</p>}
-        <h2 className="font-display text-[22px] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-2xl">{title}</h2>
+        {eyebrow && <p className="mb-1 text-[13px] font-semibold text-accent">{eyebrow}</p>}
+        <h2 className="font-display text-[22px] font-extrabold leading-tight text-ink sm:text-[26px]">{title}</h2>
         {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
@@ -120,10 +120,10 @@ export function StatCard({ label, value, hint, icon, trend, className }: { label
     <Card className={cn("relative overflow-hidden p-5", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[12px] font-semibold uppercase tracking-wider text-muted">{label}</p>
-          <p className="mt-2 truncate font-display text-[28px] font-semibold leading-none tracking-tight text-ink tabular-nums">{value}</p>
+          <p className="text-[13px] font-medium text-muted">{label}</p>
+          <p className="mt-2 truncate text-[28px] font-bold leading-none tracking-tight text-ink tabular-nums">{value}</p>
         </div>
-        {icon && <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-saffron-50 text-saffron-600 dark:bg-saffron-500/10 dark:text-saffron-300">{icon}</div>}
+        {icon && <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink-soft [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</div>}
       </div>
       {(hint || trend) && (
         <div className="mt-3 flex items-center gap-2 text-xs text-muted">
@@ -138,7 +138,7 @@ export function StatCard({ label, value, hint, icon, trend, className }: { label
 export function Divider({ label, className }: { label?: string; className?: string }) {
   if (!label) return <hr className={cn("border-line-soft", className)} />;
   return (
-    <div className={cn("flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-muted", className)}>
+    <div className={cn("flex items-center gap-3 text-xs font-medium text-muted", className)}>
       <span className="h-px flex-1 bg-line" />
       {label}
       <span className="h-px flex-1 bg-line" />

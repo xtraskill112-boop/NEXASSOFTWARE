@@ -21,11 +21,11 @@ export default function RewardsPage() {
   return (
     <div className="max-w-3xl">
       <PageTitle title="Mithaas Rewards" subtitle={`Earn ${d.settings.pointsPer100} points per ₹100 · 1 point = ${formatINR(d.settings.pointValuePaise)}`} />
-      <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-gold-300 via-gold-400 to-saffron-600 p-6 text-maroon-950 sm:p-8">
+      <Card className="relative overflow-hidden border-0 bg-[#F4E6BE] p-6 text-maroon-950 sm:p-8">
         <div className="nd-pattern absolute inset-0 opacity-30" />
         <div className="relative flex items-start justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em]">Your balance</p>
+            <p className="text-[13px] font-semibold">Your balance</p>
             <p className="mt-1 font-display text-5xl font-semibold">{d.balance.toLocaleString("en-IN")} <span className="text-xl">pts</span></p>
             <p className="mt-1 text-sm font-semibold">Worth {formatINR(d.valuePaise)} on your next order</p>
           </div>
@@ -40,7 +40,7 @@ export default function RewardsPage() {
       </Card>
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         {d.tiers.map((t) => (
-          <Card key={t.key} className={cn("p-4", t.key === d.tier.key && "ring-2 ring-saffron-400")}>
+          <Card key={t.key} className={cn("p-4", t.key === d.tier.key && "ring-2 ring-maroon-700")}>
             <p className="font-display text-lg font-semibold" style={{ color: t.color }}>{t.name}</p>
             <p className="text-xs text-muted">{t.minLifetime ? `${t.minLifetime}+ lifetime points` : "Starting tier"}</p>
             <ul className="mt-2 space-y-1 text-xs text-ink-soft">{t.perks.map((p) => <li key={p}>• {p}</li>)}</ul>

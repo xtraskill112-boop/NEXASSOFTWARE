@@ -25,8 +25,8 @@ export default function NotificationsPage() {
         <Card className="divide-y divide-line-soft">
           {d.items.map((n) => {
             const body = (
-              <div className={cn("flex gap-3 px-5 py-4", !n.readAt && "bg-saffron-50/50 dark:bg-saffron-500/5")}>
-                <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.readAt ? "bg-transparent" : "bg-saffron-500")} />
+              <div className={cn("flex gap-3 px-5 py-4", !n.readAt && "bg-surface-2/60 ")}>
+                <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.readAt ? "bg-transparent" : "bg-maroon-700")} />
                 <div className="min-w-0 flex-1"><p className="font-semibold text-ink">{n.title}</p><p className="text-sm text-ink-soft">{n.body}</p><p className="mt-1 text-xs text-muted">{new Date(n.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</p></div>
               </div>
             );

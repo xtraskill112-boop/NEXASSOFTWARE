@@ -39,7 +39,7 @@ export function AddressForm({ initial, onSaved, onCancel, defaultName, defaultPh
     <form onSubmit={save} className="space-y-4">
       <div className="flex gap-2">
         {types.map(([v, label, Icon]) => (
-          <button key={v} type="button" onClick={() => set("type", v)} className={cn("inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold transition", d.type === v ? "border-saffron-500 bg-saffron-50 text-saffron-800 dark:bg-saffron-500/15 dark:text-saffron-200" : "border-line text-ink-soft")}>
+          <button key={v} type="button" onClick={() => set("type", v)} className={cn("inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold transition", d.type === v ? "border-maroon-700 bg-surface-2 text-maroon-800  dark:text-maroon-200" : "border-line text-ink-soft")}>
             <Icon className="h-4 w-4" />{label}
           </button>
         ))}

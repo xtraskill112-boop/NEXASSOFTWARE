@@ -40,12 +40,12 @@ export default function InvoicePage() {
         </div>
       </div>
       <div className="mt-5">
-        <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Bill to / Ship to</p>
+        <p className="text-[13px] font-semibold text-neutral-500">Bill to / Ship to</p>
         <p className="font-semibold">{order.address.fullName} · {order.address.phone}</p>
         <p className="text-neutral-600">{[order.address.line1, order.address.line2, order.address.landmark, `${order.address.city}, ${order.address.state} ${order.address.pincode}`].filter(Boolean).join(", ")}</p>
       </div>
       <table className="mt-6 w-full border-collapse">
-        <thead><tr className="bg-neutral-100 text-left text-xs uppercase tracking-wide text-neutral-600"><th className="p-2">Item</th><th className="p-2 text-right">Qty</th><th className="p-2 text-right">Rate</th><th className="p-2 text-right">Discount</th><th className="p-2 text-right">GST</th><th className="p-2 text-right">Amount</th></tr></thead>
+        <thead><tr className="bg-neutral-100 text-left text-[13px] text-neutral-600"><th className="p-2">Item</th><th className="p-2 text-right">Qty</th><th className="p-2 text-right">Rate</th><th className="p-2 text-right">Discount</th><th className="p-2 text-right">GST</th><th className="p-2 text-right">Amount</th></tr></thead>
         <tbody>
           {order.items.map((i) => (
             <tr key={i.id} className="border-b border-neutral-200">

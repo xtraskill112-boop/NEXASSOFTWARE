@@ -4,7 +4,7 @@
 
 @layer base {
   html {
-    scroll-padding-top: 140px;
+    scroll-padding-top: calc(var(--nd-header-h, 120px) + 16px);
   }
 }
 

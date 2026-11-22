@@ -60,7 +60,7 @@ export function LocationSheet({ open, onClose }: { open: boolean; onClose: () =>
     <Sheet open={open} onClose={onClose} side="bottom" title="Choose delivery location" className="sm:mx-auto sm:max-w-lg">
       <div className="space-y-5 p-5">
         {mapsKey && (
-          <button type="button" onClick={locate} className="flex w-full items-center gap-3 rounded-2xl border border-saffron-200 bg-saffron-50 p-4 text-left font-semibold text-saffron-800 dark:border-saffron-500/30 dark:bg-saffron-500/10 dark:text-saffron-200">
+          <button type="button" onClick={locate} className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface-2 p-4 text-left font-semibold text-maroon-800 dark:border-maroon-300/40 dark:text-maroon-200">
             <LocateFixed className="h-5 w-5" /> Use my current location
           </button>
         )}

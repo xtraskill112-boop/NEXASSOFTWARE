@@ -15,16 +15,15 @@ export default function CollectionPage() {
   const { data: d, loading, notFound, error } = usePublic<Coll>(slug ? `/catalog/collections/${encodeURIComponent(slug)}` : null);
   useDocumentTitle(d?.collection.name);
   if (loading) return <BrandLoader className="min-h-[60dvh]" />;
-  if (notFound || !d) return <div className="mx-auto max-w-xl px-4 py-20"><ErrorState title="Collection not found" description={notFound ? "It may have been moved or removed." : error ?? "Please try again."} action={<Link href="/" className="font-semibold text-saffron-700">Back to the shop</Link>} /></div>;
+  if (notFound || !d) return <div className="mx-auto max-w-xl px-4 py-20"><ErrorState title="Collection not found" description={notFound ? "It may have been moved or removed." : error ?? "Please try again."} action={<Link href="/" className="font-semibold text-maroon-700">Back to the shop</Link>} /></div>;
   const c = d.collection;
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-4 sm:px-6">
-      <header className={`relative mb-8 overflow-hidden rounded-[2rem] p-6 sm:p-12 ${themeBg(c.theme)}`}>
-        {c.bannerImageUrl && <ProductImage src={c.bannerImageUrl} alt="" className="absolute inset-0 h-full w-full opacity-50" sizes={1600} priority />}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent" />
+      <header className={`relative mb-8 overflow-hidden rounded-xl p-6 sm:p-10 ${themeBg(c.theme)}`}>
+        {c.bannerImageUrl && <ProductImage src={c.bannerImageUrl} alt="" className="absolute inset-y-0 right-0 hidden h-full w-2/5 object-cover sm:block" sizes={900} priority />}
         <div className="relative max-w-xl">
-          {c.isFestival && <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-saffron-200">Festival collection</p>}
-          <h1 className="mt-2 font-display text-4xl font-semibold leading-tight sm:text-5xl">{c.name}</h1>
+          {c.isFestival && <p className="text-[12.5px] font-semibold text-cream-200">Festival collection</p>}
+          <h1 className="mt-1 font-display text-3xl font-extrabold leading-tight sm:text-4xl">{c.name}</h1>
           {c.description && <p className="mt-3 text-sm opacity-90 sm:text-base">{c.description}</p>}
         </div>
       </header>

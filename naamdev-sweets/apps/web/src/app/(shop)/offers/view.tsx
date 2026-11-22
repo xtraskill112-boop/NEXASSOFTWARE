@@ -10,11 +10,9 @@ export function OffersView() {
   const { data: coupons } = usePublic<{ coupons: PublicCoupon[] }>("/public/coupons");
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6">
-      <div className="nd-gradient-royal relative overflow-hidden rounded-[2rem] p-6 text-cream-100 sm:p-10">
-        <div className="nd-pattern absolute inset-0 opacity-30" />
-        <p className="relative text-[11px] font-bold uppercase tracking-[0.2em] text-saffron-300">Offers & rewards</p>
-        <h1 className="relative mt-2 font-display text-4xl font-semibold sm:text-5xl">Sweeter deals, every day</h1>
-        <p className="relative mt-2 max-w-lg text-sm text-cream-200/80">Apply a code at checkout. Coupons are validated live, so you always see what you save.</p>
+      <div className="border-b border-line pb-6">
+        <h1 className="font-display text-[30px] font-extrabold leading-tight text-ink sm:text-4xl">Offers</h1>
+        <p className="mt-1.5 max-w-lg text-[15px] text-ink-soft">Apply a code at checkout. We check it as you apply it, so the discount you see is the one you get.</p>
       </div>
       <section className="mt-8">
         <SectionHeading title="Coupons for you" />

@@ -46,7 +46,7 @@ export function CouponBox() {
         ) : (
           <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center justify-between gap-3 text-left">
             <span className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-saffron-50 text-saffron-600 dark:bg-saffron-500/10"><BadgePercent className="h-5 w-5" /></span>
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2 text-maroon-700"><BadgePercent className="h-5 w-5" /></span>
               <span><span className="block font-semibold text-ink">{t("cart.applyCoupon")}</span><span className="block text-xs text-muted">View offers & save more</span></span>
             </span>
             <ChevronRight className="h-5 w-5 text-muted" />

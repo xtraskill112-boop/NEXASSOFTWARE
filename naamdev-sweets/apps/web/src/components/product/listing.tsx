@@ -81,13 +81,13 @@ export function ProductListing({ fixed = {}, initial, emptyTitle = "No sweets ma
     }
   };
 
-  const chip = (active: boolean) => cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition", active ? "border-saffron-500 bg-saffron-50 text-saffron-800 dark:bg-saffron-500/15 dark:text-saffron-200" : "border-line bg-surface text-ink-soft hover:border-saffron-300");
+  const chip = (active: boolean) => cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-3 text-[14px] font-semibold transition-colors", active ? "border-ink bg-ink text-bg" : "border-line bg-surface text-ink-soft hover:border-ink-soft/50");
   const priceKey = `${params.minPrice ?? ""}-${params.maxPrice ?? ""}`;
   const activeCount = ["minPrice", "maxPrice", "inStock", "onOffer"].filter((k) => sp.get(k)).length;
 
   return (
     <div>
-      <div className="nd-scrollbar-none sticky top-[68px] z-30 -mx-4 flex gap-2 overflow-x-auto bg-bg/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:top-[68px]">
+      <div style={{ top: "var(--nd-header-h, 64px)" }} className="nd-scrollbar-none sticky z-30 -mx-4 flex gap-2 overflow-x-auto border-b border-line bg-bg px-4 py-2.5 sm:-mx-6 sm:px-6">
         <button type="button" className={chip(!!sp.get("sort"))} onClick={() => setSortOpen(true)}><ArrowDownUp className="h-3.5 w-3.5" />{SORTS.find((s) => s[0] === (params.sort ?? "relevance"))?.[1] ?? "Sort"}</button>
         <button type="button" className={chip(params.inStock === "true")} onClick={() => set({ inStock: params.inStock === "true" ? null : "true" })}>In stock</button>
         <button type="button" className={chip(params.onOffer === "true")} onClick={() => set({ onOffer: params.onOffer === "true" ? null : "true" })}>On offer</button>
@@ -131,8 +131,8 @@ export function ProductListing({ fixed = {}, initial, emptyTitle = "No sweets ma
         <div className="p-3">
           {SORTS.map(([value, label]) => (
             <button key={value} type="button" onClick={() => { set({ sort: value === "relevance" ? null : value }); setSortOpen(false); }}
-              className={cn("flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left text-[15px] font-semibold transition hover:bg-surface-2", (params.sort ?? "relevance") === value ? "text-saffron-700 dark:text-saffron-300" : "text-ink")}>
-              {label}{(params.sort ?? "relevance") === value && <span className="h-2.5 w-2.5 rounded-full bg-saffron-500" />}
+              className={cn("flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left text-[15px] font-semibold transition hover:bg-surface-2", (params.sort ?? "relevance") === value ? "text-maroon-700 dark:text-maroon-200" : "text-ink")}>
+              {label}{(params.sort ?? "relevance") === value && <span className="h-2.5 w-2.5 rounded-full bg-maroon-700" />}
             </button>
           ))}
         </div>

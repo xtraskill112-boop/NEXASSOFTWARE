@@ -13,10 +13,10 @@ export function FaqsView() {
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:px-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
       <h1 className="font-display text-4xl font-semibold text-ink">How can we help?</h1>
-      <p className="mt-2 text-muted">Can&apos;t find your answer? <Link href="/contact" className="font-semibold text-saffron-700">Contact us</Link>.</p>
+      <p className="mt-2 text-muted">Can&apos;t find your answer? <Link href="/contact" className="font-semibold text-maroon-700">Contact us</Link>.</p>
       {groups.map((g) => (
         <section key={g} className="mt-8">
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-saffron-700 dark:text-saffron-300">{g}</h2>
+          <h2 className="mb-3 text-[13px] font-semibold text-maroon-700 dark:text-maroon-200">{g}</h2>
           <Card className="divide-y divide-line-soft">
             {faqs.filter((f) => f.category === g).map((f) => (
               <details key={f.id} className="group px-5 py-4">

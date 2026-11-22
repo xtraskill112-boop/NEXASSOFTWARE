@@ -29,7 +29,7 @@ export default function TicketPage() {
         <div>
           <Card className="space-y-3 p-5">
             {t.messages.map((m) => (
-              <div key={m.id} className={cn("max-w-[85%] rounded-2xl px-4 py-3", m.isInternal ? "ml-auto border border-dashed border-gold-400 bg-gold-300/15" : m.authorType === "STAFF" ? "ml-auto bg-saffron-50 dark:bg-saffron-500/10" : "bg-surface-2")}>
+              <div key={m.id} className={cn("max-w-[85%] rounded-2xl px-4 py-3", m.isInternal ? "ml-auto border border-dashed border-gold-400 bg-gold-300/15" : m.authorType === "STAFF" ? "ml-auto bg-surface-2 " : "bg-surface-2")}>
                 <p className="flex items-center gap-1 text-xs font-semibold text-muted">{m.isInternal && <Lock className="h-3 w-3" />}{m.author?.name ?? (m.authorType === "SYSTEM" ? t.guestName ?? "Guest" : "Customer")} · {dt(m.createdAt)}</p>
                 <p className="mt-1 whitespace-pre-line text-sm text-ink">{m.body}</p>
               </div>
@@ -52,7 +52,7 @@ export default function TicketPage() {
             <Field label="Assignee">{(p) => <Select {...p} value={t.assignedTo?.id ?? ""} onChange={(e) => void patch({ assignedToId: e.target.value || null })}><option value="">Unassigned</option>{data.agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>}</Field>
           </Card>
           <Card className="p-5">
-            <KeyValue items={[["Customer", t.user ? <Link key="u" href={`/customers/${t.user.id}`} className="text-saffron-700">{t.user.name}</Link> : `${t.guestName} (guest)`], ["Contact", t.user?.phone ?? t.guestPhone ?? t.user?.email ?? t.guestEmail], ["Category", t.category.replace(/_/g, " ").toLowerCase()], ["Order", t.order ? <Link key="o" href={`/orders/${t.order.id}`} className="font-mono text-saffron-700">{t.order.orderNumber}</Link> : "—"]]} />
+            <KeyValue items={[["Customer", t.user ? <Link key="u" href={`/customers/${t.user.id}`} className="text-maroon-700">{t.user.name}</Link> : `${t.guestName} (guest)`], ["Contact", t.user?.phone ?? t.guestPhone ?? t.user?.email ?? t.guestEmail], ["Category", t.category.replace(/_/g, " ").toLowerCase()], ["Order", t.order ? <Link key="o" href={`/orders/${t.order.id}`} className="font-mono text-maroon-700">{t.order.orderNumber}</Link> : "—"]]} />
           </Card>
         </aside>
       </div>

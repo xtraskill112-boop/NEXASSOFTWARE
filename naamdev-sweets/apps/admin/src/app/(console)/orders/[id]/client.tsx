@@ -72,7 +72,7 @@ export default function AdminOrderPage() {
           <Card className="p-5">
             <h2 className="mb-3 font-display text-lg font-semibold text-ink">Items</h2>
             <table className="w-full text-sm">
-              <thead className="text-left text-[11px] uppercase tracking-wider text-muted"><tr><th className="py-2">Item</th><th className="py-2 text-right">Qty</th><th className="py-2 text-right">Price</th><th className="py-2 text-right">Total</th></tr></thead>
+              <thead className="text-left text-[12.5px] text-muted"><tr><th className="py-2">Item</th><th className="py-2 text-right">Qty</th><th className="py-2 text-right">Price</th><th className="py-2 text-right">Total</th></tr></thead>
               <tbody className="divide-y divide-line-soft">
                 {o.items.map((i) => {
                   const alloc = o.allocations.find((a) => a.itemId === i.id);
@@ -100,7 +100,7 @@ export default function AdminOrderPage() {
             <h2 className="mb-3 font-display text-lg font-semibold text-ink">Timeline</h2>
             <ol className="space-y-3 border-l-2 border-line pl-5 text-sm">
               {o.history.map((h) => (
-                <li key={h.id} className="relative"><span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full bg-saffron-500 ring-4 ring-surface" />
+                <li key={h.id} className="relative"><span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full bg-maroon-700 ring-4 ring-surface" />
                   <p className="font-semibold text-ink">{ORDER_STATUS_META[h.to].label}</p>
                   <p className="text-xs text-muted">{dt(h.at)} · {h.actor ?? h.actorType.toLowerCase()}{h.note ? ` — ${h.note}` : ""}</p></li>
               ))}
@@ -120,9 +120,9 @@ export default function AdminOrderPage() {
         <aside className="space-y-6">
           <Card className="p-5">
             <h2 className="mb-3 font-display text-lg font-semibold text-ink">Customer</h2>
-            <KeyValue items={[["Name", <Link key="n" href={`/customers/${o.customer.id}`} className="font-semibold text-saffron-700">{o.customerName}</Link>], ["Phone", <a key="p" href={`tel:${o.customerPhone}`}>{o.customerPhone}</a>], ["Orders", o.customer._count.orders], ["Since", dt(o.customer.createdAt, false)]]} />
+            <KeyValue items={[["Name", <Link key="n" href={`/customers/${o.customer.id}`} className="font-semibold text-maroon-700">{o.customerName}</Link>], ["Phone", <a key="p" href={`tel:${o.customerPhone}`}>{o.customerPhone}</a>], ["Orders", o.customer._count.orders], ["Since", dt(o.customer.createdAt, false)]]} />
             <div className="mt-4 rounded-2xl bg-surface-2 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-semibold text-ink"><MapPin className="h-4 w-4 text-saffron-600" />{o.address.fullName}</p>
+              <p className="flex items-center gap-1.5 font-semibold text-ink"><MapPin className="h-4 w-4 text-maroon-700" />{o.address.fullName}</p>
               <p className="text-muted">{[o.address.line1, o.address.line2, o.address.landmark, o.address.city, o.address.pincode].filter(Boolean).join(", ")}</p>
               {o.deliveryInstructions && <p className="mt-1 text-xs italic text-ink-soft">“{o.deliveryInstructions}”</p>}
             </div>
@@ -140,12 +140,12 @@ export default function AdminOrderPage() {
                   <div className="flex items-center justify-between"><b className="text-ink">{a.partnerName}</b><Badge tone={["DELIVERED"].includes(a.status) ? "success" : ["REJECTED", "EXPIRED", "CANCELLED"].includes(a.status) ? "neutral" : "brand"}>{a.status.toLowerCase().replace(/_/g, " ")}</Badge></div>
                   <p className="text-xs text-muted">{a.distanceKm ?? "–"} km · earns {formatINR(a.earningPaise)} · offered {dt(a.offeredAt)}</p>
                   {a.rejectionReason && <p className="text-xs text-maroon-600">{a.rejectionReason}</p>}
-                  {a.partnerPhone && ["ACCEPTED", "AT_STORE", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(a.status) && <a href={`tel:${a.partnerPhone}`} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-saffron-700"><Phone className="h-3 w-3" />Call rider</a>}
+                  {a.partnerPhone && ["ACCEPTED", "AT_STORE", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(a.status) && <a href={`tel:${a.partnerPhone}`} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-maroon-700"><Phone className="h-3 w-3" />Call rider</a>}
                 </li>
               ))}</ul>
             )}
             {data.tracking.partnerLocation && (
-              <a href={googleMapsDirectionsUrl(data.tracking.partnerLocation)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-saffron-700"><ExternalLink className="h-3 w-3" />Rider live location (updated {dt(data.tracking.partnerLocation.at)}){data.tracking.etaMinutes ? ` · ETA ${data.tracking.etaMinutes} min` : ""}</a>
+              <a href={googleMapsDirectionsUrl(data.tracking.partnerLocation)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-maroon-700"><ExternalLink className="h-3 w-3" />Rider live location (updated {dt(data.tracking.partnerLocation.at)}){data.tracking.etaMinutes ? ` · ETA ${data.tracking.etaMinutes} min` : ""}</a>
             )}
           </Card>
 
@@ -158,9 +158,9 @@ export default function AdminOrderPage() {
               {o.refunds.map((r) => (
                 <li key={r.id} className="rounded-xl border border-line-soft p-3"><div className="flex justify-between"><b>Refund · {r.method.toLowerCase()}</b><span>{formatINR(r.amountPaise)}</span></div><p className="text-xs text-muted">{r.status.toLowerCase()} · {r.reason}{r.reference ? ` · ref ${r.reference}` : ""}</p>{r.failureReason && <p className="text-xs text-maroon-600">{r.failureReason}</p>}
                   {r.method === "MANUAL" && r.status === "PENDING" && can("refunds.manage") && (
-                    <button type="button" className="mt-1 text-xs font-bold text-saffron-700" onClick={() => { const ref = prompt(`After sending ${formatINR(r.amountPaise)} to the customer, enter the UPI / bank reference`); if (ref && ref.trim().length >= 4) void act("Refund recorded as sent", () => api.post(`/admin/orders/refunds/${r.id}/complete`, { reference: ref.trim() })); }}>Record refund sent…</button>
+                    <button type="button" className="mt-1 text-xs font-bold text-maroon-700" onClick={() => { const ref = prompt(`After sending ${formatINR(r.amountPaise)} to the customer, enter the UPI / bank reference`); if (ref && ref.trim().length >= 4) void act("Refund recorded as sent", () => api.post(`/admin/orders/refunds/${r.id}/complete`, { reference: ref.trim() })); }}>Record refund sent…</button>
                   )}
-                  {r.gatewayRefundId && r.status === "PROCESSING" && <button type="button" className="mt-1 text-xs font-bold text-saffron-700" onClick={() => void act("Refund status synced", () => api.post(`/admin/orders/refunds/${r.id}/sync`))}>Sync status from Razorpay</button>}</li>
+                  {r.gatewayRefundId && r.status === "PROCESSING" && <button type="button" className="mt-1 text-xs font-bold text-maroon-700" onClick={() => void act("Refund status synced", () => api.post(`/admin/orders/refunds/${r.id}/sync`))}>Sync status from Razorpay</button>}</li>
               ))}
             </ul>
           </Card>
@@ -219,10 +219,10 @@ function UpiVerifyCard({ order, canVerify, onDone }: { order: AdminOrder; canVer
     }
   };
   return (
-    <Card className="mb-6 border-2 border-saffron-300 p-5 dark:border-saffron-500/40">
+    <Card className="mb-6 border-2 border-maroon-300 p-5 dark:border-maroon-300/40">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink"><Smartphone className="h-5 w-5 text-saffron-600" />Check this UPI payment</h2>
+          <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink"><Smartphone className="h-5 w-5 text-maroon-700" />Check this UPI payment</h2>
           <p className="mt-1 text-sm text-ink-soft">
             Open the shop&apos;s UPI account (e.g. Paytm for Business) and look for <b>{formatINR(order.totals.totalPaise)}</b> with UPI reference <b className="font-mono">{p?.gatewayPaymentId ?? "—"}</b>
             {p?.submittedAt ? <> (customer submitted it {dt(p.submittedAt)})</> : null}. The order stays on hold until you confirm.

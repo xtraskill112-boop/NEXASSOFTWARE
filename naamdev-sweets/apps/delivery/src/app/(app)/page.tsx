@@ -30,10 +30,10 @@ function OfferCard({ o }: { o: Assignment }) {
     catch (e) { toast.error(errorMessage(e)); } finally { setBusy(null); void refresh(); }
   };
   return (
-    <Card className="overflow-hidden border-2 border-saffron-400">
+    <Card className="overflow-hidden border-2 border-maroon-700">
       <div className="nd-gradient-saffron flex items-center justify-between px-4 py-2 text-white"><span className="text-sm font-bold">New delivery request</span><span className="flex items-center gap-1 text-sm font-bold"><Clock className="h-4 w-4" /><Countdown until={o.offerExpiresAt} /></span></div>
       <div className="space-y-3 p-4">
-        <div className="flex items-end justify-between"><div><p className="text-xs font-semibold uppercase text-muted">You earn</p><p className="font-display text-3xl font-semibold text-ink">{formatINR(o.earningPaise)}</p></div><div className="text-right"><p className="text-xs text-muted">Distance</p><p className="text-lg font-bold text-ink">{o.distanceKm ?? "–"} km</p></div></div>
+        <div className="flex items-end justify-between"><div><p className="text-[13px] font-semibold text-muted">You earn</p><p className="font-display text-3xl font-semibold text-ink">{formatINR(o.earningPaise)}</p></div><div className="text-right"><p className="text-xs text-muted">Distance</p><p className="text-lg font-bold text-ink">{o.distanceKm ?? "–"} km</p></div></div>
         <div className="space-y-2 text-sm">
           <p className="flex gap-2"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-maroon-700" /><span><b className="text-ink">Pickup</b> · {o.pickup?.name}</span></p>
           <p className="flex gap-2"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-pista-600" /><span><b className="text-ink">Drop</b> · {o.drop.area}</span></p>
@@ -73,9 +73,9 @@ export default function Home() {
       {gps === "denied" && <InlineAlert tone="danger"><AlertTriangle className="mr-1 inline h-4 w-4" />Location permission is blocked. Allow location for this app (or this site) in your phone settings — customers need it to track their order.</InlineAlert>}
 
       <div className="grid grid-cols-3 gap-3">
-        <Card className="p-3 text-center"><IndianRupee className="mx-auto h-4 w-4 text-saffron-600" /><p className="mt-1 font-bold text-ink">{formatINR(earnings.todayPaise)}</p><p className="text-[11px] text-muted">Today</p></Card>
-        <Card className="p-3 text-center"><Package className="mx-auto h-4 w-4 text-saffron-600" /><p className="mt-1 font-bold text-ink">{earnings.deliveriesToday}</p><p className="text-[11px] text-muted">Deliveries</p></Card>
-        <Card className="p-3 text-center"><Trophy className="mx-auto h-4 w-4 text-saffron-600" /><p className="mt-1 font-bold text-ink">{earnings.incentive.progress}/{earnings.incentive.target}</p><p className="text-[11px] text-muted">Bonus target</p></Card>
+        <Card className="p-3 text-center"><IndianRupee className="mx-auto h-4 w-4 text-maroon-700" /><p className="mt-1 font-bold text-ink">{formatINR(earnings.todayPaise)}</p><p className="text-[11px] text-muted">Today</p></Card>
+        <Card className="p-3 text-center"><Package className="mx-auto h-4 w-4 text-maroon-700" /><p className="mt-1 font-bold text-ink">{earnings.deliveriesToday}</p><p className="text-[11px] text-muted">Deliveries</p></Card>
+        <Card className="p-3 text-center"><Trophy className="mx-auto h-4 w-4 text-maroon-700" /><p className="mt-1 font-bold text-ink">{earnings.incentive.progress}/{earnings.incentive.target}</p><p className="text-[11px] text-muted">Bonus target</p></Card>
       </div>
       {earnings.incentive.target > 0 && (
         <div><div className="h-2 overflow-hidden rounded-full bg-surface-2"><div className="h-full rounded-full nd-gradient-saffron" style={{ width: `${(earnings.incentive.progress / earnings.incentive.target) * 100}%` }} /></div>
@@ -91,7 +91,7 @@ export default function Home() {
         ) : active.map((a) => (
           <Link key={a.assignmentId} href={`/delivery/${a.assignmentId}`}>
             <Card interactive className="mb-3 p-4">
-              <div className="flex items-center justify-between"><span className="font-mono font-bold text-ink">{a.orderNumber}</span><span className="rounded-full bg-saffron-50 px-2.5 py-1 text-xs font-bold text-saffron-800 dark:bg-saffron-500/10 dark:text-saffron-200">{STEP_LABEL[a.status] ?? a.status}</span></div>
+              <div className="flex items-center justify-between"><span className="font-mono font-bold text-ink">{a.orderNumber}</span><span className="rounded-full bg-surface-2 px-2.5 py-1 text-xs font-bold text-maroon-800 dark:text-maroon-200">{STEP_LABEL[a.status] ?? a.status}</span></div>
               <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft"><MapPin className="h-4 w-4 text-pista-600" />{a.customer?.address ?? a.drop.area}</p>
               <div className="mt-2 flex items-center justify-between text-sm"><span className="font-semibold text-ink">{formatINR(a.earningPaise)}{a.collectPaise > 0 ? ` · collect ${formatINR(a.collectPaise)}` : ""}</span><ChevronRight className="h-4 w-4 text-muted" /></div>
             </Card>

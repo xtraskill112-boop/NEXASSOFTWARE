@@ -40,16 +40,16 @@ export function VariantSheet({ product, open, onClose }: { product: ProductCard;
             <p className="mt-1 line-clamp-2 text-sm text-muted">{L(product, "shortDescription")}</p>
           </div>
         </div>
-        <p className="mb-3 mt-6 text-xs font-bold uppercase tracking-[0.18em] text-muted">{t("product.selectWeight")}</p>
+        <p className="mb-3 mt-6 text-[13px] font-semibold text-muted">{t("product.selectWeight")}</p>
         <div role="radiogroup" className="space-y-2.5">
           {product.variants.map((x) => (
             <button key={x.id} type="button" role="radio" aria-checked={x.id === variantId} disabled={!x.inStock} onClick={() => setVariantId(x.id)}
-              className={cn("flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3.5 text-left transition disabled:opacity-50", x.id === variantId ? "border-saffron-500 bg-saffron-50 dark:bg-saffron-500/10" : "border-line hover:border-saffron-200")}>
+              className={cn("flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3.5 text-left transition disabled:opacity-50", x.id === variantId ? "border-maroon-700 bg-surface-2 " : "border-line hover:border-ink-soft/40")}>
               <span className="flex items-center gap-3">
-                <span className={cn("grid h-5 w-5 place-items-center rounded-full border-2", x.id === variantId ? "border-saffron-500" : "border-line")}>{x.id === variantId && <span className="h-2.5 w-2.5 rounded-full bg-saffron-500" />}</span>
+                <span className={cn("grid h-5 w-5 place-items-center rounded-full border-2", x.id === variantId ? "border-maroon-700" : "border-line")}>{x.id === variantId && <span className="h-2.5 w-2.5 rounded-full bg-maroon-700" />}</span>
                 <span className="font-semibold text-ink">{x.label}</span>
                 {!x.inStock && <span className="text-xs font-semibold text-maroon-600">{t("common.outOfStock")}</span>}
-                {x.inStock && x.lowStock && <span className="text-xs font-semibold text-saffron-700">{t("common.onlyLeft", { n: x.available })}</span>}
+                {x.inStock && x.lowStock && <span className="text-xs font-semibold text-maroon-700">{t("common.onlyLeft", { n: x.available })}</span>}
               </span>
               <Price pricePaise={x.pricePaise} mrpPaise={x.mrpPaise} size="sm" />
             </button>

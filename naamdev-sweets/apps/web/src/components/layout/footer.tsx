@@ -23,24 +23,24 @@ export function Footer() {
     [social.x, XIcon, "X"],
     [social.whatsapp ? `https://wa.me/${social.whatsapp.replace(/\D/g, "")}` : undefined, WhatsappIcon, "WhatsApp"],
   ] as const;
+  const payWith = s?.payments.razorpayEnabled ? "UPI · Cards · Net banking · Cash on delivery" : "UPI · Cash on delivery";
   return (
-    <footer className="nd-gradient-royal relative mt-16 overflow-hidden pb-28 text-cream-200 md:pb-0 no-print">
-      <div className="nd-pattern pointer-events-none absolute inset-0 opacity-30" />
-      <div className="relative mx-auto max-w-7xl px-5 py-14 sm:px-6">
-        <div className="grid gap-10 lg:grid-cols-[1.3fr_2fr]">
+    <footer className="mt-16 border-t border-line bg-surface-2 pb-28 text-ink-soft md:pb-0 no-print">
+      <div className="mx-auto max-w-7xl px-5 py-12 sm:px-6">
+        <div className="grid gap-10 lg:grid-cols-[1.2fr_2fr]">
           <div>
-            <Logo size="lg" tone="light" />
-            <p className="mt-5 max-w-sm font-display text-xl italic text-saffron-200/90">&ldquo;{t("footer.madeWith")}&rdquo;</p>
-            <ul className="mt-6 space-y-2.5 text-sm text-cream-200/80">
-              {s?.storeProfile.address && <li className="flex gap-2.5"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-saffron-300" />{s.storeProfile.address}</li>}
-              {s?.storeProfile.phone && <li className="flex gap-2.5"><Phone className="mt-0.5 h-4 w-4 shrink-0 text-saffron-300" /><a href={`tel:${s.storeProfile.phone}`}>{s.storeProfile.phone}</a></li>}
-              {s?.storeProfile.email && <li className="flex gap-2.5"><Mail className="mt-0.5 h-4 w-4 shrink-0 text-saffron-300" /><a href={`mailto:${s.storeProfile.email}`}>{s.storeProfile.email}</a></li>}
-              {s?.storeProfile.supportHours && <li className="flex gap-2.5"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-saffron-300" />{s.storeProfile.supportHours}</li>}
+            <Logo size="md" />
+            <p className="mt-4 max-w-sm text-[15px] leading-relaxed">{t("footer.madeWith")}</p>
+            <ul className="mt-5 space-y-2 text-[14px]">
+              {s?.storeProfile.address && <li className="flex gap-2.5"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted" />{s.storeProfile.address}</li>}
+              {s?.storeProfile.phone && <li className="flex gap-2.5"><Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted" /><a href={`tel:${s.storeProfile.phone}`} className="hover:text-ink">{s.storeProfile.phone}</a></li>}
+              {s?.storeProfile.email && <li className="flex gap-2.5"><Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted" /><a href={`mailto:${s.storeProfile.email}`} className="hover:text-ink">{s.storeProfile.email}</a></li>}
+              {s?.storeProfile.supportHours && <li className="flex gap-2.5"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted" />{s.storeProfile.supportHours}</li>}
             </ul>
-            <div className="mt-6 flex gap-2">
+            <div className="mt-5 flex gap-1.5">
               {socials.filter(([href]) => !!href).map(([href, Icon, label]) => (
-                <a key={label} href={href!} target="_blank" rel="noopener noreferrer" aria-label={label} className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-cream-100 transition hover:bg-saffron-500 hover:text-white">
-                  <Icon className="h-[18px] w-[18px]" />
+                <a key={label} href={href!} target="_blank" rel="noopener noreferrer" aria-label={label} className="grid h-9 w-9 place-items-center rounded-md border border-line bg-surface text-ink-soft transition-colors hover:text-maroon-700">
+                  <Icon className="h-[17px] w-[17px]" />
                 </a>
               ))}
             </div>
@@ -48,26 +48,26 @@ export function Footer() {
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
             {cols.map((c) => (
               <div key={c.title}>
-                <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-saffron-300">{c.title}</h3>
-                <ul className="mt-4 space-y-3 text-sm">
+                <h3 className="text-[14px] font-bold text-ink">{c.title}</h3>
+                <ul className="mt-3 space-y-2.5 text-[14px]">
                   {c.links.map(([href, label]) => (
-                    <li key={href}><Link href={href!} className="text-cream-200/80 transition hover:text-white">{label}</Link></li>
+                    <li key={href}><Link href={href!} className="transition-colors hover:text-maroon-700 dark:hover:text-maroon-200">{label}</Link></li>
                   ))}
                 </ul>
               </div>
             ))}
           </div>
         </div>
-        <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs text-cream-200/60 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-10 flex flex-col gap-3 border-t border-line pt-5 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span>© {new Date().getFullYear()} {s?.storeProfile.legalName || "Naamdev Sweets"}</span>
             {s?.storeProfile.fssaiLicense && <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" />FSSAI {s.storeProfile.fssaiLicense}</span>}
             {s?.storeProfile.gstin && <span>GSTIN {s.storeProfile.gstin}</span>}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="mr-2">Secure payments: UPI · Cards · Net banking · COD</span>
-            <LanguageToggle className="text-cream-100 hover:bg-white/10 hover:text-white" />
-            <ThemeToggle className="text-cream-100 hover:bg-white/10 hover:text-white" />
+          <div className="flex items-center gap-1">
+            <span className="mr-2">Pay with {payWith}</span>
+            <LanguageToggle />
+            <ThemeToggle />
           </div>
         </div>
       </div>

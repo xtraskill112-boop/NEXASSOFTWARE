@@ -69,7 +69,7 @@ export function PaySheet({ open, amountPaise, options, contact, place, onCodPlac
   };
 
   return (
-    <Modal open={open} onClose={close} size="sm" label="Payment" className="sm:rounded-3xl" bodyClassName="p-0">
+    <Modal open={open} onClose={close} size="sm" label="Payment" bodyClassName="p-0">
       <div className="nd-gradient-maroon px-5 pb-5 pt-4 text-cream-100">
         <div className="flex items-center gap-3">
           <Emblem size={40} />
@@ -81,7 +81,7 @@ export function PaySheet({ open, amountPaise, options, contact, place, onCodPlac
         </div>
         <div className="mt-4 flex items-end justify-between gap-3">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-saffron-200">{upiOrder ? `Order ${upiOrder.number}` : "Order total"}</p>
+            <p className="text-[12.5px] font-semibold text-cream-200">{upiOrder ? `Order ${upiOrder.number}` : "Order total"}</p>
             <p className="font-display text-3xl font-semibold tabular-nums text-white">{formatINR(amountPaise)}</p>
           </div>
           {contact && <p className="max-w-[45%] truncate rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-cream-100">{contact}</p>}
@@ -100,7 +100,7 @@ export function PaySheet({ open, amountPaise, options, contact, place, onCodPlac
           )
         ) : (
           <>
-            <p className="mb-2 px-1 text-xs font-bold uppercase tracking-[0.14em] text-muted">Payment options</p>
+            <p className="mb-2 px-1 text-[13px] font-semibold text-muted">Payment options</p>
             <div className="divide-y divide-line-soft overflow-hidden rounded-2xl border border-line">
               <MethodRow
                 icon={<Smartphone className="h-5 w-5" />} title="UPI" badge="Recommended" subtitle="Google Pay, PhonePe, Paytm, BHIM & more"
@@ -138,12 +138,12 @@ function MethodRow({ icon, title, subtitle, badge, option, expanded, onToggle, c
   expanded: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   return (
-    <div className={cn("bg-bg-elevated", expanded && option.available && "bg-saffron-50/50 dark:bg-saffron-500/5")}>
+    <div className={cn("bg-bg-elevated", expanded && option.available && "bg-surface-2/60 ")}>
       <button type="button" onClick={onToggle} disabled={!option.available} aria-expanded={option.available ? expanded : undefined}
         className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-55">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-maroon-700 dark:text-saffron-300">{icon}</span>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-maroon-700 dark:text-maroon-200">{icon}</span>
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2 text-sm font-bold text-ink">{title}{badge && option.available && <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200">{badge}</span>}</span>
+          <span className="flex items-center gap-2 text-sm font-bold text-ink">{title}{badge && option.available && <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[12px] font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200">{badge}</span>}</span>
           <span className="block text-xs leading-snug text-muted">{option.available ? subtitle : option.reason}</span>
         </span>
         {option.available && <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted transition", expanded && "rotate-180")} />}
@@ -172,7 +172,7 @@ function UpiCompact({ orderId, upi, onUpdated, onDone }: { orderId: string; upi:
   if (upi.status === "VERIFYING" || upi.status === "PAID")
     return (
       <div className="space-y-3 py-2 text-center">
-        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-saffron-100 text-saffron-700 dark:bg-saffron-500/15 dark:text-saffron-200">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-surface-2 text-maroon-700 dark:text-maroon-200">
           {upi.status === "PAID" ? <CheckCircle2 className="h-6 w-6" /> : <Hourglass className="h-6 w-6" />}
         </span>
         <p className="font-display text-xl font-semibold text-ink">{upi.status === "PAID" ? "Payment confirmed" : "Checking your payment"}</p>
@@ -236,7 +236,7 @@ function UpiCompact({ orderId, upi, onUpdated, onDone }: { orderId: string; upi:
 
       <div className="flex items-center gap-3 rounded-xl border border-line px-3 py-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">Paying to</p>
+          <p className="text-[12px] font-semibold text-muted">Paying to</p>
           <p className="truncate text-sm font-bold text-ink">{upi.payeeName}</p>
           <p className="truncate font-mono text-xs text-ink-soft">{upi.vpa}</p>
         </div>

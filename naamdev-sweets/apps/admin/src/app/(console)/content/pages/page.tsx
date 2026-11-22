@@ -31,7 +31,7 @@ export default function PagesAndFaqs() {
       <Segmented value={tab} onChange={setTab} className="mb-4" options={[{ value: "pages", label: "Pages" }, { value: "faqs", label: "FAQs" }]} />
       {tab === "pages" ? (
         <DataTable<Pg> loading={pages.loading} rows={pages.data?.pages} onRowClick={(p) => setPg(p)} columns={[
-          { key: "t", header: "Page", cell: (p) => <div><p className="font-semibold text-ink">{p.title}</p><a href={`${STOREFRONT_URL}${p.slug === "contact" ? "/contact" : `/pages/${p.slug}`}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-saffron-700">/{p.slug} ↗</a></div> },
+          { key: "t", header: "Page", cell: (p) => <div><p className="font-semibold text-ink">{p.title}</p><a href={`${STOREFRONT_URL}${p.slug === "contact" ? "/contact" : `/pages/${p.slug}`}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-maroon-700">/{p.slug} ↗</a></div> },
           { key: "h", header: "Hindi", cell: (p) => <Badge tone={p.bodyHi ? "success" : "neutral"}>{p.bodyHi ? "Translated" : "English only"}</Badge> },
           { key: "u", header: "Updated", cell: (p) => dt(p.updatedAt) },
         ]} />

@@ -30,6 +30,7 @@ export const hi: Dictionary = {
     remove: "हटाएँ",
     deliverTo: "डिलीवरी पता",
     selectLocation: "लोकेशन चुनें",
+    location: "लोकेशन",
     language: "Language: English",
     darkMode: "डार्क मोड",
     somethingWrong: "कुछ गलत हो गया",

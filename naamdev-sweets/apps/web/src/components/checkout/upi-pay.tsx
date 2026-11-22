@@ -36,8 +36,8 @@ export function UpiPayPanel({ orderId, upi, onUpdated }: { orderId: string; upi:
 
   if (upi.status === "VERIFYING")
     return (
-      <Card className="border-2 border-saffron-200 p-5 dark:border-saffron-500/30">
-        <p className="flex items-center gap-2 font-display text-xl font-semibold text-ink"><Hourglass className="h-5 w-5 text-saffron-600" />Checking your UPI payment</p>
+      <Card className="border-2 border-line p-5 dark:border-maroon-300/40">
+        <p className="flex items-center gap-2 font-display text-xl font-semibold text-ink"><Hourglass className="h-5 w-5 text-maroon-700" />Checking your UPI payment</p>
         <p className="mt-2 text-sm text-ink-soft">
           Thanks! Our team is matching your payment of <b>{formatINR(upi.amountPaise)}</b> (UPI ref <span className="font-mono">{upi.reference}</span>) with the shop&apos;s UPI account.
           Your order goes to the kitchen as soon as it&apos;s confirmed — you&apos;ll get a notification. Your items stay reserved meanwhile.
@@ -66,9 +66,9 @@ export function UpiPayPanel({ orderId, upi, onUpdated }: { orderId: string; upi:
   const qr = upi.qrSvg ? <div className="mx-auto w-56 rounded-2xl bg-white p-3 shadow-soft [&>svg]:h-auto [&>svg]:w-full" aria-label="UPI QR code" dangerouslySetInnerHTML={{ __html: upi.qrSvg }} /> : null;
 
   return (
-    <Card className="overflow-hidden border-2 border-saffron-300 dark:border-saffron-500/40">
+    <Card className="overflow-hidden border-2 border-maroon-300 dark:border-maroon-300/40">
       <div className="nd-gradient-maroon p-5 text-cream-100">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-saffron-200">Step 1 · Pay by UPI</p>
+        <p className="text-[13px] font-semibold text-cream-200">Step 1 · Pay by UPI</p>
         <p className="mt-1 font-display text-3xl font-semibold">{formatINR(upi.amountPaise)}</p>
         <p className="mt-1 text-sm text-cream-200/85">to <b className="text-white">{upi.payeeName}</b> · {upi.vpa}</p>
         {countdown && (
@@ -100,7 +100,7 @@ export function UpiPayPanel({ orderId, upi, onUpdated }: { orderId: string; upi:
         </div>
 
         <form className="space-y-3 border-t border-dashed border-line pt-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-saffron-700">Step 2 · After paying</p>
+          <p className="text-[13px] font-semibold text-maroon-700">Step 2 · After paying</p>
           <Field label="UPI reference number (UTR)" hint="12 digits — shown in your UPI app under the payment details" error={error ?? undefined}>
             {(p) => <Input {...p} value={utr} onChange={(e) => setUtr(e.target.value.replace(/[^\d ]/g, "").slice(0, 15))} inputMode="numeric" autoComplete="off" placeholder="e.g. 412345678901" className="font-mono tracking-wider" />}
           </Field>

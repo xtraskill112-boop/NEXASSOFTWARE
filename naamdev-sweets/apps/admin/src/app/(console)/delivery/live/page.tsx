@@ -33,19 +33,19 @@ export default function LiveDelivery() {
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <Card className="relative aspect-square overflow-hidden bg-[radial-gradient(circle,var(--nd-surface-2)_0%,var(--nd-surface)_70%)] xl:aspect-[4/3]">
           {[0.25, 0.5, 0.75, 1].map((f) => <div key={f} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-line" style={{ width: `${f * 92}%`, height: `${f * 92}%` }}><span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-surface px-1 text-[10px] text-muted">{(R * f).toFixed(1)} km</span></div>)}
-          <div className="absolute left-1/2 top-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-maroon-700 text-saffron-100 shadow-lg ring-4 ring-white dark:ring-black/40" title={store?.name}><Store className="h-5 w-5" /></div>
+          <div className="absolute left-1/2 top-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-maroon-700 text-cream-100 shadow-lg ring-4 ring-white dark:ring-black/40" title={store?.name}><Store className="h-5 w-5" /></div>
           {partners.map((p) => {
             const { x, y } = place(p.lat!, p.lng!);
             const busy = p.assignments.some((a) => a.status !== "OFFERED");
             return (
               <div key={p.id} className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-700" style={{ left: `${x}%`, top: `${y}%` }}>
-                <span className={`grid h-9 w-9 place-items-center rounded-full text-white shadow-lg ring-4 ring-white dark:ring-black/40 ${busy ? "bg-saffron-600" : "bg-pista-600"}`} title={p.name}><Bike className="h-4 w-4" /></span>
+                <span className={`grid h-9 w-9 place-items-center rounded-full text-white shadow-lg ring-4 ring-white dark:ring-black/40 ${busy ? "bg-maroon-600" : "bg-pista-600"}`} title={p.name}><Bike className="h-4 w-4" /></span>
                 <span className="absolute left-1/2 top-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink/80 px-1.5 text-[10px] font-semibold text-bg">{p.name.split(" ")[0]}</span>
               </div>
             );
           })}
           {!store && <p className="absolute bottom-3 left-3 text-xs text-muted">Set the store location in Settings to anchor this view.</p>}
-          <div className="absolute bottom-3 right-3 flex gap-3 rounded-xl bg-surface/90 px-3 py-2 text-[11px] font-semibold"><span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-pista-600" />Free</span><span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-saffron-600" />On delivery</span></div>
+          <div className="absolute bottom-3 right-3 flex gap-3 rounded-xl bg-surface/90 px-3 py-2 text-[11px] font-semibold"><span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-pista-600" />Free</span><span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-maroon-600" />On delivery</span></div>
         </Card>
         <div className="space-y-3">
           {data.partners.length === 0 ? <EmptyState icon={<Bike className="h-7 w-7" />} title="No partners online" description="Partners appear here when they go online in the delivery app." /> : data.partners.map((p) => (

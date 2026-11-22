@@ -66,7 +66,7 @@ export default function StaffPage() {
         {role && <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2"><Field label="Name">{(p) => <Input {...p} value={role.name ?? ""} onChange={(e) => setRole({ ...role, name: e.target.value })} />}</Field><Field label="Description">{(p) => <Input {...p} value={role.description ?? ""} onChange={(e) => setRole({ ...role, description: e.target.value })} />}</Field></div>
           <div className="grid gap-4 sm:grid-cols-2">{groups.map((g) => (
-            <div key={g} className="rounded-2xl border border-line p-3"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">{g}</p>
+            <div key={g} className="rounded-2xl border border-line p-3"><p className="mb-2 text-[13px] font-semibold text-muted">{g}</p>
               {roles.data?.permissions.filter((p) => p.group === g).map((p) => <Checkbox key={p.key} className="py-1" checked={!!role.permissions?.includes(p.key)} label={p.description} description={p.key} onChange={(v) => setRole({ ...role, permissions: v ? [...(role.permissions ?? []), p.key] : role.permissions?.filter((x) => x !== p.key) })} />)}
             </div>
           ))}</div>

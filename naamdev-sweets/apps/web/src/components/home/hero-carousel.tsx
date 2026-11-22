@@ -24,60 +24,42 @@ export function HeroCarousel({ banners }: { banners: Banner[] }) {
   const b = banners[i]!;
 
   return (
-    <section aria-roledescription="carousel" aria-label="Featured offers" className="mx-auto max-w-7xl px-4 pt-2 sm:px-6 sm:pt-4" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      <div className="relative h-[230px] overflow-hidden rounded-[1.6rem] shadow-lift sm:h-[360px] sm:rounded-[2rem] lg:h-[420px]">
-        <AnimatePresence initial={false} mode="popLayout">
+    <section aria-roledescription="carousel" aria-label="Featured offers" className="mx-auto max-w-7xl px-4 pt-3 sm:px-6 sm:pt-5" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <div className="relative h-[200px] overflow-hidden rounded-xl sm:h-[300px] lg:h-[340px]">
+        <AnimatePresence initial={false}>
           <motion.div
             key={b.id}
             className={cn("absolute inset-0 flex", themeBg(b.theme))}
-            initial={{ opacity: 0, x: 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -60 }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.45 }}
             drag={n > 1 ? "x" : false}
             dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.15}
             onDragEnd={(_e, info: PanInfo) => info.offset.x < -60 ? go(1) : info.offset.x > 60 && go(-1)}
           >
-            <div className="nd-pattern pointer-events-none absolute inset-0 opacity-25" />
-            <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-white/10 blur-2xl" />
-            <div className="relative z-10 flex w-full flex-col justify-center gap-2 p-5 sm:w-3/5 sm:gap-3 sm:p-10 lg:p-14">
-              {b.eyebrow && (
-                <motion.span initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="w-fit rounded-full bg-white/20 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] backdrop-blur">
-                  {b.eyebrow}
-                </motion.span>
-              )}
-              <motion.h2 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="max-w-[14ch] font-display text-[26px] font-semibold leading-[1.05] tracking-[-0.02em] sm:text-5xl lg:text-6xl">
-                {L(b, "title")}
-              </motion.h2>
-              {b.subtitle && (
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.9 }} transition={{ delay: 0.32 }} className="line-clamp-1 max-w-[60%] text-[13px] sm:line-clamp-2 sm:max-w-md sm:text-base">
-                  {b.subtitle}
-                </motion.p>
-              )}
+            <div className="relative z-10 flex w-[58%] flex-col justify-center gap-1.5 p-5 sm:w-1/2 sm:gap-3 sm:p-10 lg:p-12">
+              {b.eyebrow && <span className="text-[12px] font-semibold opacity-80 sm:text-[14px]">{b.eyebrow}</span>}
+              <h2 className="font-display text-[21px] font-extrabold leading-[1.15] sm:text-4xl lg:text-[44px]">{L(b, "title")}</h2>
+              {b.subtitle && <p className="hidden max-w-md text-base leading-snug opacity-85 sm:line-clamp-2">{b.subtitle}</p>}
               {b.ctaLink && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                  <Link href={b.ctaLink} className="mt-1 inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm sm:mt-2 sm:h-12 sm:rounded-2xl sm:px-6 font-bold text-maroon-800 shadow-lg transition hover:gap-3 hover:bg-cream-100">
-                    {b.ctaLabel ?? "Shop now"} <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </motion.div>
+                <Link href={b.ctaLink} className="mt-1.5 inline-flex w-fit items-center gap-1.5 text-[14px] font-bold underline decoration-current/30 underline-offset-4 hover:decoration-current sm:mt-3 sm:rounded-md sm:bg-ink sm:px-5 sm:py-2.5 sm:text-cream-50 sm:no-underline dark:sm:bg-cream-50 dark:sm:text-ink">
+                  {b.ctaLabel ?? "Shop now"} <ArrowRight className="h-4 w-4" />
+                </Link>
               )}
             </div>
             {b.imageUrl && (
-              <motion.div initial={{ opacity: 0, scale: 0.9, rotate: -4 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ delay: 0.15, type: "spring", damping: 18 }} className="pointer-events-none absolute -bottom-8 -right-12 w-[52%] max-w-[520px] sm:-right-6 sm:bottom-auto sm:top-1/2 sm:w-[46%] sm:-translate-y-1/2">
-                <div className="animate-float">
-                  <ProductImage src={b.imageUrl} alt="" priority className="aspect-square w-full rounded-full shadow-[0_40px_80px_-30px_rgba(0,0,0,0.55)] ring-8 ring-white/15" sizes={600} />
-                </div>
-              </motion.div>
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-[42%] sm:w-1/2">
+                <ProductImage src={b.imageUrl} alt="" priority className="h-full w-full object-cover" sizes={700} />
+              </div>
             )}
           </motion.div>
         </AnimatePresence>
         {n > 1 && (
-          <div className="absolute bottom-3 left-5 z-20 flex gap-1.5 sm:bottom-4 sm:left-10">
+          <div className={cn("absolute bottom-3 left-5 z-20 flex gap-1.5 sm:bottom-5 sm:left-10", ["maroon", "royal", "midnight"].includes(b.theme) ? "text-cream-100" : "text-ink")}>
             {banners.map((x, k) => (
-              <button key={x.id} type="button" aria-label={`Show slide ${k + 1}`} aria-current={k === i} onClick={() => setI(k)} className="h-2 overflow-hidden rounded-full bg-white/35 transition-all" style={{ width: k === i ? 28 : 8 }}>
-                {k === i && !paused && <motion.span key={i} className="block h-full bg-white" initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 5.5, ease: "linear" }} />}
-                {k === i && paused && <span className="block h-full w-full bg-white" />}
-              </button>
+              <button key={x.id} type="button" aria-label={`Show slide ${k + 1}`} aria-current={k === i} onClick={() => setI(k)} className={cn("h-1.5 rounded-full transition-all", k === i ? "w-5 bg-current opacity-90" : "w-1.5 bg-current opacity-30")} />
             ))}
           </div>
         )}

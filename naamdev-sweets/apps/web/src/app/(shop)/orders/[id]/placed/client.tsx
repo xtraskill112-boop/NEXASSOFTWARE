@@ -27,7 +27,7 @@ export default function OrderPlacedPage() {
       ))}
       <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", damping: 12 }} className="mx-auto w-fit">
         <div className="relative">
-          <span className="absolute inset-0 animate-pulse-ring rounded-full bg-saffron-400/40" />
+          <span className="absolute inset-0 animate-pulse-ring rounded-full bg-maroon-400/40" />
           <Emblem size={120} />
         </div>
       </motion.div>
@@ -35,12 +35,12 @@ export default function OrderPlacedPage() {
       <p className="mt-2 text-ink-soft">{pending ? "Your order is reserved. Complete the payment to confirm it." : t("order.thanks")}</p>
       <Card className="mt-8 p-5 text-left">
         <div className="flex items-center justify-between">
-          <div><p className="text-xs font-semibold uppercase tracking-wider text-muted">Order</p><p className="font-mono text-lg font-bold text-ink">{order.orderNumber}</p></div>
+          <div><p className="text-[13px] font-semibold text-muted">Order</p><p className="font-mono text-lg font-bold text-ink">{order.orderNumber}</p></div>
           <OrderStatusBadge status={order.status} />
         </div>
         <div className="mt-4 space-y-2 text-sm text-ink-soft">
-          {order.estimatedDeliveryAt && <p className="flex items-center gap-2"><Clock className="h-4 w-4 text-saffron-600" />Arriving around {new Date(order.estimatedDeliveryAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</p>}
-          <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-saffron-600" />{[order.address.line1, order.address.line2, order.address.city, order.address.pincode].filter(Boolean).join(", ")}</p>
+          {order.estimatedDeliveryAt && <p className="flex items-center gap-2"><Clock className="h-4 w-4 text-maroon-700" />Arriving around {new Date(order.estimatedDeliveryAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</p>}
+          <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-maroon-700" />{[order.address.line1, order.address.line2, order.address.city, order.address.pincode].filter(Boolean).join(", ")}</p>
         </div>
         <div className="mt-4 flex items-center justify-between border-t border-dashed border-line pt-4">
           <span className="text-sm text-muted">{order.items.reduce((s, i) => s + i.quantity, 0)} items · {order.paymentMethod === "COD" ? "Cash on delivery" : order.paymentMethod === "UPI" ? (order.paymentStatus === "PAID" ? "Paid by UPI" : "UPI payment pending") : "Paid online"}</span>

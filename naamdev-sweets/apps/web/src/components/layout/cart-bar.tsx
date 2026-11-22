@@ -15,16 +15,16 @@ export function CartBar() {
   return (
     <AnimatePresence>
       {show && (
-        <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} className="fixed inset-x-3 bottom-[calc(72px+env(safe-area-inset-bottom))] z-40 md:hidden no-print">
-          <Link href="/cart" className="nd-gradient-saffron flex items-center justify-between rounded-2xl px-4 py-3 text-white shadow-glow">
+        <motion.div initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-x-3 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 md:hidden no-print">
+          <Link href="/cart" className="flex items-center justify-between rounded-lg bg-maroon-700 px-4 py-2.5 text-white shadow-lift">
             <span className="flex items-center gap-3">
-              <motion.span key={bump} animate={{ rotate: [0, -12, 12, 0] }} className="grid h-9 w-9 place-items-center rounded-xl bg-white/20"><ShoppingBag className="h-5 w-5" /></motion.span>
+              <motion.span key={bump} animate={bump ? { scale: [1, 1.15, 1] } : undefined} transition={{ duration: 0.25 }}><ShoppingBag className="h-5 w-5" /></motion.span>
               <span className="leading-tight">
-                <span className="block text-[11px] font-semibold uppercase tracking-wider text-white/80">{count} item{count > 1 ? "s" : ""} added</span>
-                <span className="block text-base font-bold">{formatINR(cart?.pricing.totalPaise ?? 0)}</span>
+                <span className="block text-[12px] text-white/80">{count} item{count > 1 ? "s" : ""}</span>
+                <span className="block text-[15px] font-bold tabular-nums">{formatINR(cart?.pricing.totalPaise ?? 0)}</span>
               </span>
             </span>
-            <span className="flex items-center gap-1 text-sm font-bold">View cart <ChevronRight className="h-4 w-4" /></span>
+            <span className="flex items-center gap-0.5 text-[15px] font-semibold">View cart <ChevronRight className="h-4 w-4" /></span>
           </Link>
         </motion.div>
       )}

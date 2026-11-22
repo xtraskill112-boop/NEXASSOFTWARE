@@ -38,7 +38,7 @@ export default function DeliveryPage() {
       <div className="flex items-center">
         {STEP_NAMES.map((n, i) => (
           <div key={n} className="flex flex-1 flex-col items-center gap-1 text-center">
-            <span className={cn("grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold", i <= step ? "bg-saffron-500 text-white" : "bg-surface-2 text-muted")}>{i < step || a.status === "DELIVERED" ? "✓" : i + 1}</span>
+            <span className={cn("grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold", i <= step ? "bg-maroon-700 text-white" : "bg-surface-2 text-muted")}>{i < step || a.status === "DELIVERED" ? "✓" : i + 1}</span>
             <span className="text-[10px] font-semibold text-muted">{n}</span>
           </div>
         ))}
@@ -47,7 +47,7 @@ export default function DeliveryPage() {
       {a.status === "DELIVERED" && <InlineAlert tone="success"><CheckCircle2 className="mr-1 inline h-4 w-4" />Delivered at {time(a.deliveredAt)}. Great job!</InlineAlert>}
 
       <Card className="p-4">
-        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted"><Store className="h-4 w-4" />Pickup</p>
+        <p className="flex items-center gap-2 text-[13px] font-semibold text-muted"><Store className="h-4 w-4" />Pickup</p>
         <p className="mt-1 font-semibold text-ink">{a.pickup?.name}</p>
         <p className="text-sm text-muted">{a.pickup?.address}</p>
         {a.navigation.toStore && step <= 1 && <a href={a.navigation.toStore} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-surface-2 px-3 py-2 text-sm font-bold text-ink"><Navigation className="h-4 w-4" />Navigate to store</a>}
@@ -56,7 +56,7 @@ export default function DeliveryPage() {
 
       {a.customer && (
         <Card className="p-4">
-          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted"><MapPin className="h-4 w-4" />Deliver to</p>
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-muted"><MapPin className="h-4 w-4" />Deliver to</p>
           <p className="mt-1 font-semibold text-ink">{a.customer.name}</p>
           <p className="text-sm text-muted">{a.customer.address}</p>
           {a.customer.instructions && <p className="mt-2 rounded-lg bg-gold-300/20 px-3 py-2 text-sm">“{a.customer.instructions}”</p>}
@@ -76,7 +76,7 @@ export default function DeliveryPage() {
         {(a.status === "PICKED_UP" || a.status === "OUT_FOR_DELIVERY") && (
           <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void act("deliver", { otp, codCollected: a.collectPaise > 0 ? cash : undefined }, "Delivered! 🎉"); }}>
             <label className="block text-sm font-semibold text-ink">Customer&apos;s 4-digit delivery OTP</label>
-            <input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" autoComplete="one-time-code" placeholder="••••" aria-label="Delivery OTP" className="h-16 w-full rounded-2xl border-2 border-line bg-surface text-center font-mono text-3xl tracking-[0.6em] outline-none focus:border-saffron-500" />
+            <input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" autoComplete="one-time-code" placeholder="••••" aria-label="Delivery OTP" className="h-16 w-full rounded-2xl border-2 border-line bg-surface text-center font-mono text-3xl tracking-[0.6em] outline-none focus:border-ink-soft" />
             {a.collectPaise > 0 && <Checkbox checked={cash} onChange={setCash} label={`I have collected ${formatINR(a.collectPaise)}`} />}
             <Button type="submit" size="xl" block loading={busy} disabled={otp.length !== 4 || (a.collectPaise > 0 && !cash)}>Complete delivery</Button>
           </form>

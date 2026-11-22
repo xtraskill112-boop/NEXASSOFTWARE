@@ -49,14 +49,14 @@ export function DataTable<T extends object>({ columns, rows, loading, error, onR
     <Card className="overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-surface-2/70 text-left text-[11px] font-bold uppercase tracking-wider text-muted">
+          <thead className="bg-surface-2/70 text-left text-[12.5px] font-semibold text-muted">
             <tr>{columns.map((c) => <th key={c.key} scope="col" className={cn("whitespace-nowrap px-4 py-3", c.align === "right" && "text-right", c.align === "center" && "text-center", c.className)}>{c.header}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-line-soft">
             {loading && !rows?.length
               ? Array.from({ length: 6 }, (_, i) => <tr key={i}>{columns.map((c) => <td key={c.key} className="px-4 py-3.5"><Skeleton className="h-4 w-full" rounded="rounded-md" /></td>)}</tr>)
               : rows?.map((r, i) => (
-                  <tr key={rowKey ? rowKey(r) : (r as { id?: string }).id ?? i} onClick={onRowClick ? () => onRowClick(r) : undefined} className={cn("transition", onRowClick && "cursor-pointer hover:bg-saffron-50/60 dark:hover:bg-saffron-500/5")}>
+                  <tr key={rowKey ? rowKey(r) : (r as { id?: string }).id ?? i} onClick={onRowClick ? () => onRowClick(r) : undefined} className={cn("transition", onRowClick && "cursor-pointer hover:bg-surface-2 ")}>
                     {columns.map((c) => <td key={c.key} className={cn("px-4 py-3 align-middle text-ink-soft", c.align === "right" && "text-right tabular-nums", c.align === "center" && "text-center", c.className)}>{c.cell(r)}</td>)}
                   </tr>
                 ))}
@@ -88,13 +88,13 @@ export function ImageUploader({ value, onChange, folder = "products", multiple =
         <div key={u + i} className="group relative h-24 w-24 overflow-hidden rounded-2xl border border-line bg-surface-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={u} alt="" className="h-full w-full object-cover" />
-          {i === 0 && multiple && <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[9px] font-bold uppercase text-white">Cover</span>}
+          {i === 0 && multiple && <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[12px] font-semibold text-white">Cover</span>}
           <button type="button" aria-label="Remove image" onClick={() => onChange(value.filter((_, k) => k !== i))} className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
           {multiple && i > 0 && <button type="button" onClick={() => onChange([u, ...value.filter((_, k) => k !== i)])} className="absolute inset-x-1 bottom-1 rounded bg-black/60 py-0.5 text-[9px] font-bold text-white opacity-0 group-hover:opacity-100">Make cover</button>}
         </div>
       ))}
       {value.length < (multiple ? max : 1) || !multiple ? (
-        <button type="button" onClick={() => ref.current?.click()} className="grid h-24 w-24 place-items-center rounded-2xl border-2 border-dashed border-line text-muted transition hover:border-saffron-400 hover:text-saffron-600">
+        <button type="button" onClick={() => ref.current?.click()} className="grid h-24 w-24 place-items-center rounded-2xl border-2 border-dashed border-line text-muted transition hover:border-ink-soft/40 hover:text-maroon-700">
           {busy ? <Spinner /> : <span className="flex flex-col items-center gap-1 text-[11px] font-semibold"><Upload className="h-5 w-5" />Upload</span>}
         </button>
       ) : null}
@@ -115,7 +115,7 @@ export function KeyValue({ items }: { items: [ReactNode, ReactNode][] }) {
   return (
     <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
       {items.map(([k, v], i) => (
-        <div key={i}><dt className="text-xs font-semibold uppercase tracking-wider text-muted">{k}</dt><dd className="mt-0.5 text-ink">{v ?? "—"}</dd></div>
+        <div key={i}><dt className="text-[13px] font-semibold text-muted">{k}</dt><dd className="mt-0.5 text-ink">{v ?? "—"}</dd></div>
       ))}
     </dl>
   );

@@ -17,7 +17,7 @@ export default function EarningsPage() {
     <div className="space-y-5">
       <h1 className="font-display text-3xl font-semibold text-ink">Earnings</h1>
       <Card className="nd-gradient-maroon border-0 p-5 text-cream-100">
-        <p className="text-xs font-bold uppercase tracking-wider text-saffron-200">Payout due</p>
+        <p className="text-[13px] font-semibold text-cream-200">Payout due</p>
         <p className="mt-1 font-display text-4xl font-semibold">{formatINR(s.unsettledPaise)}</p>
         <p className="mt-1 text-xs text-cream-200/75">Settled weekly to your bank/UPI by the store.</p>
       </Card>

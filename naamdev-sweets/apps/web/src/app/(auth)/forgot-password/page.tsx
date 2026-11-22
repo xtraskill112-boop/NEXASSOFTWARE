@@ -42,7 +42,7 @@ function ForgotInner() {
         </div>
       )}
       {error && <InlineAlert tone="danger" className="mt-5">{error}</InlineAlert>}
-      <p className="mt-8 text-center text-sm text-muted"><Link href="/login" className="font-semibold text-saffron-700">Back to login</Link></p>
+      <p className="mt-8 text-center text-sm text-muted"><Link href="/login" className="font-semibold text-maroon-700">Back to login</Link></p>
     </div>
   );
 }

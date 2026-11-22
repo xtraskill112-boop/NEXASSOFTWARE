@@ -49,7 +49,7 @@ export default function ProfilePage() {
         <div className="mb-6 flex items-center gap-4">
           <div className="relative">
             <Avatar name={user.name} src={user.avatarUrl} size={76} />
-            <button type="button" onClick={() => fileRef.current?.click()} className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full bg-saffron-500 text-white shadow" aria-label="Change photo"><Camera className="h-4 w-4" /></button>
+            <button type="button" onClick={() => fileRef.current?.click()} className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full bg-maroon-700 text-white shadow" aria-label="Change photo"><Camera className="h-4 w-4" /></button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && void uploadAvatar(e.target.files[0])} />
           </div>
           <div><p className="font-semibold text-ink">{user.phone}</p><p className="text-xs text-muted">Mobile number {user.phoneVerified ? "verified ✓" : "not verified"} · change it in Password & security</p></div>

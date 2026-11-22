@@ -13,7 +13,7 @@ function Accordion({ title, children, defaultOpen }: { title: string; children: 
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <div className="border-b border-line-soft last:border-0">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center justify-between py-4 text-left font-display text-lg font-semibold text-ink">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center justify-between py-4 text-left font-display text-[17px] font-bold text-ink">
         {title}
         <ChevronDown className={cn("h-5 w-5 text-muted transition", open && "rotate-180")} />
       </button>
@@ -35,8 +35,8 @@ export function ProductInfo({ product }: { product: ProductDetail }) {
         <p>{product.ingredients}</p>
         {product.allergens.length > 0 && (
           <div className="mt-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-maroon-700 dark:text-maroon-300">{t("product.allergens")}</p>
-            <div className="flex flex-wrap gap-2">{product.allergens.map((a) => <span key={a} className="rounded-full bg-maroon-50 px-3 py-1 text-xs font-semibold text-maroon-700 dark:bg-maroon-500/10 dark:text-maroon-200">{a}</span>)}</div>
+            <p className="mb-2 text-[13px] font-semibold text-maroon-700 dark:text-maroon-300">{t("product.allergens")}</p>
+            <div className="flex flex-wrap gap-2">{product.allergens.map((a) => <span key={a} className="rounded-md bg-maroon-50 px-2 py-0.5 text-[13px] font-semibold text-maroon-700 dark:bg-maroon-500/10 dark:text-maroon-200">{a}</span>)}</div>
           </div>
         )}
       </Accordion>
@@ -44,7 +44,7 @@ export function ProductInfo({ product }: { product: ProductDetail }) {
         <Accordion title={`${t("product.nutrition")} (per 100 g)`}>
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {Object.entries(product.nutrition).map(([k, v]) => (
-              <div key={k} className="rounded-2xl bg-surface-2 px-4 py-3"><dt className="text-xs text-muted">{k}</dt><dd className="font-bold text-ink">{v}</dd></div>
+              <div key={k} className="rounded-lg bg-surface-2 px-3.5 py-2.5"><dt className="text-xs text-muted">{k}</dt><dd className="font-bold text-ink">{v}</dd></div>
             ))}
           </dl>
         </Accordion>
@@ -68,13 +68,13 @@ export function Reviews({ product }: { product: ProductDetail }) {
   const total = product.ratingCounts.reduce((s, r) => s + r.count, 0);
   return (
     <section id="reviews" className="scroll-mt-28">
-      <SectionHeading title={t("product.reviews")} action={<Link href="/account/orders" className="inline-flex items-center gap-1.5 text-sm font-bold text-saffron-700 dark:text-saffron-300"><PenLine className="h-4 w-4" />Write a review</Link>} />
+      <SectionHeading title={t("product.reviews")} action={<Link href="/account/orders" className="inline-flex items-center gap-1.5 text-sm font-bold text-maroon-700 dark:text-maroon-200"><PenLine className="h-4 w-4" />Write a review</Link>} />
       {total === 0 ? (
         <Card className="p-6 text-center text-sm text-muted">{t("product.noReviews")}<p className="mt-1 text-xs">Reviews are accepted from verified buyers after delivery.</p></Card>
       ) : (
         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
           <Card className="p-6">
-            <p className="font-display text-5xl font-semibold text-ink">{product.avgRating.toFixed(1)}</p>
+            <p className="text-5xl font-bold text-ink tabular-nums">{product.avgRating.toFixed(1)}</p>
             <Stars value={product.avgRating} className="mt-2" />
             <p className="mt-1 text-sm text-muted">{product.reviewCount} verified review{product.reviewCount > 1 ? "s" : ""}</p>
             <div className="mt-5 space-y-2">
@@ -123,7 +123,7 @@ export function BoughtTogether({ product, items }: { product: ProductDetail; ite
             <div key={p.id} className="flex items-center gap-3">
               {i > 0 && <span className="text-xl font-bold text-muted">+</span>}
               <Link href={`/product/${p.slug}`} className="w-24 text-center">
-                <ProductImage src={p.image} alt={p.name} className="mx-auto h-20 w-20 rounded-2xl" sizes={160} />
+                <ProductImage src={p.image} alt={p.name} className="mx-auto h-20 w-20 rounded-lg" sizes={160} />
                 <p className="mt-1.5 line-clamp-2 text-xs font-semibold text-ink">{L(p, "name")}</p>
                 <p className="text-xs text-muted">{pick(p)?.label} · {formatINR(pick(p)?.pricePaise ?? 0)}</p>
               </Link>

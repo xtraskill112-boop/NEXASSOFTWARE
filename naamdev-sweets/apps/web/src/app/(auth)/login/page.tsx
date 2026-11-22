@@ -95,7 +95,7 @@ function LoginInner() {
               <form className="mt-8 space-y-4" onSubmit={(e) => { e.preventDefault(); void login(); }}>
                 <Field label={t("auth.email")}>{(p) => <Input {...p} type="email" value={cred.email} onChange={(e) => setCred({ ...cred, email: e.target.value })} autoComplete="email" inputMode="email" leading={<Mail className="h-4 w-4 text-muted" />} autoFocus />}</Field>
                 <Field label={t("auth.password")}>{(p) => <Input {...p} type="password" value={cred.password} onChange={(e) => setCred({ ...cred, password: e.target.value })} autoComplete="current-password" />}</Field>
-                <div className="text-right"><Link href={`/forgot-password${cred.email ? `?email=${encodeURIComponent(cred.email)}` : ""}`} className="text-sm font-semibold text-saffron-700">{t("auth.forgot")}</Link></div>
+                <div className="text-right"><Link href={`/forgot-password${cred.email ? `?email=${encodeURIComponent(cred.email)}` : ""}`} className="text-sm font-semibold text-maroon-700">{t("auth.forgot")}</Link></div>
                 <Button type="submit" size="xl" block loading={busy} disabled={!cred.email || !cred.password}>{t("common.login")}</Button>
               </form>
               <Divider label={t("auth.newHere")} className="my-6" />
@@ -114,7 +114,7 @@ function LoginInner() {
                 <Field label="Referral code (optional)" error={fieldErrors.referralCode}>{(p) => <Input {...p} value={profile.referralCode} onChange={(e) => setProfile({ ...profile, referralCode: e.target.value.toUpperCase() })} className="font-mono uppercase" />}</Field>
                 <Button type="submit" size="xl" block loading={busy} disabled={!cred.email || cred.password.length < 8 || profile.name.trim().length < 2}>{t("auth.createAccount")}</Button>
               </form>
-              <p className="mt-6 text-center text-sm text-muted">{t("auth.haveAccount")} <button type="button" className="font-semibold text-saffron-700" onClick={() => { setError(null); setStep("login"); }}>{t("common.login")}</button></p>
+              <p className="mt-6 text-center text-sm text-muted">{t("auth.haveAccount")} <button type="button" className="font-semibold text-maroon-700" onClick={() => { setError(null); setStep("login"); }}>{t("common.login")}</button></p>
             </>
           )}
           {step === "profile" && (

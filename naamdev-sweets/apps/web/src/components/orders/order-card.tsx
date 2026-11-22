@@ -22,7 +22,7 @@ export function OrderCard({ order }: { order: Order }) {
         </div>
         <div className="mt-4 flex items-center justify-between border-t border-line-soft pt-3">
           <span className="font-bold text-ink">{formatINR(order.totals.totalPaise)}</span>
-          <span className="inline-flex items-center gap-1 text-sm font-semibold text-saffron-700 dark:text-saffron-300">Details <ChevronRight className="h-4 w-4" /></span>
+          <span className="inline-flex items-center gap-1 text-sm font-semibold text-maroon-700 dark:text-maroon-200">Details <ChevronRight className="h-4 w-4" /></span>
         </div>
       </Card>
     </Link>

@@ -18,7 +18,7 @@ export default function ProductPage() {
   const p = data?.product;
   useDocumentTitle(p ? p.seoTitle?.replace(" | NAAMDEV SWEETS", "") ?? p.name : null);
   if (loading) return <BrandLoader className="min-h-[60dvh]" />;
-  if (notFound || !p) return <div className="mx-auto max-w-xl px-4 py-20"><ErrorState title="Sweet not found" description={notFound ? "It may have been moved or removed." : error ?? "Please try again."} action={<Link href="/" className="font-semibold text-saffron-700">Back to the shop</Link>} /></div>;
+  if (notFound || !p) return <div className="mx-auto max-w-xl px-4 py-20"><ErrorState title="Sweet not found" description={notFound ? "It may have been moved or removed." : error ?? "Please try again."} action={<Link href="/" className="font-semibold text-maroon-700">Back to the shop</Link>} /></div>;
   const prices = p.variants.map((v) => v.pricePaise / 100);
   const ld = {
     "@context": "https://schema.org",

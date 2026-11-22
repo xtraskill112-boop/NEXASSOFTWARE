@@ -3,9 +3,12 @@ import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
+// Fonts are self-hosted from npm (Fontsource) so builds never depend on reaching Google Fonts.
+// Martel for headings, Mukta for text — both by the Indian Type Foundry, with matching Devanagari.
+const martel = localFont({ src: [{ path: "../../node_modules/@fontsource/martel/files/martel-latin-700-normal.woff2", weight: "700" }, { path: "../../node_modules/@fontsource/martel/files/martel-latin-800-normal.woff2", weight: "800" }], variable: "--font-martel", display: "swap" });
+const mukta = localFont({ src: [{ path: "../../node_modules/@fontsource/mukta/files/mukta-latin-400-normal.woff2", weight: "400" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-latin-500-normal.woff2", weight: "500" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-latin-600-normal.woff2", weight: "600" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-latin-700-normal.woff2", weight: "700" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-latin-800-normal.woff2", weight: "800" }], variable: "--font-mukta", display: "swap" });
+
 // Self-hosted from npm (Fontsource): builds never depend on reaching Google Fonts.
-const fraunces = localFont({ src: "../../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2", variable: "--font-fraunces", display: "swap", weight: "100 900" });
-const jakarta = localFont({ src: "../../node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2", variable: "--font-jakarta", display: "swap", weight: "200 800" });
 
 export const metadata: Metadata = {
   title: { default: "NAAMDEV Console", template: "%s · NAAMDEV Console" },
@@ -15,7 +18,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${fraunces.variable} ${jakarta.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${martel.variable} ${mukta.variable}`}>
       <body><Providers>{children}</Providers></body>
     </html>
   );

@@ -18,11 +18,11 @@ export default function ReferralsPage() {
       <PageTitle title="Refer & earn" />
       <Card className="nd-gradient-maroon relative overflow-hidden border-0 p-6 text-cream-100 sm:p-8">
         <div className="nd-pattern absolute inset-0 opacity-25" />
-        <Gift className="relative h-10 w-10 text-saffron-300" />
+        <Gift className="relative h-10 w-10 text-cream-300" />
         <p className="relative mt-3 font-display text-3xl font-semibold">Share mithaas, earn {d.referrerBonus} points</p>
         <p className="relative mt-2 text-sm text-cream-200/80">Your friend gets {d.refereeBonus} points after their first delivered order — and so do you.</p>
         <div className="relative mt-6 flex flex-wrap items-center gap-3">
-          <span className="rounded-2xl border-2 border-dashed border-saffron-300/60 bg-white/10 px-5 py-3 font-mono text-2xl font-bold tracking-[0.2em]">{d.code}</span>
+          <span className="rounded-2xl border-2 border-dashed border-line bg-white/10 px-5 py-3 font-mono text-2xl font-bold tracking-[0.2em]">{d.code}</span>
           <Button variant="white" onClick={async () => { await navigator.clipboard?.writeText(d.code); toast.success("Code copied"); }}><Copy className="h-4 w-4" />Copy</Button>
           <Button variant="white" onClick={async () => { if (navigator.share) await navigator.share({ title: "NAAMDEV SWEETS", text: msg }).catch(() => undefined); else { await navigator.clipboard?.writeText(msg); toast.success("Invite message copied"); } }}><Share2 className="h-4 w-4" />Share</Button>
         </div>

@@ -49,12 +49,12 @@ export default function Dashboard() {
           </div>
 
           {!!upi.data?.items.length && (
-            <Card className="border-2 border-saffron-300 p-5 dark:border-saffron-500/40">
-              <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink"><Smartphone className="h-5 w-5 text-saffron-600" />{upi.data.items.length} UPI payment{upi.data.items.length > 1 ? "s" : ""} to check</h2>
+            <Card className="border-2 border-maroon-300 p-5 dark:border-maroon-300/40">
+              <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink"><Smartphone className="h-5 w-5 text-maroon-700" />{upi.data.items.length} UPI payment{upi.data.items.length > 1 ? "s" : ""} to check</h2>
               <p className="mb-3 text-sm text-muted">These orders are on hold until someone confirms the money reached the shop&apos;s UPI account.</p>
               <ul className="divide-y divide-line-soft text-sm">
                 {upi.data.items.slice(0, 8).map((u) => (
-                  <li key={u.orderId}><Link href={`/orders/${u.orderId}`} className="flex items-center justify-between gap-3 py-2 hover:text-saffron-700"><span className="font-mono font-bold">{u.orderNumber}</span><span className="truncate text-muted">{u.customerName}</span><span className="font-mono text-xs">UTR {u.reference}</span><span className="font-semibold tabular-nums">{formatINR(u.totalPaise)}</span></Link></li>
+                  <li key={u.orderId}><Link href={`/orders/${u.orderId}`} className="flex items-center justify-between gap-3 py-2 hover:text-maroon-700"><span className="font-mono font-bold">{u.orderNumber}</span><span className="truncate text-muted">{u.customerName}</span><span className="font-mono text-xs">UTR {u.reference}</span><span className="font-semibold tabular-nums">{formatINR(u.totalPaise)}</span></Link></li>
                 ))}
               </ul>
             </Card>
@@ -82,7 +82,7 @@ export default function Dashboard() {
                 <div className="mt-6 grid grid-cols-3 gap-3 border-t border-line-soft pt-4">
                   {(["ONLINE", "UPI", "COD"] as const).map((m) => {
                     const p = d.charts!.paymentSplit.find((x) => x.method === m);
-                    return <div key={m} className="rounded-2xl bg-surface-2 p-3"><p className="text-[11px] font-bold uppercase tracking-wider text-muted">{m === "ONLINE" ? "Razorpay" : m === "UPI" ? "UPI (direct)" : "Cash on delivery"}</p><p className="mt-1 font-bold tabular-nums text-ink">{formatINR(p?.amountPaise ?? 0)}</p><p className="text-xs text-muted">{p?.orders ?? 0} orders</p></div>;
+                    return <div key={m} className="rounded-2xl bg-surface-2 p-3"><p className="text-[12.5px] font-semibold text-muted">{m === "ONLINE" ? "Razorpay" : m === "UPI" ? "UPI (direct)" : "Cash on delivery"}</p><p className="mt-1 font-bold tabular-nums text-ink">{formatINR(p?.amountPaise ?? 0)}</p><p className="text-xs text-muted">{p?.orders ?? 0} orders</p></div>;
                   })}
                 </div>
               </Card>
@@ -105,7 +105,7 @@ export default function Dashboard() {
             <Card className="p-5">
               <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold text-ink"><Star className="h-4 w-4 text-gold-500" />Bestsellers · 30 days</h2>
               {d.bestsellers.length === 0 ? <p className="text-sm text-muted">No sales yet.</p> : (
-                <ol className="space-y-2.5 text-sm">{d.bestsellers.map((b, i) => <li key={b.productId} className="flex items-center gap-3"><span className="grid h-6 w-6 place-items-center rounded-full bg-saffron-50 text-xs font-bold text-saffron-700 dark:bg-saffron-500/10">{i + 1}</span><span className="flex-1 truncate text-ink">{b.name}</span><span className="text-xs text-muted">{b.quantity} sold</span></li>)}</ol>
+                <ol className="space-y-2.5 text-sm">{d.bestsellers.map((b, i) => <li key={b.productId} className="flex items-center gap-3"><span className="grid h-6 w-6 place-items-center rounded-full bg-surface-2 text-xs font-bold text-maroon-700">{i + 1}</span><span className="flex-1 truncate text-ink">{b.name}</span><span className="text-xs text-muted">{b.quantity} sold</span></li>)}</ol>
               )}
             </Card>
             <Card className="p-5">
@@ -115,11 +115,11 @@ export default function Dashboard() {
               )}
             </Card>
             <Card className="p-5">
-              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold text-ink"><CalendarClock className="h-4 w-4 text-saffron-600" />Expiring soon</h2>
+              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold text-ink"><CalendarClock className="h-4 w-4 text-maroon-700" />Expiring soon</h2>
               {d.expiring.length === 0 ? <p className="text-sm text-muted">No batches expiring soon.</p> : (
                 <ul className="space-y-2 text-sm">{d.expiring.map((b) => <li key={b.batchId} className="flex items-center justify-between gap-2"><span className="truncate text-ink">{b.product} <span className="text-muted">· {b.variant} · {b.batchNumber}</span></span><span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-maroon-600"><Clock className="h-3 w-3" />{dt(b.expiresAt)}</span></li>)}</ul>
               )}
-              <Link href="/inventory/expiry" className="mt-3 inline-block text-xs font-bold text-saffron-700">Manage expiry →</Link>
+              <Link href="/inventory/expiry" className="mt-3 inline-block text-xs font-bold text-maroon-700">Manage expiry →</Link>
             </Card>
           </div>
           {!d.revenue && <p className="text-xs text-muted"><ShoppingBag className="mr-1 inline h-3 w-3" />Revenue figures are visible to roles with analytics access.</p>}

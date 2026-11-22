@@ -18,7 +18,7 @@ export function Gallery({ images, name, videoUrl }: { images: { url: string; alt
   const { t } = useI18n();
   return (
     <div className="lg:sticky lg:top-24">
-      <div className="relative overflow-hidden rounded-[2rem] bg-surface-2 shadow-card ring-1 ring-line-soft">
+      <div className="relative overflow-hidden rounded-xl bg-surface-2">
         <div
           className="relative aspect-square cursor-zoom-in overflow-hidden"
           onMouseMove={(e) => {
@@ -41,7 +41,7 @@ export function Gallery({ images, name, videoUrl }: { images: { url: string; alt
           {zoom && !showVideo && (
             <div className="pointer-events-none absolute inset-0 hidden lg:block" style={{ backgroundImage: `url(${cur.url})`, backgroundSize: "220%", backgroundPosition: `${zoom.x}% ${zoom.y}%` }} />
           )}
-          <span className="pointer-events-none absolute bottom-4 right-4 grid h-10 w-10 place-items-center rounded-full bg-white/85 text-ink shadow backdrop-blur dark:bg-black/50 dark:text-white"><Expand className="h-4 w-4" /></span>
+          <span className="pointer-events-none absolute bottom-3 right-3 grid h-9 w-9 place-items-center rounded-md bg-white/90 text-ink dark:bg-black/60 dark:text-white"><Expand className="h-4 w-4" /></span>
         </div>
       </div>
       {/* Catalogue photos are representative (not this shop's own); uploaded photos carry no note. */}
@@ -49,12 +49,12 @@ export function Gallery({ images, name, videoUrl }: { images: { url: string; alt
       {(items.length > 1 || videoUrl) && (
         <div className="mt-3 flex gap-2.5">
           {items.map((im, k) => (
-            <button key={im.url + k} type="button" aria-label={`View image ${k + 1}`} onClick={() => { setI(k); setShowVideo(false); }} className={cn("h-16 w-16 overflow-hidden rounded-2xl ring-2 transition sm:h-20 sm:w-20", k === i && !showVideo ? "ring-saffron-500" : "ring-transparent opacity-70 hover:opacity-100")}>
+            <button key={im.url + k} type="button" aria-label={`View image ${k + 1}`} onClick={() => { setI(k); setShowVideo(false); }} className={cn("h-16 w-16 overflow-hidden rounded-lg ring-2 ring-offset-2 ring-offset-bg transition sm:h-20 sm:w-20", k === i && !showVideo ? "ring-maroon-700" : "ring-transparent opacity-75 hover:opacity-100")}>
               <ProductImage src={im.url || null} alt="" className="h-full w-full" sizes={160} />
             </button>
           ))}
           {videoUrl && (
-            <button type="button" onClick={() => setShowVideo(true)} className={cn("grid h-16 w-16 place-items-center rounded-2xl bg-maroon-800 text-saffron-200 ring-2 sm:h-20 sm:w-20", showVideo ? "ring-saffron-500" : "ring-transparent")} aria-label="Play product video">
+            <button type="button" onClick={() => setShowVideo(true)} className={cn("grid h-16 w-16 place-items-center rounded-lg bg-maroon-800 text-cream-200 ring-2 ring-offset-2 ring-offset-bg sm:h-20 sm:w-20", showVideo ? "ring-maroon-700" : "ring-transparent")} aria-label="Play product video">
               <PlayCircle className="h-7 w-7" />
             </button>
           )}
@@ -64,7 +64,7 @@ export function Gallery({ images, name, videoUrl }: { images: { url: string; alt
         {light && (
           <motion.div className="fixed inset-0 z-[95] grid place-items-center bg-black/90 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setLight(false)} role="dialog" aria-label={`${name} images`}>
             <button type="button" aria-label="Close" className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white"><X /></button>
-            <div className="max-h-[85vh] w-full max-w-3xl overflow-auto rounded-3xl" onClick={(e) => e.stopPropagation()} style={{ touchAction: "pinch-zoom" }}>
+            <div className="max-h-[85vh] w-full max-w-3xl overflow-auto rounded-xl" onClick={(e) => e.stopPropagation()} style={{ touchAction: "pinch-zoom" }}>
               <ProductImage src={cur.url || null} alt={cur.alt} className="h-auto w-full" sizes={1200} />
             </div>
           </motion.div>

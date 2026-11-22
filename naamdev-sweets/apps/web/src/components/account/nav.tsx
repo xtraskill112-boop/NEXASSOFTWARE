@@ -36,7 +36,7 @@ export function AccountNav() {
       {links.map(({ href, label, icon: Icon }) => {
         const active = pathname.startsWith(href);
         return (
-          <Link key={href} href={href} className={cn("flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold transition", active ? "bg-saffron-50 text-saffron-800 dark:bg-saffron-500/10 dark:text-saffron-200" : "text-ink-soft hover:bg-surface-2")}>
+          <Link key={href} href={href} className={cn("flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold transition", active ? "bg-surface-2 text-maroon-800  dark:text-maroon-200" : "text-ink-soft hover:bg-surface-2")}>
             <Icon className="h-[18px] w-[18px]" />{label}
             {href === "/account/notifications" && unread > 0 && <span className="ml-auto rounded-full bg-maroon-700 px-2 text-[10px] font-bold text-white">{unread}</span>}
           </Link>
