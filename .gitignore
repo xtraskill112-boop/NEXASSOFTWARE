@@ -1,3 +1,0 @@
-# Third-party agent skill installed with `npx skills add` (40 MB of assets); restore it with
-# `npx skills experimental_install` from skills-lock.json instead of committing the copy.
-.claude/skills/design-taste-frontend/
