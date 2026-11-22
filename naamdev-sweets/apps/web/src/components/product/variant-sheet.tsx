@@ -27,7 +27,7 @@ export function VariantSheet({ product, open, onClose }: { product: ProductCard;
             setBusy(false);
             if (ok) onClose();
           }}>
-            {v?.inStock ? `Add item · ${formatINR(v.pricePaise * qty)}` : t("common.outOfStock")}
+            {v?.inStock ? `Add ${qty > 1 ? `${qty} ` : ""}for ${formatINR(v.pricePaise * qty)}` : t("common.outOfStock")}
           </Button>
         </div>
       }

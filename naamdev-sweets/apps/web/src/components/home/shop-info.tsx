@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BadgePercent, Bike, ChevronRight, Clock, Leaf, Truck } from "lucide-react";
+import { BadgePercent, Bike, Clock, Leaf, Truck } from "lucide-react";
 import type { Banner, PublicCoupon } from "@naamdev/api-client";
 import { formatINR } from "@naamdev/shared";
 import { cn } from "@naamdev/ui";
@@ -40,22 +40,22 @@ export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
   const fee = s?.checkout.baseDeliveryFeePaise;
   return (
     <section className="mx-auto max-w-3xl px-4 pt-4">
-      <div className="rounded-3xl border border-line bg-surface p-4 shadow-[0_6px_20px_-10px_rgb(16_16_24/0.18)]">
-        <div className="flex items-start justify-between gap-3">
+      <div className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
+        <div>
           <div className="min-w-0">
-            <h1 className="text-[22px] font-extrabold leading-tight text-ink">NAAMDEV SWEETS</h1>
-            <p className="mt-0.5 text-[14px] text-muted">Sweets · Namkeen · Snacks{store?.city ? ` · ${store.city}` : ""}</p>
+            <h1 className="text-[28px] font-extrabold leading-tight text-ink">NAAMDEV SWEETS</h1>
+            <p className="mt-0.5 text-[15px] text-muted">Mithai, namkeen and hot snacks{store?.city ? ` in ${store.city}` : ""}</p>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[12px] font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><Leaf className="h-3.5 w-3.5" />Pure veg</span>
         </div>
         <ul className="mt-3 space-y-2 border-t border-dashed border-line pt-3 text-[15px] text-ink-soft">
+          <li className="flex items-center gap-2"><Leaf className="h-4 w-4 shrink-0 text-emerald-600" />Pure vegetarian kitchen</li>
           {store && open != null && (
             <li className="flex items-center gap-2">
               <Clock className="h-4 w-4 shrink-0 text-muted" />
               {open ? (
-                <span><b className="font-semibold text-emerald-700 dark:text-emerald-400">Open now</b> · closes {label(store.closingTime)}</span>
+                <span><b className="font-semibold text-emerald-700 dark:text-emerald-400">Open now</b>, closes at {label(store.closingTime)}</span>
               ) : (
-                <span><b className="font-semibold text-maroon-700 dark:text-maroon-200">Closed</b> · opens {label(store.openingTime)}</span>
+                <span><b className="font-semibold text-maroon-700 dark:text-maroon-200">Closed</b>, opens at {label(store.openingTime)}</span>
               )}
             </li>
           )}
@@ -72,7 +72,7 @@ export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
           {freeDeliveryPaise > 0 && (
             <li className="flex items-center gap-2">
               <Truck className="h-4 w-4 shrink-0 text-muted" />
-              <span>Free delivery above <b className="font-semibold text-ink">{formatINR(freeDeliveryPaise)}</b>{fee ? ` · ${formatINR(fee)} below that` : ""}</span>
+              <span>Free delivery above <b className="font-semibold text-ink">{formatINR(freeDeliveryPaise)}</b>{fee ? `, otherwise ${formatINR(fee)}` : ""}</span>
             </li>
           )}
         </ul>
@@ -89,8 +89,8 @@ export function DealsRow({ coupons, strip }: { coupons: PublicCoupon[]; strip: B
   return (
     <section className="mx-auto max-w-3xl pt-5">
       <div className="flex items-center justify-between px-4">
-        <h2 className="text-[18px] font-extrabold text-ink">Offers for you</h2>
-        <Link href="/offers" className="flex items-center text-[14px] font-semibold text-maroon-700 dark:text-maroon-200">All <ChevronRight className="h-4 w-4" /></Link>
+        <h2 className="text-[20px] font-bold text-ink">Offers</h2>
+        <Link href="/offers" className="flex min-h-[44px] items-center text-[15px] font-semibold text-maroon-700 underline-offset-4 hover:underline dark:text-maroon-200">See all</Link>
       </div>
       <div className="nd-scrollbar-none mt-3 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
         {coupons.map((c) => (
@@ -98,7 +98,7 @@ export function DealsRow({ coupons, strip }: { coupons: PublicCoupon[]; strip: B
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink-soft"><BadgePercent className="h-5 w-5" /></span>
             <span className="min-w-0">
               <span className="block truncate text-[15px] font-bold text-ink">{c.title}</span>
-              <span className="block truncate text-[12px] font-semibold uppercase tracking-wide text-muted">Use {c.code}</span>
+              <span className="block truncate text-[13px] text-muted">Use code <b className="font-semibold text-ink-soft">{c.code}</b></span>
             </span>
           </Link>
         ))}
@@ -127,7 +127,7 @@ export function BannerRow({ banners }: { banners: Banner[] }) {
             <div className="relative z-10 flex w-[58%] flex-col justify-center gap-1 p-4">
               {b.eyebrow && <span className="line-clamp-1 text-[12px] font-semibold opacity-80">{b.eyebrow}</span>}
               <span className="line-clamp-3 text-[18px] font-extrabold leading-tight">{b.title}</span>
-              {b.ctaLabel && <span className="mt-1 inline-flex items-center text-[13px] font-bold">{b.ctaLabel} <ChevronRight className="h-4 w-4" /></span>}
+              {b.ctaLabel && <span className="mt-1 text-[14px] font-semibold underline decoration-current/40 underline-offset-4">{b.ctaLabel}</span>}
             </div>
             {b.imageUrl && <ProductImage src={b.imageUrl} alt="" className="absolute inset-y-0 right-0 h-full w-[42%] object-cover" sizes={400} />}
           </Link>

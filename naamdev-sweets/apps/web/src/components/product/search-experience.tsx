@@ -82,7 +82,7 @@ export function SearchExperience() {
               {sugg.categories.map((c) => (
                 <Link key={c.slug} href={`/category/${c.slug}`} className="flex items-center gap-3 border-b border-line-soft px-4 py-3 hover:bg-surface-2">
                   <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2 text-maroon-700"><Search className="h-4 w-4" /></span>
-                  <span className="text-sm"><b className="text-ink">{c.name}</b> <span className="text-muted">· Category</span></span>
+                  <span className="text-sm"><b className="text-ink">{c.name}</b> <span className="text-muted">category</span></span>
                 </Link>
               ))}
               {sugg.products.map((p) => (
@@ -90,7 +90,7 @@ export function SearchExperience() {
                   <ProductImage src={p.image} alt={p.name} className="h-12 w-12 rounded-xl" sizes={96} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-ink">{p.name}</span>
-                    <span className="block text-xs text-muted">{p.category} · from {formatINR(p.pricePaise)}</span>
+                    <span className="block text-xs text-muted">{p.category}, from {formatINR(p.pricePaise)}</span>
                   </span>
                 </Link>
               ))}

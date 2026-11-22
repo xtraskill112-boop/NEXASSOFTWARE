@@ -54,7 +54,7 @@ export function ProductCard({ product, priority, className, layout = "vertical" 
           </h3>
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">
-          <span className="truncate">{weights.join(" · ")}</span>
+          <span className="truncate">{weights.join(", ")}</span>
           <RatingPill rating={product.avgRating} count={product.reviewCount} />
         </div>
         <div className="mt-auto flex items-end justify-between gap-2 pt-2.5">

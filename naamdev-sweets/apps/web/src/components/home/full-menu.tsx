@@ -87,7 +87,7 @@ export function FullMenu({ section }: { section: HomeSection }) {
     <div id="menu" style={{ scrollMarginTop: "var(--nd-header-h, 64px)" }}>
       {/* Category shortcuts */}
       <section className="mx-auto max-w-3xl px-4 pt-6">
-        <h2 className="text-[18px] font-extrabold text-ink">{t("home.shopByCategory")}</h2>
+        <h2 className="text-[20px] font-bold text-ink">{t("home.shopByCategory")}</h2>
         <div className="nd-scrollbar-none -mx-4 mt-3 flex gap-4 overflow-x-auto px-4 pb-1">
           {groups.map((g) => (
             <button key={g.category.id} type="button" onClick={() => jump(g.category.slug)} className="flex w-[76px] shrink-0 flex-col items-center gap-1.5 text-center">
@@ -100,10 +100,9 @@ export function FullMenu({ section }: { section: HomeSection }) {
         </div>
       </section>
 
-      <div className="mx-auto mt-5 flex max-w-3xl items-center gap-3 px-4">
-        <span className="h-px flex-1 bg-line" />
-        <h2 className="text-[15px] font-semibold text-muted">{L(section, "title")} · {t("home.menuItems", { n: total })}</h2>
-        <span className="h-px flex-1 bg-line" />
+      <div className="mx-auto mt-8 flex max-w-3xl items-baseline justify-between gap-3 px-4">
+        <h2 className="text-[24px] font-bold text-ink">{L(section, "title")}</h2>
+        <span className="text-[13px] text-muted">{t("home.menuItems", { n: total })}, rates per kg or per piece</span>
       </div>
 
       {/* Sticky category bar */}
@@ -144,7 +143,7 @@ export function FullMenu({ section }: { section: HomeSection }) {
             <section key={g.category.id} id={id} aria-labelledby={`${id}-title`} className="border-b-[10px] border-surface-2 px-4 last:border-b-0">
               <h3 id={`${id}-title`}>
                 <button type="button" aria-expanded={open} onClick={() => toggle(g.category.slug)} className="flex w-full items-center justify-between py-4 text-left">
-                  <span className="text-[18px] font-extrabold text-ink">
+                  <span className="text-[20px] font-bold text-ink">
                     {L(g.category, "name")} <span className="font-semibold text-muted">({g.products.length})</span>
                   </span>
                   <ChevronDown className={cn("h-5 w-5 text-ink-soft transition-transform", !open && "-rotate-90")} />
@@ -177,7 +176,7 @@ export function FullMenu({ section }: { section: HomeSection }) {
             </div>
           </>
         )}
-        <button type="button" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} className="nd-press relative flex h-12 items-center gap-2 rounded-full bg-ink px-5 text-[14px] font-bold uppercase tracking-wide text-bg shadow-lift">
+        <button type="button" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} className="nd-press relative flex h-12 items-center gap-2 rounded-full bg-ink px-5 text-[15px] font-semibold text-bg shadow-lift">
           {menuOpen ? <X className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}Menu
         </button>
       </div>

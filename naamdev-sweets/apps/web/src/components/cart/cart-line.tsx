@@ -22,7 +22,7 @@ export function CartLine({ item, saved }: { item: CartItem; saved?: boolean }) {
             <div className="flex items-center gap-1.5"><VegMark type={item.product.foodType} /><Link href={`/product/${item.product.slug}`} className="truncate font-semibold text-ink hover:underline">{L(item.product, "name")}</Link></div>
             {item.product.variants.length > 1 ? (
               <select aria-label="Weight" value={item.variant.id} onChange={(e) => void update(item.id, { variantId: e.target.value })} className="mt-1.5 rounded-lg border border-line bg-surface px-2 py-1 text-xs font-semibold text-ink-soft">
-                {item.product.variants.map((v) => <option key={v.id} value={v.id} disabled={!v.inStock}>{v.label} · {formatINR(v.pricePaise)}{v.inStock ? "" : " (sold out)"}</option>)}
+                {item.product.variants.map((v) => <option key={v.id} value={v.id} disabled={!v.inStock}>{v.label}, {formatINR(v.pricePaise)}{v.inStock ? "" : " (sold out)"}</option>)}
               </select>
             ) : <p className="mt-1 text-xs font-semibold text-muted">{item.variant.label}</p>}
           </div>
