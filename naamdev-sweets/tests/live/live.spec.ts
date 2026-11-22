@@ -116,13 +116,20 @@ test.describe("demo logins", () => {
     await page.getByRole("button", { name: "Buy now" }).first().click();
     await expect(page.getByRole("heading", { name: "Checkout" })).toBeVisible();
     await expect(page.getByText(/Estimated delivery/)).toBeVisible();
-    await page.getByRole("button", { name: /Proceed to pay/ }).last().click();
-    const sheet = page.getByRole("dialog", { name: "Payment" });
-    await expect(sheet.getByText("NAAMDEV SWEETS", { exact: true })).toBeVisible();
-    await expect(sheet.getByRole("button", { name: /^Pay ₹[\d,.]+ with UPI$/ })).toBeVisible();
-    await expect(sheet.getByRole("button", { name: /Cash on Delivery/ })).toBeVisible();
-    await sheet.getByRole("button", { name: "Close" }).first().click();
-    await expect(sheet).toHaveCount(0);
+    // Outside opening hours the shop takes no orders: the notice shows and paying is switched off.
+    const closedNotice = page.getByText(/We're closed right now/).first();
+    if (await closedNotice.isVisible().catch(() => false)) {
+      console.log(`shop closed now: ${await closedNotice.innerText()}`);
+      await expect(page.getByRole("button", { name: /Proceed to pay/ }).last()).toBeDisabled();
+    } else {
+      await page.getByRole("button", { name: /Proceed to pay/ }).last().click();
+      const sheet = page.getByRole("dialog", { name: "Payment" });
+      await expect(sheet.getByText("NAAMDEV SWEETS", { exact: true })).toBeVisible();
+      await expect(sheet.getByRole("button", { name: /^Pay ₹[\d,.]+ with UPI$/ })).toBeVisible();
+      await expect(sheet.getByRole("button", { name: /Cash on Delivery/ })).toBeVisible();
+      await sheet.getByRole("button", { name: "Close" }).first().click();
+      await expect(sheet).toHaveCount(0);
+    }
     // Leave the demo cart as it was.
     if (!hadKaju) {
       await page.goto(`${WEB}/cart`);

@@ -493,6 +493,27 @@ const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
       console.log(`  checkout: ₹5 delivery under ₹100, minimum ₹20; ${writes.length} record(s) updated`);
     },
   },
+  {
+    // Owner, 22 Nov 2026: the ₹100-off first-order offer ends; the shop closes at 10 PM (live shop only).
+    id: "2026-11-22-no-welcome-offer-close-10pm",
+    run: async () => {
+      const applied = ((await db.collection("meta").doc("migrations").get()).data()?.applied ?? {}) as Record<string, unknown>;
+      if (!applied["2026-11-21-owner-catalogue"]) return false;
+      const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+      const coupon = db.collection(C.coupons).doc("WELCOME100");
+      if ((await coupon.get()).exists) writes.push((b) => b.update(coupon, { isActive: false, isPublic: false, updatedAt: now() }));
+      for (const d of (await db.collection(C.banners).where("ctaLabel", "==", "WELCOME100").get()).docs)
+        writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+      for (const d of (await db.collection(C.stores).where("isDefault", "==", true).get()).docs)
+        if (d.data().closingTime !== "22:00") writes.push((b) => b.update(d.ref, { closingTime: "22:00", updatedAt: now() }));
+      const profile = db.collection(C.settings).doc("storeProfile");
+      const value = ((await profile.get()).data()?.value ?? null) as Record<string, unknown> | null;
+      if (value && typeof value.supportHours === "string" && !/10(:00)?\s*PM/i.test(value.supportHours))
+        writes.push((b) => b.set(profile, { value: { ...value, supportHours: "8:00 AM – 10:00 PM, all days" }, updatedById: null, updatedAt: now() }));
+      await commitInChunks(writes);
+      console.log(`  first-order offer off, closing time 10 PM; ${writes.length} record(s) updated`);
+    },
+  },
 ];
 
 /** Rails that repeat what the full menu already shows; hidden (not deleted) so the owner can bring any back. */

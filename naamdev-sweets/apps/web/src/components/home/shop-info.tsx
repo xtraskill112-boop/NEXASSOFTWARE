@@ -3,27 +3,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BadgePercent, Bike, Clock, Leaf, Truck } from "lucide-react";
 import type { Banner, PublicCoupon } from "@naamdev/api-client";
-import { formatINR } from "@naamdev/shared";
+import { clockLabel as label, formatINR, isOpenAt, minutesNow as nowInIndia } from "@naamdev/shared";
 import { cn } from "@naamdev/ui";
 import { useLocation } from "@/lib/location";
 import { useSettings } from "@/lib/settings";
 import { ProductImage } from "../common/product-image";
 import { themeBg } from "./themes";
-
-const toMin = (hhmm: string) => {
-  const [h, m] = hhmm.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-};
-const label = (hhmm: string) => {
-  const t = toMin(hhmm);
-  const h = Math.floor(t / 60), m = t % 60;
-  return `${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "AM" : "PM"}`;
-};
-/** Minutes since midnight in India (the shop's time zone), whatever the visitor's clock says. */
-const nowInIndia = () => {
-  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
-  return Number(p.find((x) => x.type === "hour")?.value ?? 0) * 60 + Number(p.find((x) => x.type === "minute")?.value ?? 0);
-};
 
 /** The shop's header card: open hours, delivery time for the chosen PIN code and the delivery fee rule. */
 export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
@@ -32,11 +17,11 @@ export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(nowInIndia());
-    const id = setInterval(() => setNow(nowInIndia()), 60_000);
+    const id = setInterval(() => setNow(nowInIndia()), 30_000);
     return () => clearInterval(id);
   }, []);
   const store = s?.store;
-  const open = store && now != null ? now >= toMin(store.openingTime) && now < toMin(store.closingTime) : null;
+  const open = store && now != null ? isOpenAt(store.openingTime, store.closingTime, now) : null;
   const fee = s?.checkout.baseDeliveryFeePaise;
   return (
     <section className="mx-auto max-w-3xl px-4 pt-4">

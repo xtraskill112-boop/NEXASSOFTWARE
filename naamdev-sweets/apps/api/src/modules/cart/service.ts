@@ -1,10 +1,12 @@
 import type { Request, Response } from "express";
 import { C, db, getDoc, getDocs, newId, type Cart, type CartItem, type Coupon, type CouponUsage, type Inventory, type Order, type User, type WithId } from "@naamdev/db";
-import { priceCart, sellingPrice, type CouponRule, type PricingResult } from "@naamdev/shared";
+import { closedNotice, minutesNow, priceCart, sellingPrice, type CouponRule, type PricingResult } from "@naamdev/shared";
+import { env } from "../../config/env";
 import { randomToken } from "../../lib/crypto";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { getSetting } from "../../lib/settings";
 import { catalog } from "../catalog/cache";
+import { defaultStore } from "../catalog/service";
 import { activeVariants, sortedImages } from "../catalog/serializers";
 
 /** Guest carts are identified by a random token the browser keeps and sends in this header. */
@@ -180,6 +182,11 @@ export async function buildCartView(
   if (!items.length) blockers.push("Your cart is empty.");
   if (items.some((i) => i.issues.length)) blockers.push("Some items are unavailable or exceed available stock. Please update your cart.");
   if (!pricing.meetsMinimumOrder && items.length) blockers.push(`Minimum order value is ₹${(pricing.minOrderPaise / 100).toFixed(0)}.`);
+  if (items.length && env.ENFORCE_STORE_HOURS) {
+    const store = await defaultStore();
+    const notice = store ? closedNotice(store.openingTime, store.closingTime, minutesNow()) : null;
+    if (notice) blockers.push(notice);
+  }
 
   const strip = ({ _gstRate: _g, _categoryId: _c, ...rest }: (typeof all)[number]) => rest;
   return { id: cart?.id ?? null, items: items.map(strip), savedItems: savedItems.map(strip), couponCode: code ?? null, pricing, canCheckout: blockers.length === 0, blockers };

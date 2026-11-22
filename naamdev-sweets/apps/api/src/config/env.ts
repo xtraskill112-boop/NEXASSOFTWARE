@@ -28,6 +28,8 @@ const schema = z.object({
   LOG_LEVEL: z.string().default(isProd ? "info" : "debug"),
   // In-process background jobs (default on in development; the deploy turns them on for the Render server).
   JOBS_ENABLED: bool(!isProd),
+  // Orders are only taken while the shop is open (its opening hours, India time). Tests turn this off.
+  ENFORCE_STORE_HOURS: bool(true),
   // Shared secret for the x-jobs-secret header on /internal/jobs/tick (an optional external trigger).
   JOBS_SECRET: isProd ? z.string().min(24, "JOBS_SECRET must be at least 24 characters") : z.string().optional(),
 

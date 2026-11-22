@@ -14,7 +14,7 @@ pids=()
 cleanup() { for p in "${pids[@]}"; do kill -- "-$p" 2>/dev/null || kill "$p" 2>/dev/null || true; done; }
 trap cleanup EXIT
 LOGS="${E2E_LOG_DIR:-${TMPDIR:-/tmp}}"
-setsid bash -c "cd apps/api && JOBS_ENABLED=true EMAIL_PROVIDER=console SMS_PROVIDER=console exec npx tsx src/index.ts" > "$LOGS/nd-e2e-api.log" 2>&1 & pids+=($!)
+setsid bash -c "cd apps/api && JOBS_ENABLED=true ENFORCE_STORE_HOURS=false EMAIL_PROVIDER=console SMS_PROVIDER=console exec npx tsx src/index.ts" > "$LOGS/nd-e2e-api.log" 2>&1 & pids+=($!)
 # Static production builds, served with firebase.json's rewrites and headers (like Firebase Hosting).
 for app in web admin delivery; do
   if [ "${E2E_SKIP_BUILD:-0}" = "1" ] && [ -d "apps/$app/out" ]; then continue; fi

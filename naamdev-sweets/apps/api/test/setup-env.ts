@@ -8,6 +8,8 @@ process.env.METADATA_SERVER_DETECTION = "none";
 process.env.EMAIL_PROVIDER = "console";
 process.env.SMS_PROVIDER = "console";
 process.env.JOBS_ENABLED = "false";
+// The suite places orders at any hour of the day.
+process.env.ENFORCE_STORE_HOURS = "false";
 process.env.JOBS_SECRET = JOBS_SECRET;
 process.env.RAZORPAY_KEY_ID = RZP_KEY_ID;
 process.env.RAZORPAY_KEY_SECRET = RZP_KEY_SECRET;
