@@ -117,6 +117,8 @@ export interface PublicSettings {
   returns: { enabled: boolean; windowHours: number };
   announcement: { active: boolean; text: string; textHi?: string; link?: string };
   store: { name: string; city: string; lat: number; lng: number; openingTime: string; closingTime: string } | null;
+  /** Areas the shop delivers to, with the fee charged below the free-delivery threshold. */
+  deliveryAreas?: { pincode: string; area: string; feePaise: number }[];
   payments: { razorpayEnabled: boolean; razorpayKeyId: string | null };
   integrations: { push: boolean; sms: boolean; email: boolean; otpDevEcho: boolean };
 }

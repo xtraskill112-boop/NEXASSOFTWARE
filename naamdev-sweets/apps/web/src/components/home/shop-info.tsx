@@ -10,6 +10,8 @@ import { useSettings } from "@/lib/settings";
 import { ProductImage } from "../common/product-image";
 import { themeBg } from "./themes";
 
+const listOf = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+
 /** The shop's header card: open hours, delivery time for the chosen PIN code and the delivery fee rule. */
 export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
   const s = useSettings();
@@ -21,6 +23,9 @@ export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
     return () => clearInterval(id);
   }, []);
   const store = s?.store;
+  const areas = s?.deliveryAreas ?? [];
+  const named = areas.length > 0 && areas.length <= 6 ? areas : [];
+  const here = location?.serviceable ? location : null;
   const open = store && now != null ? isOpenAt(store.openingTime, store.closingTime, now) : null;
   const fee = s?.checkout.baseDeliveryFeePaise;
   return (
@@ -49,7 +54,9 @@ export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
             {location?.serviceable && location.etaMinutes ? (
               <span>Delivery in about <b className="font-semibold text-ink">{location.etaMinutes} min</b> to {location.area ?? location.pincode}</span>
             ) : location && !location.serviceable ? (
-              <span>We don&apos;t deliver to {location.pincode} yet</span>
+              <span>We don&apos;t deliver to {location.pincode}{named.length ? `. We deliver to ${listOf(named.map((x) => `${x.area} (${x.pincode})`))}` : " yet"}</span>
+            ) : named.length ? (
+              <span>We deliver to {listOf(named.map((x) => `${x.area} (${x.pincode})`))}</span>
             ) : (
               <span>Set your location to see the delivery time</span>
             )}
@@ -57,7 +64,16 @@ export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
           {freeDeliveryPaise > 0 && (
             <li className="flex items-center gap-2">
               <Truck className="h-4 w-4 shrink-0 text-muted" />
-              <span>Free delivery above <b className="font-semibold text-ink">{formatINR(freeDeliveryPaise)}</b>{fee ? `, otherwise ${formatINR(fee)}` : ""}</span>
+              <span>
+                Free delivery above <b className="font-semibold text-ink">{formatINR(freeDeliveryPaise)}</b>
+                {here?.deliveryFeePaise != null
+                  ? `, otherwise ${formatINR(here.deliveryFeePaise)} to ${here.area ?? here.pincode}`
+                  : named.length && new Set(named.map((x) => x.feePaise)).size > 1
+                    ? `, otherwise ${listOf(named.map((x) => `${formatINR(x.feePaise)} to ${x.area}`))}`
+                    : fee
+                      ? `, otherwise ${formatINR(named[0]?.feePaise ?? fee)}`
+                      : ""}
+              </span>
             </li>
           )}
         </ul>

@@ -19,8 +19,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   useEffect(() => setLoc(savedLocation.get()), []);
 
   const checkPincode = useCallback(async (pincode: string) => {
-    const r = await api.get<{ serviceable: boolean; area?: string | null; city?: string | null; etaMinutes?: number }>("/catalog/delivery-estimate", { query: { pincode } });
-    return { pincode, serviceable: r.serviceable, area: r.area ?? null, city: r.city ?? null, etaMinutes: r.etaMinutes };
+    const r = await api.get<{ serviceable: boolean; area?: string | null; city?: string | null; etaMinutes?: number; deliveryFeePaise?: number }>("/catalog/delivery-estimate", { query: { pincode } });
+    return { pincode, serviceable: r.serviceable, area: r.area ?? null, city: r.city ?? null, etaMinutes: r.etaMinutes, deliveryFeePaise: r.deliveryFeePaise };
   }, []);
 
   const setLocation = useCallback((l: SavedLocation) => {

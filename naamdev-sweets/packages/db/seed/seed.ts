@@ -514,6 +514,39 @@ const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
       console.log(`  first-order offer off, closing time 10 PM; ${writes.length} record(s) updated`);
     },
   },
+  {
+    // Owner, 22 Nov 2026: deliver only to Ladriya (341517, ₹5) and Maulasar (332318, ₹20); live shop only.
+    id: "2026-11-22-zones-ladriya-maulasar",
+    run: async () => {
+      const applied = ((await db.collection("meta").doc("migrations").get()).data()?.applied ?? {}) as Record<string, unknown>;
+      if (!applied["2026-11-21-owner-catalogue"]) return false;
+      const keep = [
+        { pincode: "341517", area: "Ladriya", feePaise: 500, etaMinutes: 30 },
+        { pincode: "332318", area: "Maulasar", feePaise: 2000, etaMinutes: 45 },
+      ];
+      const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+      const ids = new Set(keep.map((z) => z.pincode));
+      for (const d of (await db.collection(C.zones).where("isActive", "==", true).get()).docs)
+        if (!ids.has(d.id)) writes.push((b) => b.update(d.ref, { isActive: false, updatedAt: now() }));
+      for (const z of keep) {
+        const ref = db.collection(C.zones).doc(z.pincode);
+        const exists = (await ref.get()).exists;
+        writes.push((b) =>
+          b.set(ref, {
+            pincode: z.pincode, area: z.area, city: z.area, deliveryFeePaise: z.feePaise, etaMinutes: z.etaMinutes, isActive: true,
+            ...(exists ? {} : { createdAt: now() }), updatedAt: now(),
+          }, { merge: true }),
+        );
+      }
+      const deliveryRef = db.collection(C.settings).doc("delivery");
+      const delivery = ((await deliveryRef.get()).data()?.value ?? DEFAULT_SETTINGS.delivery) as Record<string, unknown>;
+      writes.push((b) => b.set(deliveryRef, { value: { ...delivery, restrictToZones: true }, updatedById: null, updatedAt: now() }));
+      for (const d of (await db.collection(C.banners).where("title", "==", "Free delivery above ₹100").get()).docs)
+        writes.push((b) => b.update(d.ref, { subtitle: "₹5 to Ladriya, ₹20 to Maulasar on smaller orders", updatedAt: now() }));
+      await commitInChunks(writes);
+      console.log(`  delivery only to Ladriya and Maulasar; ${writes.length} record(s) updated`);
+    },
+  },
 ];
 
 /** Rails that repeat what the full menu already shows; hidden (not deleted) so the owner can bring any back. */

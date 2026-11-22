@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { C, db, getDoc, getDocs, type Collection, type ContentPage, type Coupon, type Faq, type Product } from "@naamdev/db";
+import { C, db, getDoc, getDocs, type Collection, type ContentPage, type Coupon, type DeliveryZone, type Faq, type Product } from "@naamdev/db";
 import { pincodeSchema, productListQuerySchema, PUBLIC_SETTING_KEYS, describeCoupon } from "@naamdev/shared";
 import { env, integrations } from "../../config/env";
 import { notFound } from "../../lib/errors";
@@ -79,13 +79,23 @@ catalogRouter.get("/delivery-estimate", async (req, res) => {
 export const publicRouter = Router();
 
 publicRouter.get("/settings", async (_req, res) => {
-  const entries = await Promise.all(PUBLIC_SETTING_KEYS.map(async (k) => [k, await getSetting(k)] as const));
+  const [entries, zones, checkout] = await Promise.all([
+    Promise.all(PUBLIC_SETTING_KEYS.map(async (k) => [k, await getSetting(k)] as const)),
+    getDocs<DeliveryZone>(db.collection(C.zones).where("isActive", "==", true)),
+    getSetting("checkout"),
+  ]);
   const s = await defaultStore();
+  // Where the shop delivers and what it charges there (before the free-delivery threshold).
+  const deliveryAreas = zones
+    .map((z) => ({ pincode: z.pincode, area: z.area, feePaise: z.deliveryFeePaise ?? checkout.baseDeliveryFeePaise }))
+    .sort((a, b) => a.feePaise - b.feePaise || a.area.localeCompare(b.area))
+    .slice(0, 30);
   const store = s ? { name: s.name, city: s.city, lat: s.lat, lng: s.lng, openingTime: s.openingTime, closingTime: s.closingTime } : null;
   res.set("Cache-Control", "public, max-age=60");
   res.json({
     ...Object.fromEntries(entries),
     store,
+    deliveryAreas,
     payments: {
       razorpayEnabled: integrations.razorpay,
       razorpayKeyId: integrations.razorpay ? env.RAZORPAY_KEY_ID : null,

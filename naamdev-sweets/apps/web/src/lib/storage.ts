@@ -24,7 +24,7 @@ export const recentSearches = {
   clear: () => write("nd_recent_searches", []),
 };
 
-export interface SavedLocation { pincode: string; area: string | null; city: string | null; serviceable: boolean; etaMinutes?: number }
+export interface SavedLocation { pincode: string; area: string | null; city: string | null; serviceable: boolean; etaMinutes?: number; deliveryFeePaise?: number }
 export const savedLocation = {
   get: (): SavedLocation | null => safe(() => JSON.parse(localStorage.getItem("nd_location") ?? "null") as SavedLocation | null, null),
   set: (l: SavedLocation) => safe(() => localStorage.setItem("nd_location", JSON.stringify(l)), undefined),
