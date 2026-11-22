@@ -476,6 +476,23 @@ const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
       console.log(`  ${writes.length} record(s) updated`);
     },
   },
+  {
+    // Owner, 22 Nov 2026: free delivery from ₹100, ₹5 below that, minimum order ₹20 (live shop only).
+    id: "2026-11-22-delivery-5-min-20",
+    run: async () => {
+      const applied = ((await db.collection("meta").doc("migrations").get()).data()?.applied ?? {}) as Record<string, unknown>;
+      if (!applied["2026-11-21-owner-catalogue"]) return false;
+      const ref = db.collection(C.settings).doc("checkout");
+      const current = ((await ref.get()).data()?.value ?? {}) as Record<string, unknown>;
+      await ref.set({ value: { ...current, baseDeliveryFeePaise: 500, freeDeliveryThresholdPaise: 10000, minOrderPaise: 2000 }, updatedById: null, updatedAt: now() });
+      const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+      for (const d of (await db.collection(C.zones).where("deliveryFeePaise", "!=", null).get()).docs) writes.push((b) => b.update(d.ref, { deliveryFeePaise: null, updatedAt: now() }));
+      for (const d of (await db.collection(C.banners).where("subtitle", "==", "₹20 delivery on smaller orders").get()).docs)
+        writes.push((b) => b.update(d.ref, { subtitle: "₹5 delivery on smaller orders", updatedAt: now() }));
+      await commitInChunks(writes);
+      console.log(`  checkout: ₹5 delivery under ₹100, minimum ₹20; ${writes.length} record(s) updated`);
+    },
+  },
 ];
 
 /** Rails that repeat what the full menu already shows; hidden (not deleted) so the owner can bring any back. */
