@@ -45,6 +45,13 @@ test("API is up and Firestore answers", async ({ request }) => {
   // For the record (not checked — the owner may change these): the current checkout rules.
   const co = ((await settings.json()) as { checkout?: Record<string, number> }).checkout;
   if (co) console.log(`checkout: delivery ₹${co.baseDeliveryFeePaise / 100}, free from ₹${co.freeDeliveryThresholdPaise / 100}, minimum ₹${co.minOrderPaise / 100}, GST ${co.defaultGstRate}%`);
+  // For the record: where the shop delivers, and what three PIN codes get.
+  const areas = ((await settings.json()) as { deliveryAreas?: { pincode: string; area: string; feePaise: number }[] }).deliveryAreas ?? [];
+  console.log(`delivery areas: ${areas.map((x) => `${x.area} ${x.pincode} ₹${x.feePaise / 100}`).join(", ") || "none listed"}`);
+  for (const pin of ["341517", "332318", "302001"]) {
+    const est = (await (await request.get(`${API}/api/v1/catalog/delivery-estimate?pincode=${pin}`)).json()) as { serviceable: boolean; area?: string; deliveryFeePaise?: number; etaMinutes?: number };
+    console.log(`pincode ${pin}: ${est.serviceable ? `delivers (${est.area}, ₹${(est.deliveryFeePaise ?? 0) / 100}, about ${est.etaMinutes} min)` : "not served"}`);
+  }
   // What the storefront home page will show: each section and how many products it has.
   const home = await request.get(`${API}/api/v1/catalog/home`);
   const text = await home.text();
