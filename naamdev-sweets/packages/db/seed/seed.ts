@@ -456,6 +456,7 @@ const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
   { id: "2026-11-21-owner-catalogue", run: () => applyOwnerCatalogue() },
   { id: "2026-11-21-menu-home", run: () => menuHome() },
   { id: "2026-11-21-archive-old-products", run: () => archiveOldProducts() },
+  { id: "2026-11-22-stock-50", run: () => setStockTo(50) },
   {
     // No GST; ₹20 delivery below ₹100, free from ₹100; no minimum order.
     id: "2026-11-20-no-gst-flat-delivery",
@@ -602,6 +603,92 @@ async function archiveOldProducts(): Promise<void | false> {
 
   await commitInChunks(writes);
   console.log(`  ${archived.size} old product(s) archived, ${units} unit(s) of their sample stock written off`);
+}
+
+const millis = (t: unknown) => (t instanceof Date ? t.getTime() : (t as { toMillis(): number }).toMillis());
+
+/** Products the owner said are not in stock; a blanket stock change leaves them alone. */
+const KEEP_OUT_OF_STOCK = new Set(["khopra-pak"]);
+
+/**
+ * The owner asked for every active item's stock to be set to `target` (22 Nov 2026). Each active
+ * variant of each live product ends with exactly `target` units available, booked the way staff
+ * would book it: a short count gets a new batch (expiry = today + the product's shelf life), an
+ * excess is taken from the oldest batches first (FEFO), and every movement goes in the stock ledger.
+ * Each variant is changed in its own transaction, so an order placed meanwhile can't be lost.
+ */
+async function setStockTo(target: number): Promise<void | false> {
+  const applied = ((await db.collection("meta").doc("migrations").get()).data()?.applied ?? {}) as Record<string, unknown>;
+  if (!applied["2026-11-21-owner-catalogue"]) return false;
+  const reason = `Stock set to ${target} (owner's request)`;
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  let variants = 0, addedUnits = 0, removedUnits = 0;
+  const products = (await db.collection(C.products).where("isActive", "==", true).get()).docs.filter(
+    (d) => !d.data().deletedAt && !KEEP_OUT_OF_STOCK.has(d.data().slug),
+  );
+  for (const d of products) {
+    const p = d.data() as { shelfLifeDays?: number; variants: { id: string; sku: string; isActive: boolean }[] };
+    const shelfDays = Math.max(1, p.shelfLifeDays ?? 1);
+    for (const v of p.variants.filter((x) => x.isActive)) {
+      variants++;
+      await db.runTransaction(async (tx) => {
+        const invRef = db.collection(C.inventory).doc(v.id);
+        const inv = ((await tx.get(invRef)).data() ?? {}) as Partial<Inventory>;
+        // Raw Firestore reads give Timestamps, not Dates: compare in milliseconds.
+        const batchDocs = (await tx.get(db.collection(C.batches).where("variantId", "==", v.id).where("status", "==", "ACTIVE"))).docs
+          .map((b) => ({ ref: b.ref, id: b.id, ...(b.data() as InventoryBatch), expiresMs: millis(b.data().expiresAt) }))
+          .sort((a, b) => a.expiresMs - b.expiresMs);
+        let available = inv.available ?? 0;
+        const at = now();
+        const ledger = (batchId: string, type: "STOCK_IN" | "ADJUSTMENT" | "EXPIRED", quantity: number, why = reason) =>
+          tx.set(db.collection(C.stockTransactions).doc(), {
+            variantId: v.id, productId: d.id, batchId, type, quantity, balanceAfter: available, reason: why, orderId: null, createdById: null, createdAt: at,
+          });
+        // Batches already past the sale cutoff can't be sold: retire them first (as the expiry job
+        // would), so the target counts only sellable stock.
+        const cutoff = at.getTime() + 6 * 3600_000;
+        for (const b of batchDocs.filter((x) => x.expiresMs <= cutoff)) {
+          tx.update(b.ref, { status: "EXPIRED", remaining: 0, updatedAt: at });
+          if (b.remaining > 0) {
+            available = Math.max(0, available - b.remaining);
+            ledger(b.id, "EXPIRED", -b.remaining, "Auto-expired at sale cutoff");
+          }
+        }
+        batchDocs.splice(0, batchDocs.length, ...batchDocs.filter((x) => x.expiresMs > cutoff));
+        if (available < target) {
+          const qty = target - available;
+          const ref = db.collection(C.batches).doc();
+          const batch: InventoryBatch = {
+            variantId: v.id, productId: d.id, batchNumber: `SET${target}-${stamp}`, supplierId: null, manufacturedAt: at,
+            expiresAt: new Date(at.getTime() + shelfDays * day), quantity: qty, remaining: qty, costPricePaise: 0, status: "ACTIVE",
+            expiryAlertedAt: null, createdAt: at, updatedAt: at,
+          };
+          tx.set(ref, batch);
+          available += qty;
+          addedUnits += qty;
+          ledger(ref.id, "STOCK_IN", qty);
+        } else if (available > target) {
+          let need = available - target;
+          for (const b of batchDocs) {
+            if (need <= 0) break;
+            const take = Math.min(need, b.remaining);
+            if (take <= 0) continue;
+            const remaining = b.remaining - take;
+            tx.update(b.ref, { remaining, ...(remaining === 0 ? { status: "DEPLETED" } : {}), updatedAt: at });
+            available -= take;
+            removedUnits += take;
+            need -= take;
+            ledger(b.id, "ADJUSTMENT", -take);
+          }
+        }
+        tx.set(invRef, {
+          variantId: v.id, productId: d.id, available, reserved: inv.reserved ?? 0, lowStockThreshold: inv.lowStockThreshold ?? 5,
+          lastRestockedAt: available > (inv.available ?? 0) ? at : inv.lastRestockedAt ?? null, lowStockAlertedAt: null, updatedAt: at,
+        });
+      });
+    }
+  }
+  console.log(`  ${variants} variant(s) of ${products.length} product(s) set to ${target}: +${addedUnits} / -${removedUnits} unit(s)`);
 }
 
 /**

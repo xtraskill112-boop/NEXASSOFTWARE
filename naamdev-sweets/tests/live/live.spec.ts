@@ -53,6 +53,13 @@ test("API is up and Firestore answers", async ({ request }) => {
   const feed = JSON.parse(text) as { banners?: { hero: { title: string }[] }; sections: { type: string; title: string; products?: unknown[]; groups?: { category: { name: string }; products: unknown[] }[] }[] };
   console.log(feed.sections.map((s) => `${s.type}=${s.groups ? s.groups.map((g) => `${g.category.name}:${g.products.length}`).join(",") : s.products?.length ?? "-"}`).join(" "));
   console.log(`hero banners: ${feed.banners?.hero.map((b) => b.title).join(" | ") || "none"}`);
+  // For the record: stock shown on a few product pages (the public figure is capped at 50).
+  for (const slug of ["kaju-katli", "dal-kachori", "kolhapuri-namkeen", "khopra-pak"]) {
+    const pd = await request.get(`${API}/api/v1/catalog/products/${slug}`);
+    if (!pd.ok()) continue;
+    const vs = ((await pd.json()) as { product: { variants: { label: string; available: number }[] } }).product.variants;
+    console.log(`stock ${slug}: ${vs.map((v) => `${v.label}=${v.available}`).join(", ")}`);
+  }
   const menu = feed.sections.find((s) => s.type === "FULL_MENU");
   const rails = feed.sections.filter((s) => s.products?.length);
   expect((menu?.groups?.length ?? 0) + rails.length, "the home page has products to show").toBeGreaterThan(0);
