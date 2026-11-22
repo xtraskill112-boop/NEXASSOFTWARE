@@ -7,6 +7,9 @@ const PIECES = /^(\d+)\s*(pc|pcs|piece|pieces)\b|^pack of (\d+)/i;
  * The shop's counter rate for an item, the way a halwai's board shows it: rupees per kg for sweets
  * sold by weight, per piece for kachori, ghevar and the like. Null when the packs don't say.
  */
+/** Branded packets are sold by the pack, so they carry no counter rate. */
+export const isPacked = (p: { tags: string[] }) => p.tags.includes("packed");
+
 export function counterRate(variants: Variant[]): { paise: number; unit: "kg" | "piece" } | null {
   const byWeight = variants.filter((v) => v.weightGrams && WEIGHT_LABEL.test(v.label));
   if (byWeight.length) {

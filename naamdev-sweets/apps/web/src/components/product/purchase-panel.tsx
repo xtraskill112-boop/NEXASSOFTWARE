@@ -9,7 +9,7 @@ import { errorMessage } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
 import { useLocation } from "@/lib/location";
-import { counterRate } from "@/lib/rate";
+import { counterRate, isPacked } from "@/lib/rate";
 import { recentlyViewed } from "@/lib/storage";
 import { WishlistButton } from "./wishlist-button";
 
@@ -21,7 +21,7 @@ export function PurchasePanel({ product }: { product: ProductDetail }) {
   const [qty, setQty] = useState(1);
   const [busy, setBusy] = useState<"add" | "buy" | null>(null);
   const v = product.variants.find((x) => x.id === variantId) ?? product.variants[0];
-  const rate = counterRate(product.variants);
+  const rate = isPacked(product) ? null : counterRate(product.variants);
 
   useEffect(() => recentlyViewed.push(product.id), [product.id]);
   useEffect(() => setQty((q) => Math.max(1, Math.min(q, v?.available || 1))), [variantId]); // eslint-disable-line react-hooks/exhaustive-deps

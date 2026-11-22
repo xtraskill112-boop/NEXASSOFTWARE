@@ -4,7 +4,7 @@ import type { ProductCard as Product } from "@naamdev/api-client";
 import { formatINR } from "@naamdev/shared";
 import { RatingPill, VegMark, cn } from "@naamdev/ui";
 import { useI18n } from "@/lib/i18n";
-import { counterRate } from "@/lib/rate";
+import { counterRate, isPacked } from "@/lib/rate";
 import { ProductImage } from "../common/product-image";
 import { AddButton } from "./add-button";
 
@@ -14,7 +14,7 @@ import { AddButton } from "./add-button";
  */
 export function MenuItem({ product, priority, className }: { product: Product; priority?: boolean; className?: string }) {
   const { L } = useI18n();
-  const rate = counterRate(product.variants);
+  const rate = isPacked(product) ? null : counterRate(product.variants);
   const def = product.variants.find((v) => v.id === product.defaultVariantId) ?? product.variants[0];
   const href = `/product/${product.slug}`;
   return (
@@ -40,6 +40,7 @@ export function MenuItem({ product, priority, className }: { product: Product; p
           ) : def ? (
             <>
               <span className="text-[24px] font-bold leading-none tracking-[-0.02em] text-ink">{formatINR(def.pricePaise)}</span>
+              {def.mrpPaise > def.pricePaise && <s className="text-[14px] text-muted">{formatINR(def.mrpPaise)}</s>}
               <span className="text-[13px] text-muted">for {def.label}</span>
             </>
           ) : null}
