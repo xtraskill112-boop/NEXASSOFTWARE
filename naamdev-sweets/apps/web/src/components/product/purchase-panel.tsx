@@ -61,9 +61,9 @@ export function PurchasePanel({ product }: { product: ProductDetail }) {
         <div role="radiogroup" aria-label={t("product.selectWeight")} className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
           {product.variants.map((x) => (
             <button key={x.id} type="button" role="radio" aria-checked={x.id === variantId} disabled={!x.inStock} onClick={() => setVariantId(x.id)}
-              className={cn("flex w-full items-center gap-3 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45", x.id === variantId ? "bg-go-50/60 dark:bg-go-600/10" : "bg-surface hover:bg-surface-2")}>
-              <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border-2", x.id === variantId ? "border-go-600" : "border-line")}>{x.id === variantId && <span className="h-2.5 w-2.5 rounded-full bg-go-600" />}</span>
-              <span className="flex-1 text-[15px] font-semibold text-ink">{x.label}{!x.inStock && <span className="ml-2 text-[12px] font-semibold text-maroon-600">Sold out</span>}{x.discountPct > 0 && <span className="ml-2 rounded bg-go-50 px-1 py-0.5 text-[11px] font-bold text-go-700">{x.discountPct}% off</span>}</span>
+              className={cn("flex w-full items-center gap-3 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45", x.id === variantId ? "bg-maroon-50/60 dark:bg-maroon-500/15" : "bg-surface hover:bg-surface-2")}>
+              <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border-2", x.id === variantId ? "border-maroon-700" : "border-line")}>{x.id === variantId && <span className="h-2.5 w-2.5 rounded-full bg-maroon-700" />}</span>
+              <span className="flex-1 text-[15px] font-semibold text-ink">{x.label}{!x.inStock && <span className="ml-2 text-[12px] font-semibold text-maroon-600">Sold out</span>}{x.discountPct > 0 && <span className="ml-2 rounded bg-maroon-50 px-1 py-0.5 text-[11px] font-bold text-maroon-800">{x.discountPct}% off</span>}</span>
               <span className="text-[15px] font-semibold text-ink tabular-nums">{formatINR(x.pricePaise)}</span>
             </button>
           ))}
@@ -74,8 +74,8 @@ export function PurchasePanel({ product }: { product: ProductDetail }) {
           <span className="text-sm text-muted">Total <b className="text-ink">{formatINR((v?.pricePaise ?? 0) * qty)}</b></span>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <Button variant="outline" size="lg" className="border-go-600 font-bold text-go-600 hover:bg-go-50 dark:text-go-500" disabled={!v?.inStock} loading={busy === "add"} onClick={() => go("add")}>{v?.inStock ? "Add to cart" : t("common.outOfStock")}</Button>
-          <Button size="lg" className="bg-go-600 font-bold hover:bg-go-700 dark:bg-go-600 dark:hover:bg-go-700" disabled={!v?.inStock} loading={busy === "buy"} onClick={() => go("buy")}>{t("common.buyNow")}</Button>
+          <Button variant="outline" size="lg" className="border-maroon-700 font-bold text-maroon-700 hover:bg-maroon-50 dark:text-maroon-200" disabled={!v?.inStock} loading={busy === "add"} onClick={() => go("add")}>{v?.inStock ? "Add to cart" : t("common.outOfStock")}</Button>
+          <Button size="lg" className="font-bold" disabled={!v?.inStock} loading={busy === "buy"} onClick={() => go("buy")}>{t("common.buyNow")}</Button>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export function PurchasePanel({ product }: { product: ProductDetail }) {
           <p className="truncate text-[13px] text-muted">{v?.label}</p>
           <p className="text-lg font-bold text-ink">{formatINR((v?.pricePaise ?? 0) * qty)}</p>
         </div>
-        <Button size="lg" className="bg-go-600 font-bold hover:bg-go-700 dark:bg-go-600 dark:hover:bg-go-700" disabled={!v?.inStock} loading={busy === "add"} onClick={() => go("add")}>{v?.inStock ? "Add to cart" : t("common.outOfStock")}</Button>
+        <Button size="lg" className="font-bold" disabled={!v?.inStock} loading={busy === "add"} onClick={() => go("add")}>{v?.inStock ? "Add to cart" : t("common.outOfStock")}</Button>
       </div>
     </div>
   );

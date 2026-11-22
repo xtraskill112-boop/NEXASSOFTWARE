@@ -46,14 +46,14 @@ export function ShopInfo({ freeDeliveryPaise }: { freeDeliveryPaise: number }) {
             <h1 className="text-[22px] font-extrabold leading-tight text-ink">NAAMDEV SWEETS</h1>
             <p className="mt-0.5 text-[14px] text-muted">Sweets · Namkeen · Snacks{store?.city ? ` · ${store.city}` : ""}</p>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-go-50 px-2 py-1 text-[12px] font-bold text-go-700 dark:bg-go-600/15 dark:text-go-500"><Leaf className="h-3.5 w-3.5" />Pure veg</span>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[12px] font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><Leaf className="h-3.5 w-3.5" />Pure veg</span>
         </div>
-        <ul className="mt-3 space-y-2 border-t border-dashed border-line pt-3 text-[14px] text-ink-soft">
+        <ul className="mt-3 space-y-2 border-t border-dashed border-line pt-3 text-[15px] text-ink-soft">
           {store && open != null && (
             <li className="flex items-center gap-2">
               <Clock className="h-4 w-4 shrink-0 text-muted" />
               {open ? (
-                <span><b className="font-semibold text-go-600 dark:text-go-500">Open now</b> · closes {label(store.closingTime)}</span>
+                <span><b className="font-semibold text-emerald-700 dark:text-emerald-400">Open now</b> · closes {label(store.closingTime)}</span>
               ) : (
                 <span><b className="font-semibold text-maroon-700 dark:text-maroon-200">Closed</b> · opens {label(store.openingTime)}</span>
               )}
@@ -95,7 +95,7 @@ export function DealsRow({ coupons, strip }: { coupons: PublicCoupon[]; strip: B
       <div className="nd-scrollbar-none mt-3 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
         {coupons.map((c) => (
           <Link key={c.code} href="/offers" className="flex w-[268px] shrink-0 snap-start items-center gap-3 rounded-2xl border border-line bg-surface p-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-maroon-50 text-maroon-700 dark:bg-maroon-500/15 dark:text-maroon-200"><BadgePercent className="h-5 w-5" /></span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink-soft"><BadgePercent className="h-5 w-5" /></span>
             <span className="min-w-0">
               <span className="block truncate text-[15px] font-bold text-ink">{c.title}</span>
               <span className="block truncate text-[12px] font-semibold uppercase tracking-wide text-muted">Use {c.code}</span>
@@ -104,7 +104,7 @@ export function DealsRow({ coupons, strip }: { coupons: PublicCoupon[]; strip: B
         ))}
         {notes.map((b) => (
           <Link key={b.id} href={b.ctaLink ?? "/offers"} className="flex w-[268px] shrink-0 snap-start items-center gap-3 rounded-2xl border border-line bg-surface p-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-go-50 text-go-700 dark:bg-go-600/15 dark:text-go-500"><Truck className="h-5 w-5" /></span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink-soft"><Truck className="h-5 w-5" /></span>
             <span className="min-w-0">
               <span className="block truncate text-[15px] font-bold text-ink">{b.title}</span>
               {b.subtitle && <span className="block truncate text-[12px] text-muted">{b.subtitle}</span>}

@@ -2,12 +2,12 @@
 import Link from "next/link";
 import type { Category } from "@naamdev/api-client";
 import { ProductImage } from "@/components/common/product-image";
-import { BrandLoader } from "@naamdev/ui";
+import { CategoryGridSkeleton } from "@/components/common/skeletons";
 import { usePublic } from "@/lib/use-public";
 
 export function CategoriesView() {
   const { data, loading } = usePublic<{ categories: Category[] }>("/catalog/categories");
-  if (loading) return <BrandLoader className="min-h-[50dvh]" />;
+  if (loading) return <CategoryGridSkeleton />;
   const cats = (data?.categories ?? []).filter((c) => !c.parentId);
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6">

@@ -16,7 +16,7 @@ export function CartBar() {
     <AnimatePresence>
       {show && (
         <motion.div initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-x-3 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 md:hidden no-print">
-          <Link href="/cart" className="flex items-center justify-between rounded-xl bg-go-600 px-4 py-3 text-white shadow-lift">
+          <Link href="/cart" className="nd-press flex min-h-[52px] items-center justify-between rounded-xl bg-maroon-700 px-4 py-2.5 text-white shadow-lift">
             <span className="flex items-center gap-3">
               <motion.span key={bump} animate={bump ? { scale: [1, 1.15, 1] } : undefined} transition={{ duration: 0.25 }}><ShoppingBag className="h-5 w-5" /></motion.span>
               <span className="leading-tight">

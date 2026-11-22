@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { ProductDetail } from "@naamdev/api-client";
-import { BrandLoader, ErrorState } from "@naamdev/ui";
+import { ErrorState } from "@naamdev/ui";
+import { ProductPageSkeleton } from "@/components/common/skeletons";
 import { BoughtTogether, ProductInfo, Reviews } from "@/components/product/product-info";
 import { Gallery } from "@/components/product/gallery";
 import { ProductRail } from "@/components/product/product-rail";
@@ -17,7 +18,7 @@ export default function ProductPage() {
   const { data, loading, notFound, error } = usePublic<{ product: ProductDetail }>(slug ? `/catalog/products/${encodeURIComponent(slug)}` : null);
   const p = data?.product;
   useDocumentTitle(p ? p.seoTitle?.replace(" | NAAMDEV SWEETS", "") ?? p.name : null);
-  if (loading) return <BrandLoader className="min-h-[60dvh]" />;
+  if (loading) return <ProductPageSkeleton />;
   if (notFound || !p) return <div className="mx-auto max-w-xl px-4 py-20"><ErrorState title="Sweet not found" description={notFound ? "It may have been moved or removed." : error ?? "Please try again."} action={<Link href="/" className="font-semibold text-maroon-700">Back to the shop</Link>} /></div>;
   const prices = p.variants.map((v) => v.pricePaise / 100);
   const ld = {

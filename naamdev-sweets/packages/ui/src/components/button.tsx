@@ -18,17 +18,17 @@ const variants: Record<ButtonVariant, string> = {
 
 const sizes: Record<ButtonSize, string> = {
   xs: "h-7 px-2.5 text-xs rounded-md gap-1",
-  sm: "h-9 px-3.5 text-sm rounded-md gap-1.5",
+  sm: "h-10 px-4 text-sm rounded-md gap-1.5",
   md: "h-11 px-5 text-[15px] rounded-lg gap-2",
   lg: "h-12 px-6 text-[15px] rounded-lg gap-2",
   xl: "h-14 px-7 text-base rounded-lg gap-2.5",
   icon: "h-11 w-11 rounded-lg",
-  "icon-sm": "h-9 w-9 rounded-md",
+  "icon-sm": "h-10 w-10 rounded-md",
 };
 
 export function buttonStyles(opts: { variant?: ButtonVariant; size?: ButtonSize; block?: boolean; className?: string } = {}) {
   return cn(
-    "relative inline-flex select-none items-center justify-center whitespace-nowrap font-semibold transition-colors duration-150",
+    "nd-press relative inline-flex select-none items-center justify-center whitespace-nowrap font-semibold",
     "disabled:pointer-events-none disabled:opacity-50",
     variants[opts.variant ?? "primary"],
     sizes[opts.size ?? "md"],

@@ -1,7 +1,8 @@
 "use client";
 import type { HomeFeed } from "@naamdev/api-client";
 import { localized } from "@naamdev/shared/i18n";
-import { BrandLoader, ErrorState } from "@naamdev/ui";
+import { ErrorState } from "@naamdev/ui";
+import { HomeSkeleton } from "@/components/common/skeletons";
 import { CategoryGrid } from "@/components/home/category-grid";
 import { FullMenu } from "@/components/home/full-menu";
 import { HeroCarousel } from "@/components/home/hero-carousel";
@@ -24,7 +25,7 @@ const LINKS: Record<string, string> = {
 export function HomeFeedView() {
   const { locale } = useI18n();
   const { data: feed, loading } = usePublic<HomeFeed>("/catalog/home");
-  if (loading && !feed) return <BrandLoader className="min-h-[60dvh]" />;
+  if (loading && !feed) return <HomeSkeleton />;
   if (!feed)
     return (
       <div className="mx-auto max-w-xl px-4 py-20">

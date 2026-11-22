@@ -18,7 +18,7 @@ export function AddButton({ product, className, size = "md", variant = "inline" 
   const totalQty = inCart.reduce((s, i) => s + i.quantity, 0);
 
   if (!product.inStock)
-    return <span className={cn("inline-flex h-9 items-center justify-center rounded-lg border border-line bg-surface px-2.5 text-[13px] font-semibold text-muted", variant === "overlay" && "shadow-[0_3px_10px_rgb(0_0_0/0.1)]", className)}>{t("common.outOfStock")}</span>;
+    return <span className={cn("inline-flex h-10 items-center justify-center rounded-lg border border-line bg-surface px-2.5 text-[13px] font-semibold text-muted", variant === "overlay" && "h-11 shadow-[0_3px_10px_rgb(0_0_0/0.1)]", className)}>{t("common.outOfStock")}</span>;
 
   const onAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -39,10 +39,10 @@ export function AddButton({ product, className, size = "md", variant = "inline" 
             void setQuantity(inCart[0]!.variant.id, q);
           }} />
       ) : totalQty > 0 ? (
-        <button type="button" onClick={() => setSheet(true)} className={cn("h-9 rounded-lg border border-line bg-surface px-3 text-[14px] font-bold text-go-600 shadow-[0_3px_10px_rgb(0_0_0/0.1)]", variant === "overlay" && "h-10 w-full")}>{totalQty} added +</button>
+        <button type="button" onClick={() => setSheet(true)} className={cn("nd-press h-10 rounded-lg border border-line bg-surface px-3 text-[14px] font-bold text-maroon-700 shadow-[0_3px_10px_rgb(0_0_0/0.1)]", variant === "overlay" && "h-11 w-full")}>{totalQty} added +</button>
       ) : (
         <button type="button" disabled={busy} onClick={onAdd}
-          className={cn("inline-flex items-center justify-center rounded-lg border border-line bg-surface font-extrabold uppercase tracking-wide text-go-600 shadow-[0_3px_10px_rgb(0_0_0/0.1)] transition-colors hover:bg-go-50 disabled:opacity-60 dark:text-go-500 dark:hover:bg-go-600/15", variant === "overlay" ? "h-10 w-full text-[16px]" : size === "sm" ? "h-9 px-5 text-[14px]" : "h-10 px-6 text-[15px]")}>
+          className={cn("nd-press inline-flex items-center justify-center rounded-lg border border-line bg-surface font-extrabold uppercase tracking-wide text-maroon-700 shadow-[0_3px_10px_rgb(0_0_0/0.1)] hover:bg-maroon-50 disabled:opacity-60 dark:text-maroon-200 dark:hover:bg-maroon-500/15", variant === "overlay" ? "h-11 w-full text-[16px]" : size === "sm" ? "h-10 px-5 text-[14px]" : "h-11 px-6 text-[15px]")}>
           {t("common.add")}
         </button>
       )}

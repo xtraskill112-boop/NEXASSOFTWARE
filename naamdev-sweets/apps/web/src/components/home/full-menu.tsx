@@ -122,7 +122,7 @@ export function FullMenu({ section }: { section: HomeSection }) {
                   jump(g.category.slug);
                 }}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-1 rounded-full border px-3.5 py-1.5 text-[14px] font-semibold shadow-[0_1px_3px_rgb(0_0_0/0.06)] transition-colors",
+                  "nd-press inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border px-4 text-[14px] font-semibold",
                   on ? "border-ink bg-ink text-bg" : "border-line bg-surface text-ink-soft hover:border-ink-soft/40",
                 )}
               >
@@ -169,7 +169,7 @@ export function FullMenu({ section }: { section: HomeSection }) {
             <button type="button" aria-label="Close menu" className="fixed inset-0 cursor-default bg-black/30" onClick={() => setMenuOpen(false)} />
             <div role="dialog" aria-label="Menu categories" className="absolute bottom-14 right-0 max-h-[60dvh] w-64 overflow-y-auto rounded-2xl bg-ink p-2 text-bg shadow-lift">
               {groups.map((g) => (
-                <button key={g.category.id} type="button" onClick={() => jump(g.category.slug)} className={cn("flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-[15px] transition-colors hover:bg-white/10", g.category.slug === active ? "font-bold" : "font-medium opacity-85")}>
+                <button key={g.category.id} type="button" onClick={() => jump(g.category.slug)} className={cn("nd-press flex min-h-[44px] w-full items-center justify-between rounded-lg px-3 text-left text-[15px] hover:bg-white/10", g.category.slug === active ? "font-bold" : "font-medium opacity-85")}>
                   {L(g.category, "name")}
                   <span className="text-[13px] opacity-70">{g.products.length}</span>
                 </button>
@@ -177,7 +177,7 @@ export function FullMenu({ section }: { section: HomeSection }) {
             </div>
           </>
         )}
-        <button type="button" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} className="relative flex h-12 items-center gap-2 rounded-full bg-ink px-5 text-[14px] font-bold uppercase tracking-wide text-bg shadow-lift">
+        <button type="button" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} className="nd-press relative flex h-12 items-center gap-2 rounded-full bg-ink px-5 text-[14px] font-bold uppercase tracking-wide text-bg shadow-lift">
           {menuOpen ? <X className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}Menu
         </button>
       </div>

@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import type { ProductCard } from "@naamdev/api-client";
-import { BrandLoader, ErrorState } from "@naamdev/ui";
+import { ErrorState } from "@naamdev/ui";
+import { MenuListSkeleton } from "@/components/common/skeletons";
 import { ProductImage } from "@/components/common/product-image";
 import { themeBg } from "@/components/home/themes";
 import { ProductGrid } from "@/components/product/product-rail";
@@ -14,7 +15,7 @@ export default function CollectionPage() {
   const slug = useRouteParam("slug");
   const { data: d, loading, notFound, error } = usePublic<Coll>(slug ? `/catalog/collections/${encodeURIComponent(slug)}` : null);
   useDocumentTitle(d?.collection.name);
-  if (loading) return <BrandLoader className="min-h-[60dvh]" />;
+  if (loading) return <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6"><MenuListSkeleton /></div>;
   if (notFound || !d) return <div className="mx-auto max-w-xl px-4 py-20"><ErrorState title="Collection not found" description={notFound ? "It may have been moved or removed." : error ?? "Please try again."} action={<Link href="/" className="font-semibold text-maroon-700">Back to the shop</Link>} /></div>;
   const c = d.collection;
   return (

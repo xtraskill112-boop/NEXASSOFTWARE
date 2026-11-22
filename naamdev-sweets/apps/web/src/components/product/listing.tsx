@@ -5,7 +5,7 @@ import { ArrowDownUp, PackageSearch, SlidersHorizontal, X } from "lucide-react";
 import type { ProductList } from "@naamdev/api-client";
 import { Button, EmptyState, ErrorState, Sheet, cn } from "@naamdev/ui";
 import { api, errorMessage } from "@/lib/api";
-import { ProductCardSkeleton } from "./product-card";
+import { MenuListSkeleton } from "../common/skeletons";
 import { ProductGrid } from "./product-rail";
 
 const SORTS = [
@@ -81,7 +81,7 @@ export function ProductListing({ fixed = {}, initial, emptyTitle = "No sweets ma
     }
   };
 
-  const chip = (active: boolean) => cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-3 text-[14px] font-semibold transition-colors", active ? "border-ink bg-ink text-bg" : "border-line bg-surface text-ink-soft hover:border-ink-soft/50");
+  const chip = (active: boolean) => cn("nd-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-4 text-[14px] font-semibold", active ? "border-ink bg-ink text-bg" : "border-line bg-surface text-ink-soft hover:border-ink-soft/50");
   const priceKey = `${params.minPrice ?? ""}-${params.maxPrice ?? ""}`;
   const activeCount = ["minPrice", "maxPrice", "inStock", "onOffer"].filter((k) => sp.get(k)).length;
 
@@ -114,7 +114,7 @@ export function ProductListing({ fixed = {}, initial, emptyTitle = "No sweets ma
       {error ? (
         <ErrorState description={error} action={<Button onClick={() => set({})}>Retry</Button>} />
       ) : loading ? (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{Array.from({ length: 10 }, (_, i) => <ProductCardSkeleton key={i} />)}</div>
+        <MenuListSkeleton />
       ) : items.length === 0 ? (
         <EmptyState icon={<PackageSearch className="h-8 w-8" />} title={emptyTitle} description={data?.suggestion ? `Did you mean "${data.suggestion}"?` : "Try removing a filter or searching for something else."}
           action={data?.suggestion ? <Button variant="soft" onClick={() => set({ q: data.suggestion })}>Search “{data.suggestion}”</Button> : activeCount ? <Button variant="outline" onClick={() => set({ minPrice: null, maxPrice: null, inStock: null, onOffer: null })}>Clear filters</Button> : undefined} />

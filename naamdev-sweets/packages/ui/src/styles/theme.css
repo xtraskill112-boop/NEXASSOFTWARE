@@ -45,18 +45,13 @@
   --color-pista-600: #4f7a24;
 
   --color-veg: #1f8a3c;
-  /* Action green (ADD, cart bar) */
-  --color-go-50: #e9f7ef;
-  --color-go-500: #1aa260;
-  --color-go-600: #128a50;
-  --color-go-700: #0d7243;
   --color-nonveg: #b3261e;
 
-  /* Typography — Outfit (Latin) everywhere, Mukta for Devanagari. Every var() has a fallback so
+  /* Typography — Geist (Latin) everywhere, Mukta for Devanagari. Every var() has a fallback so
      an app that doesn't load a family keeps the rest of the stack. */
-  --font-display: var(--font-outfit, system-ui), var(--font-mukta-deva, system-ui), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-outfit, system-ui), var(--font-mukta-deva, system-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-deva: var(--font-mukta-deva, system-ui), var(--font-outfit, system-ui), "Noto Sans Devanagari", sans-serif;
+  --font-display: var(--font-geist, system-ui), var(--font-mukta-deva, system-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-geist, system-ui), var(--font-mukta-deva, system-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-deva: var(--font-mukta-deva, system-ui), var(--font-geist, system-ui), "Noto Sans Devanagari", sans-serif;
 
   /* Radii — kept small and consistent: 6px controls, 10–14px cards and photos. */
   --radius-lg: 0.5rem;
@@ -102,13 +97,13 @@
   --nd-bg: #ffffff;
   --nd-bg-elevated: #ffffff;
   --nd-surface: #ffffff;
-  --nd-surface-2: #f2f2f5;
-  --nd-surface-3: #e7e7ec;
-  --nd-ink: #1b1b1f;
-  --nd-ink-soft: #3e3e47;
-  --nd-muted: #6c6c78;
-  --nd-line: #e3e3e9;
-  --nd-line-soft: #efeff3;
+  --nd-surface-2: #f4f4f5;
+  --nd-surface-3: #e9e9ec;
+  --nd-ink: #18181b;
+  --nd-ink-soft: #3f3f46;
+  --nd-muted: #6b6b76;
+  --nd-line: #e5e7eb;
+  --nd-line-soft: #f0f1f3;
   --nd-brand: #7a1b2d;
   --nd-accent: #c8641a;
   --nd-ring: #c8641a;
@@ -116,16 +111,16 @@
 }
 
 .dark {
-  --nd-bg: #121214;
-  --nd-bg-elevated: #18181b;
-  --nd-surface: #1a1a1d;
-  --nd-surface-2: #242428;
-  --nd-surface-3: #2f2f34;
-  --nd-ink: #f2f2f4;
-  --nd-ink-soft: #d0d0d6;
-  --nd-muted: #9a9aa6;
-  --nd-line: #33333a;
-  --nd-line-soft: #26262b;
+  --nd-bg: #0f172a;
+  --nd-bg-elevated: #131c31;
+  --nd-surface: #16203a;
+  --nd-surface-2: #1d2945;
+  --nd-surface-3: #263453;
+  --nd-ink: #f1f5f9;
+  --nd-ink-soft: #cbd5e1;
+  --nd-muted: #94a3b8;
+  --nd-line: #273449;
+  --nd-line-soft: #1e293b;
   --nd-brand: #f2c9cf;
   --nd-accent: #f0a050;
   --nd-ring: #f0a050;
@@ -156,6 +151,8 @@
     background: var(--nd-bg);
     color: var(--nd-ink);
     font-family: var(--font-sans);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
   }
   :lang(hi) body,
@@ -170,7 +167,8 @@
     outline-offset: 2px;
     border-radius: 4px;
   }
-  h1, h2, h3 {
+  h1, h2, h3, h4 {
+    letter-spacing: -0.02em;
     text-wrap: balance;
   }
   @media (prefers-reduced-motion: reduce) {
@@ -201,6 +199,15 @@
   }
   .nd-pattern {
     display: none;
+  }
+  /* Tactile press for anything tappable: quick colour change, a slight squeeze while held. */
+  .nd-press {
+    transition-property: color, background-color, border-color, box-shadow, transform;
+    transition-duration: 160ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+  .nd-press:active:not(:disabled) {
+    transform: scale(0.98);
   }
   .nd-scrollbar-none {
     scrollbar-width: none;

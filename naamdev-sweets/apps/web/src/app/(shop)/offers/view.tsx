@@ -1,7 +1,8 @@
 "use client";
 import { Suspense } from "react";
 import type { PublicCoupon } from "@naamdev/api-client";
-import { BrandLoader, SectionHeading } from "@naamdev/ui";
+import { SectionHeading } from "@naamdev/ui";
+import { MenuListSkeleton } from "@/components/common/skeletons";
 import { CouponTicket } from "@/components/home/coupon-ticket";
 import { ProductListing } from "@/components/product/listing";
 import { usePublic } from "@/lib/use-public";
@@ -20,7 +21,7 @@ export function OffersView() {
       </section>
       <section className="mt-12">
         <SectionHeading title="Sweets on offer" />
-        <Suspense fallback={<BrandLoader className="py-20" />}>
+        <Suspense fallback={<MenuListSkeleton />}>
           <ProductListing fixed={{ onOffer: "true" }} />
         </Suspense>
       </section>

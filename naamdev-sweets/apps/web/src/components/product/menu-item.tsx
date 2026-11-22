@@ -22,9 +22,9 @@ export function MenuItem({ product, priority, className }: { product: Product; p
         <div className="flex h-5 items-center gap-2">
           <VegMark type={product.foodType} className="h-[15px] w-[15px]" />
           {product.isBestseller ? (
-            <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#d4561d] dark:text-[#f08a55]"><Star className="h-3.5 w-3.5" fill="currentColor" strokeWidth={0} />Bestseller</span>
+            <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-ink-soft"><Star className="h-3.5 w-3.5 text-amber-500" fill="currentColor" strokeWidth={0} />Bestseller</span>
           ) : product.isNewArrival ? (
-            <span className="text-[13px] font-semibold text-go-600 dark:text-go-500">New</span>
+            <span className="text-[13px] font-semibold text-ink-soft">New</span>
           ) : null}
         </div>
         <h3 className="mt-1 text-[17px] font-bold leading-snug text-ink">
@@ -35,7 +35,7 @@ export function MenuItem({ product, priority, className }: { product: Product; p
           {def && multi && <span className="text-[13px] text-muted">for {def.label}</span>}
         </div>
         {product.reviewCount > 0 && <RatingPill rating={product.avgRating} count={product.reviewCount} className="mt-1.5" />}
-        <p className="mt-2 line-clamp-2 text-[14px] leading-snug text-muted">{L(product, "shortDescription")}</p>
+        <p className="mt-2 line-clamp-2 text-[15px] leading-snug text-muted">{L(product, "shortDescription")}</p>
       </div>
       <div className="w-[136px] shrink-0">
         <div className="relative">

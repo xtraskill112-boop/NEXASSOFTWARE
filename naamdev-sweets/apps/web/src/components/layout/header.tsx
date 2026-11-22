@@ -15,7 +15,7 @@ import { useSettings } from "@/lib/settings";
 import { LocationSheet } from "./location-sheet";
 
 export function IconButton({ href, label, children, badge, onClick, className }: { href?: string; label: string; children: React.ReactNode; badge?: number; onClick?: () => void; className?: string }) {
-  const cls = cn("relative grid h-10 w-10 place-items-center rounded-lg text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink", className);
+  const cls = cn("nd-press relative grid h-11 w-11 place-items-center rounded-lg text-ink-soft hover:bg-surface-2 hover:text-ink", className);
   const b = badge ? (
     <span className="absolute right-0.5 top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-maroon-700 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-bg-elevated">
       {badge > 99 ? "99+" : badge}
