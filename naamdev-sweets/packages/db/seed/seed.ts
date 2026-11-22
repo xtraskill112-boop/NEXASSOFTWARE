@@ -457,6 +457,7 @@ const MIGRATIONS: { id: string; run: () => Promise<void | false> }[] = [
   { id: "2026-11-21-menu-home", run: () => menuHome() },
   { id: "2026-11-21-archive-old-products", run: () => archiveOldProducts() },
   { id: "2026-11-22-stock-50", run: () => setStockTo(50) },
+  { id: "2026-11-22-mandir-namkeen", run: () => addPackedNamkeen() },
   {
     // No GST; ₹20 delivery below ₹100, free from ₹100; no minimum order.
     id: "2026-11-20-no-gst-flat-delivery",
@@ -603,6 +604,69 @@ async function archiveOldProducts(): Promise<void | false> {
 
   await commitInChunks(writes);
   console.log(`  ${archived.size} old product(s) archived, ${units} unit(s) of their sample stock written off`);
+}
+
+/**
+ * Branded packets the shop resells (owner, 22 Nov 2026): Mandir Namkeen in two sizes. Prices are the
+ * pack MRP with the shop's offer price; the photos are the packets themselves (owner's pictures).
+ */
+const PACKED_NAMKEEN = [
+  {
+    slug: "mandir-bikaneri-bhujia", name: "Mandir Bikaneri Bhujia", nameHi: "मंदिर बीकानेरी भुजिया", sku: "ND-MBB-201",
+    short: "Thin, crunchy Bikaneri sev by Mandir Namkeen, in a sealed pack.",
+    description: "Bikaneri bhujia from Mandir Namkeen: thin, crunchy sev made from moth beans and gram flour with Bikaneri spices. Sealed retail pack.",
+    images: ["mandir-bikaneri-bhujia", "mandir-bikaneri-bhujia-2"], tags: ["namkeen", "bhujia", "packed", "mandir"],
+  },
+  {
+    slug: "mandir-all-in-one", name: "Mandir All In One Namkeen", nameHi: "मंदिर ऑल इन वन नमकीन", sku: "ND-MAIO-202",
+    short: "A crunchy mixed namkeen by Mandir Namkeen, in a sealed pack.",
+    description: "All In One mixture from Mandir Namkeen: a crunchy mix of sev, dal and more in one pack. Sealed retail pack.",
+    images: ["mandir-all-in-one", "mandir-all-in-one-2"], tags: ["namkeen", "mixture", "packed", "mandir"],
+  },
+] as const;
+const PACKED_SIZES = [
+  { label: "200 g", weightGrams: 200, mrp: 65, sale: 50 },
+  { label: "400 g", weightGrams: 400, mrp: 130, sale: 100 },
+];
+
+async function addPackedNamkeen(): Promise<void | false> {
+  const applied = ((await db.collection("meta").doc("migrations").get()).data()?.applied ?? {}) as Record<string, unknown>;
+  if (!applied["2026-11-21-owner-catalogue"]) return false;
+  const cat = (await db.collection(C.categories).where("slug", "==", "namkeen").limit(1).get()).docs[0];
+  if (!cat) return false;
+  const supplierId = (await db.collection(C.suppliers).limit(1).get()).docs[0]?.id ?? null;
+  const shelfLifeDays = 90;
+  const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
+  let added = 0;
+  for (const p of PACKED_NAMKEEN) {
+    if (!(await db.collection(C.products).where("slug", "==", p.slug).limit(1).get()).empty) continue;
+    const productId = newId();
+    const variants: ProductVariant[] = PACKED_SIZES.map((s, vi) => ({
+      id: newId(), label: s.label, weightGrams: s.weightGrams, sku: `${p.sku}-${vi + 1}`, barcode: null, mrpPaise: rupees(s.mrp),
+      salePricePaise: rupees(s.sale), isActive: true, isDefault: s.weightGrams === 400, sortOrder: vi,
+    }));
+    const images = p.images.map((n, i) => ({
+      id: newId(), url: `/static/catalog/products/${n}.webp`, alt: i ? `${p.name} — pack` : p.name, publicId: null, width: 620, height: 620, sortOrder: i,
+    }));
+    const base = {
+      name: p.name, nameHi: p.nameHi, slug: p.slug, shortDescription: p.short, shortDescriptionHi: null, description: p.description,
+      categoryId: cat.id, subcategoryId: null, sku: p.sku, barcode: null, hsnCode: "21069099", ingredients: UNKNOWN_INGREDIENTS, allergens: [],
+      nutrition: null, manufacturingInfo: "Packed by Mandir Namkeen. See the pack for its best-before date.", shelfLifeDays,
+      storageInstructions: "Store in a cool, dry place. Close the pack after opening.", foodType: "VEG" as const, isFeatured: false,
+      isBestseller: false, isNewArrival: true, isActive: true, tags: [...p.tags], videoUrl: null, gstRate: null, avgRating: 0, reviewCount: 0,
+      soldCount: 0, viewCount: 0, seoTitle: `${p.name} — Buy Online | NAAMDEV SWEETS`, seoDescription: p.short, deletedAt: null, images, variants,
+      createdAt: now(), updatedAt: now(),
+    };
+    writes.push((b) => b.set(db.collection(C.products).doc(productId), { ...base, ...productDerived(base) }));
+    writes.push((b) => b.set(db.collection(C.skus).doc(p.sku), { productId, variantId: null }));
+    for (const v of variants) {
+      writes.push((b) => b.set(db.collection(C.skus).doc(v.sku), { productId, variantId: v.id }));
+      openingStock(writes, productId, v, 50, shelfLifeDays, `MANDIR-${v.sku}`, supplierId);
+    }
+    added++;
+  }
+  await commitInChunks(writes);
+  console.log(`  ${added} packed namkeen product(s) added`);
 }
 
 const millis = (t: unknown) => (t instanceof Date ? t.getTime() : (t as { toMillis(): number }).toMillis());
