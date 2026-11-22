@@ -54,11 +54,14 @@ test("API is up and Firestore answers", async ({ request }) => {
   console.log(feed.sections.map((s) => `${s.type}=${s.groups ? s.groups.map((g) => `${g.category.name}:${g.products.length}`).join(",") : s.products?.length ?? "-"}`).join(" "));
   console.log(`hero banners: ${feed.banners?.hero.map((b) => b.title).join(" | ") || "none"}`);
   // For the record: stock shown on a few product pages (the public figure is capped at 50).
-  for (const slug of ["kaju-katli", "dal-kachori", "kolhapuri-namkeen", "khopra-pak"]) {
+  for (const slug of ["kaju-katli", "dal-kachori", "kolhapuri-namkeen", "khopra-pak", "mandir-bikaneri-bhujia", "mandir-all-in-one"]) {
     const pd = await request.get(`${API}/api/v1/catalog/products/${slug}`);
-    if (!pd.ok()) continue;
-    const vs = ((await pd.json()) as { product: { variants: { label: string; available: number }[] } }).product.variants;
-    console.log(`stock ${slug}: ${vs.map((v) => `${v.label}=${v.available}`).join(", ")}`);
+    if (!pd.ok()) {
+      console.log(`stock ${slug}: not found (${pd.status()})`);
+      continue;
+    }
+    const vs = ((await pd.json()) as { product: { variants: { label: string; available: number; pricePaise: number; mrpPaise: number }[] } }).product.variants;
+    console.log(`stock ${slug}: ${vs.map((v) => `${v.label}=${v.available} @ ₹${v.pricePaise / 100}${v.mrpPaise > v.pricePaise ? ` (MRP ₹${v.mrpPaise / 100})` : ""}`).join(", ")}`);
   }
   const menu = feed.sections.find((s) => s.type === "FULL_MENU");
   const rails = feed.sections.filter((s) => s.products?.length);
