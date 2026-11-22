@@ -20,7 +20,7 @@ export function VariantSheet({ product, open, onClose }: { product: ProductCard;
       footer={
         <div className="flex items-center gap-3">
           <QuantityStepper value={qty} onChange={setQty} min={1} max={Math.max(1, Math.min(20, v?.available ?? 1))} size="lg" />
-          <Button block size="lg" loading={busy} disabled={!v?.inStock} onClick={async () => {
+          <Button block size="lg" className="bg-go-600 font-bold hover:bg-go-700 dark:bg-go-600" loading={busy} disabled={!v?.inStock} onClick={async () => {
             if (!v) return;
             setBusy(true);
             const ok = await add(v.id, qty, `${L(product, "name")} (${v.label})`);
@@ -34,9 +34,9 @@ export function VariantSheet({ product, open, onClose }: { product: ProductCard;
     >
       <div className="p-5">
         <div className="flex gap-4">
-          <ProductImage src={product.image} alt={product.name} className="h-20 w-20 shrink-0 rounded-2xl" sizes={160} />
+          <ProductImage src={product.image} alt={product.name} className="h-20 w-20 shrink-0 rounded-xl" sizes={160} />
           <div className="min-w-0">
-            <div className="flex items-center gap-2"><VegMark type={product.foodType} /><h3 className="truncate font-display text-lg font-semibold text-ink">{L(product, "name")}</h3></div>
+            <div className="flex items-center gap-2"><VegMark type={product.foodType} /><h3 className="truncate text-[18px] font-bold text-ink">{L(product, "name")}</h3></div>
             <p className="mt-1 line-clamp-2 text-sm text-muted">{L(product, "shortDescription")}</p>
           </div>
         </div>
@@ -44,9 +44,9 @@ export function VariantSheet({ product, open, onClose }: { product: ProductCard;
         <div role="radiogroup" className="space-y-2.5">
           {product.variants.map((x) => (
             <button key={x.id} type="button" role="radio" aria-checked={x.id === variantId} disabled={!x.inStock} onClick={() => setVariantId(x.id)}
-              className={cn("flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3.5 text-left transition disabled:opacity-50", x.id === variantId ? "border-maroon-700 bg-surface-2 " : "border-line hover:border-ink-soft/40")}>
+              className={cn("flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors disabled:opacity-50", x.id === variantId ? "border-go-600 bg-go-50/60 dark:bg-go-600/10" : "border-line hover:bg-surface-2")}>
               <span className="flex items-center gap-3">
-                <span className={cn("grid h-5 w-5 place-items-center rounded-full border-2", x.id === variantId ? "border-maroon-700" : "border-line")}>{x.id === variantId && <span className="h-2.5 w-2.5 rounded-full bg-maroon-700" />}</span>
+                <span className={cn("grid h-5 w-5 place-items-center rounded-full border-2", x.id === variantId ? "border-go-600" : "border-line")}>{x.id === variantId && <span className="h-2.5 w-2.5 rounded-full bg-go-600" />}</span>
                 <span className="font-semibold text-ink">{x.label}</span>
                 {!x.inStock && <span className="text-xs font-semibold text-maroon-600">{t("common.outOfStock")}</span>}
                 {x.inStock && x.lowStock && <span className="text-xs font-semibold text-maroon-700">{t("common.onlyLeft", { n: x.available })}</span>}

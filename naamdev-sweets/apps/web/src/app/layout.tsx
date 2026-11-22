@@ -6,10 +6,8 @@ import { SITE_URL } from "@/lib/api";
 import "./globals.css";
 
 // Fonts are self-hosted from npm (Fontsource) so builds never depend on reaching Google Fonts.
-// Martel for headings, Mukta for text — both by the Indian Type Foundry, with matching Devanagari.
-const martel = localFont({ src: [{ path: "../../node_modules/@fontsource/martel/files/martel-latin-700-normal.woff2", weight: "700" }, { path: "../../node_modules/@fontsource/martel/files/martel-latin-800-normal.woff2", weight: "800" }], variable: "--font-martel", display: "swap" });
-const mukta = localFont({ src: [{ path: "../../node_modules/@fontsource/mukta/files/mukta-latin-400-normal.woff2", weight: "400" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-latin-500-normal.woff2", weight: "500" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-latin-600-normal.woff2", weight: "600" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-latin-700-normal.woff2", weight: "700" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-latin-800-normal.woff2", weight: "800" }], variable: "--font-mukta", display: "swap" });
-const martelDeva = localFont({ src: [{ path: "../../node_modules/@fontsource/martel/files/martel-devanagari-700-normal.woff2", weight: "700" }, { path: "../../node_modules/@fontsource/martel/files/martel-devanagari-800-normal.woff2", weight: "800" }], variable: "--font-martel-deva", display: "swap", preload: false });
+// Outfit for all Latin text; Mukta (Indian Type Foundry) for Devanagari.
+const outfit = localFont({ src: [{ path: "../../node_modules/@fontsource/outfit/files/outfit-latin-400-normal.woff2", weight: "400" }, { path: "../../node_modules/@fontsource/outfit/files/outfit-latin-500-normal.woff2", weight: "500" }, { path: "../../node_modules/@fontsource/outfit/files/outfit-latin-600-normal.woff2", weight: "600" }, { path: "../../node_modules/@fontsource/outfit/files/outfit-latin-700-normal.woff2", weight: "700" }, { path: "../../node_modules/@fontsource/outfit/files/outfit-latin-800-normal.woff2", weight: "800" }], variable: "--font-outfit", display: "swap" });
 const muktaDeva = localFont({ src: [{ path: "../../node_modules/@fontsource/mukta/files/mukta-devanagari-400-normal.woff2", weight: "400" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-devanagari-500-normal.woff2", weight: "500" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-devanagari-600-normal.woff2", weight: "600" }, { path: "../../node_modules/@fontsource/mukta/files/mukta-devanagari-700-normal.woff2", weight: "700" }], variable: "--font-mukta-deva", display: "swap", preload: false });
 
 
@@ -28,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#FAF6EF" }, { media: "(prefers-color-scheme: dark)", color: "#151211" }],
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#FFFFFF" }, { media: "(prefers-color-scheme: dark)", color: "#121214" }],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -47,7 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     potentialAction: { "@type": "SearchAction", target: `${SITE_URL}/search?q={query}`, "query-input": "required name=query" },
   };
   return (
-    <html lang="en" suppressHydrationWarning className={`${martel.variable} ${mukta.variable} ${martelDeva.variable} ${muktaDeva.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${muktaDeva.variable}`}>
       <body className="min-h-dvh">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd).replace(/</g, "\\u003c") }} />
         <Providers>

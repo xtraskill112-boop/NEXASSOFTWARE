@@ -6,8 +6,8 @@ export function QuantityStepper({ value, onChange, min = 0, max = 20, size = "md
   const h = { sm: "h-8 text-sm", md: "h-10 text-[15px]", lg: "h-12 text-base" }[size];
   const w = { sm: "w-7", md: "w-9", lg: "w-11" }[size];
   return (
-    <div role="group" aria-label={label} className={cn("inline-flex items-center overflow-hidden rounded-lg border border-maroon-700 bg-surface font-bold text-maroon-700 dark:border-maroon-300 dark:text-maroon-100", h, className)}>
-      <button type="button" aria-label="Decrease quantity" disabled={disabled || value <= min} onClick={() => onChange(value - 1)} className={cn("grid h-full place-items-center transition hover:bg-maroon-50 disabled:opacity-40 dark:hover:bg-maroon-500/20", w)}>
+    <div role="group" aria-label={label} className={cn("inline-flex items-center overflow-hidden rounded-lg border border-line bg-surface font-extrabold text-go-600 dark:text-go-500", h, className)}>
+      <button type="button" aria-label="Decrease quantity" disabled={disabled || value <= min} onClick={() => onChange(value - 1)} className={cn("grid h-full place-items-center transition hover:bg-go-50 disabled:opacity-40 dark:hover:bg-go-600/15", w)}>
         −
       </button>
       <span className="relative grid h-full min-w-7 place-items-center overflow-hidden tabular-nums" aria-live="polite">
@@ -17,7 +17,7 @@ export function QuantityStepper({ value, onChange, min = 0, max = 20, size = "md
           </motion.span>
         </AnimatePresence>
       </span>
-      <button type="button" aria-label="Increase quantity" disabled={disabled || value >= max} onClick={() => onChange(value + 1)} className={cn("grid h-full place-items-center transition hover:bg-maroon-50 disabled:opacity-40 dark:hover:bg-maroon-500/20", w)}>
+      <button type="button" aria-label="Increase quantity" disabled={disabled || value >= max} onClick={() => onChange(value + 1)} className={cn("grid h-full place-items-center transition hover:bg-go-50 disabled:opacity-40 dark:hover:bg-go-600/15", w)}>
         +
       </button>
     </div>

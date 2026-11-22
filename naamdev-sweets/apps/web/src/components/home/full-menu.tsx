@@ -1,37 +1,32 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { BookOpen, ChevronDown, X } from "lucide-react";
 import type { HomeSection } from "@naamdev/api-client";
 import { cn } from "@naamdev/ui";
+import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
-import { ProductCard } from "../product/product-card";
+import { ProductImage } from "../common/product-image";
+import { MenuItem } from "../product/menu-item";
 
 const anchor = (slug: string) => `menu-${slug}`;
+const headerHeight = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue("--nd-header-h")) || 64;
 
 /**
- * The whole menu on the home page: every product, grouped by category, with a category bar that
- * stays under the header so customers can jump straight to laddu, barfi, namkeen…
+ * The whole menu on the home page, laid out like a food-delivery menu: category shortcuts, a sticky
+ * category bar, collapsible sections of menu lines, and a floating "Menu" button that jumps anywhere.
  */
 export function FullMenu({ section }: { section: HomeSection }) {
   const { L, t } = useI18n();
+  const { count } = useCart();
   const groups = section.groups ?? [];
   const total = groups.reduce((n, g) => n + g.products.length, 0);
   const [active, setActive] = useState(groups[0]?.category.slug ?? "");
-  const [headerHeight, setHeaderHeight] = useState(0);
+  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const [menuOpen, setMenuOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
-  const chipsRef = useRef<HTMLDivElement>(null);
+  const chipsRef = useRef<HTMLElement>(null);
 
-  // The bar sits right under the sticky header, whose height differs between phone and desktop.
-  useEffect(() => {
-    const header = document.querySelector("header");
-    if (!header) return;
-    const update = () => setHeaderHeight(Math.round(header.getBoundingClientRect().height));
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(header);
-    return () => ro.disconnect();
-  }, []);
-
-  const offset = () => headerHeight + (barRef.current?.offsetHeight ?? 0);
+  const offset = () => headerHeight() + (barRef.current?.offsetHeight ?? 0);
 
   // Highlight the category being read.
   useEffect(() => {
@@ -54,9 +49,9 @@ export function FullMenu({ section }: { section: HomeSection }) {
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [groups, headerHeight]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [groups]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep the highlighted chip visible inside the (horizontally scrolling) bar.
+  // Keep the highlighted chip visible inside the horizontally scrolling bar.
   useEffect(() => {
     const bar = chipsRef.current;
     const chip = bar?.querySelector<HTMLElement>(`[data-slug="${active}"]`);
@@ -64,26 +59,56 @@ export function FullMenu({ section }: { section: HomeSection }) {
   }, [active]);
 
   const jump = (slug: string) => {
-    const el = document.getElementById(anchor(slug));
-    if (!el) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset() + 1, behavior: reduce ? "auto" : "smooth" });
-    setActive(slug);
+    setClosed((c) => {
+      if (!c.has(slug)) return c;
+      const n = new Set(c);
+      n.delete(slug);
+      return n;
+    });
+    setMenuOpen(false);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(anchor(slug));
+      if (!el) return;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - offset() + 1, behavior: reduce ? "auto" : "smooth" });
+      setActive(slug);
+    });
   };
+  const toggle = (slug: string) =>
+    setClosed((c) => {
+      const n = new Set(c);
+      if (n.has(slug)) n.delete(slug);
+      else n.add(slug);
+      return n;
+    });
 
   if (!groups.length) return null;
   return (
-    <div id="menu" style={{ scrollMarginTop: headerHeight }}>
-      <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 sm:pt-8">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-display text-[26px] font-extrabold leading-tight text-ink sm:text-[32px]">{L(section, "title")}</h2>
-          <span className="shrink-0 text-[14px] text-muted">{t("home.menuItems", { n: total })}</span>
+    <div id="menu" style={{ scrollMarginTop: "var(--nd-header-h, 64px)" }}>
+      {/* Category shortcuts */}
+      <section className="mx-auto max-w-3xl px-4 pt-6">
+        <h2 className="text-[18px] font-extrabold text-ink">{t("home.shopByCategory")}</h2>
+        <div className="nd-scrollbar-none -mx-4 mt-3 flex gap-4 overflow-x-auto px-4 pb-1">
+          {groups.map((g) => (
+            <button key={g.category.id} type="button" onClick={() => jump(g.category.slug)} className="flex w-[76px] shrink-0 flex-col items-center gap-1.5 text-center">
+              <span className="block h-[72px] w-[72px] overflow-hidden rounded-full bg-surface-2">
+                <ProductImage src={g.products[0]?.image ?? null} alt="" className="h-full w-full" sizes={160} />
+              </span>
+              <span className="line-clamp-2 text-[13px] font-medium leading-tight text-ink-soft">{L(g.category, "name")}</span>
+            </button>
+          ))}
         </div>
-        {section.subtitle && <p className="mt-0.5 text-[15px] text-ink-soft">{section.subtitle}</p>}
+      </section>
+
+      <div className="mx-auto mt-5 flex max-w-3xl items-center gap-3 px-4">
+        <span className="h-px flex-1 bg-line" />
+        <h2 className="text-[15px] font-semibold text-muted">{L(section, "title")} · {t("home.menuItems", { n: total })}</h2>
+        <span className="h-px flex-1 bg-line" />
       </div>
 
-      <div ref={barRef} style={{ top: headerHeight }} className="sticky z-40 mt-3 border-b border-line bg-bg no-print">
-        <nav ref={chipsRef} aria-label={t("home.menuJump")} className="nd-scrollbar-none mx-auto flex max-w-7xl gap-1.5 overflow-x-auto px-4 py-2.5 sm:px-6">
+      {/* Sticky category bar */}
+      <div ref={barRef} style={{ top: "var(--nd-header-h, 64px)" }} className="sticky z-40 mt-2 bg-bg no-print">
+        <nav ref={chipsRef} aria-label={t("home.menuJump")} className="nd-scrollbar-none mx-auto flex max-w-3xl gap-2 overflow-x-auto px-4 py-2.5">
           {groups.map((g) => {
             const on = g.category.slug === active;
             return (
@@ -97,8 +122,8 @@ export function FullMenu({ section }: { section: HomeSection }) {
                   jump(g.category.slug);
                 }}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-[14px] font-semibold transition-colors",
-                  on ? "border-ink bg-ink text-bg" : "border-line bg-surface text-ink-soft hover:border-ink-soft/50 hover:text-ink",
+                  "inline-flex shrink-0 items-center gap-1 rounded-full border px-3.5 py-1.5 text-[14px] font-semibold shadow-[0_1px_3px_rgb(0_0_0/0.06)] transition-colors",
+                  on ? "border-ink bg-ink text-bg" : "border-line bg-surface text-ink-soft hover:border-ink-soft/40",
                 )}
               >
                 {L(g.category, "name")}
@@ -107,22 +132,54 @@ export function FullMenu({ section }: { section: HomeSection }) {
             );
           })}
         </nav>
+        <div className="h-px bg-line-soft" />
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        {groups.map((g, gi) => (
-          <section key={g.category.id} id={anchor(g.category.slug)} aria-labelledby={`${anchor(g.category.slug)}-title`} className="border-b border-line pb-6 pt-6 last:border-b-0">
-            <h3 id={`${anchor(g.category.slug)}-title`} className="mb-4 flex items-baseline gap-2 font-display text-[20px] font-extrabold text-ink sm:text-[24px]">
-              {L(g.category, "name")}
-              <span className="font-sans text-[14px] font-normal text-muted">({g.products.length})</span>
-            </h3>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-4 xl:grid-cols-5">
-              {g.products.map((p, i) => (
-                <ProductCard key={p.id} product={p} priority={gi === 0 && i < 2} />
+      {/* Sections */}
+      <div className="mx-auto max-w-3xl">
+        {groups.map((g, gi) => {
+          const open = !closed.has(g.category.slug);
+          const id = anchor(g.category.slug);
+          return (
+            <section key={g.category.id} id={id} aria-labelledby={`${id}-title`} className="border-b-[10px] border-surface-2 px-4 last:border-b-0">
+              <h3 id={`${id}-title`}>
+                <button type="button" aria-expanded={open} onClick={() => toggle(g.category.slug)} className="flex w-full items-center justify-between py-4 text-left">
+                  <span className="text-[18px] font-extrabold text-ink">
+                    {L(g.category, "name")} <span className="font-semibold text-muted">({g.products.length})</span>
+                  </span>
+                  <ChevronDown className={cn("h-5 w-5 text-ink-soft transition-transform", !open && "-rotate-90")} />
+                </button>
+              </h3>
+              {open && (
+                <div className="-mt-3">
+                  {g.products.map((p, i) => (
+                    <MenuItem key={p.id} product={p} priority={gi === 0 && i < 2} className={cn(i < g.products.length - 1 && "border-b border-dashed border-line")} />
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      {/* Floating menu button + category list */}
+      <div className={cn("fixed right-4 z-40 no-print md:right-8", count > 0 ? "bottom-[calc(132px+env(safe-area-inset-bottom))] md:bottom-8" : "bottom-[calc(80px+env(safe-area-inset-bottom))] md:bottom-8")}>
+        {menuOpen && (
+          <>
+            <button type="button" aria-label="Close menu" className="fixed inset-0 cursor-default bg-black/30" onClick={() => setMenuOpen(false)} />
+            <div role="dialog" aria-label="Menu categories" className="absolute bottom-14 right-0 max-h-[60dvh] w-64 overflow-y-auto rounded-2xl bg-ink p-2 text-bg shadow-lift">
+              {groups.map((g) => (
+                <button key={g.category.id} type="button" onClick={() => jump(g.category.slug)} className={cn("flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-[15px] transition-colors hover:bg-white/10", g.category.slug === active ? "font-bold" : "font-medium opacity-85")}>
+                  {L(g.category, "name")}
+                  <span className="text-[13px] opacity-70">{g.products.length}</span>
+                </button>
               ))}
             </div>
-          </section>
-        ))}
+          </>
+        )}
+        <button type="button" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} className="relative flex h-12 items-center gap-2 rounded-full bg-ink px-5 text-[14px] font-bold uppercase tracking-wide text-bg shadow-lift">
+          {menuOpen ? <X className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}Menu
+        </button>
       </div>
     </div>
   );

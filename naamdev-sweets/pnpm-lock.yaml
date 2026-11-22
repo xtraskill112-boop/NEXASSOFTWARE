@@ -23,10 +23,7 @@ importers:
 
   apps/admin:
     dependencies:
-      '@fontsource/martel':
-        specifier: 5.3.0
-        version: 5.3.0
-      '@fontsource/mukta':
+      '@fontsource/outfit':
         specifier: 5.3.0
         version: 5.3.0
       '@naamdev/api-client':
@@ -178,10 +175,7 @@ importers:
 
   apps/delivery:
     dependencies:
-      '@fontsource/martel':
-        specifier: 5.3.0
-        version: 5.3.0
-      '@fontsource/mukta':
+      '@fontsource/outfit':
         specifier: 5.3.0
         version: 5.3.0
       '@naamdev/api-client':
@@ -239,10 +233,10 @@ importers:
 
   apps/web:
     dependencies:
-      '@fontsource/martel':
+      '@fontsource/mukta':
         specifier: 5.3.0
         version: 5.3.0
-      '@fontsource/mukta':
+      '@fontsource/outfit':
         specifier: 5.3.0
         version: 5.3.0
       '@naamdev/api-client':
@@ -986,11 +980,11 @@ packages:
   '@firebase/webchannel-wrapper@1.0.3':
     resolution: {integrity: sha512-2xCRM9q9FlzGZCdgDMJwc0gyUkWFtkosy7Xxr6sFgQwn+wMNIWd7xIvYNauU1r64B5L5rsGKy/n9TKJ0aAFeqQ==}
 
-  '@fontsource/martel@5.3.0':
-    resolution: {integrity: sha512-E/L2GnnmYkcjgt6IMN9ISgr2ldDzSeO1J+aTMwWsOy+Ti4EEC8B9RHiU32kUMGiyI9Ot8JLzQ4FA39HH1tFfbQ==}
-
   '@fontsource/mukta@5.3.0':
     resolution: {integrity: sha512-BIM9rx9SmHOcVR8cmOba9LnaFwhfiaFcclwgKV9rH4DIdCmD/tBBhtY02GGukuayxSbqfZ6pXzSO88IigTewDw==}
+
+  '@fontsource/outfit@5.3.0':
+    resolution: {integrity: sha512-0AVHzTTVJSxWDOxPKSfMeHhZeBFDU3cmgrcOb76ZEyhGo0+xgyG3GsLF3h9+X8w0IX7G4jzjJgFQEBiWdX6VgA==}
 
   '@google-cloud/cloud-sql-connector@1.13.0':
     resolution: {integrity: sha512-DAjtzUnKBsJrZTnfernOOCndi7RGFvwRk4drNBD60SJ64jx1T0+U6gyWVfbTHWTG8Nr6XwgBcGVK2W2unUzA1g==}
@@ -5603,9 +5597,9 @@ snapshots:
 
   '@firebase/webchannel-wrapper@1.0.3': {}
 
-  '@fontsource/martel@5.3.0': {}
-
   '@fontsource/mukta@5.3.0': {}
+
+  '@fontsource/outfit@5.3.0': {}
 
   '@google-cloud/cloud-sql-connector@1.13.0':
     dependencies:

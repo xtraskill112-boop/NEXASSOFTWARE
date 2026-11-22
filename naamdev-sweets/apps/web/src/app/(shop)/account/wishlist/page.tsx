@@ -19,7 +19,7 @@ export default function WishlistPage() {
       <PageTitle title="Wishlist" subtitle="Sweets you’ve saved for later cravings" />
       {!visible ? <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="aspect-square" />)}</div> : visible.length === 0 ? (
         <EmptyState icon={<Heart className="h-8 w-8" />} title="Your wishlist is empty" description="Tap the heart on any sweet to save it here." action={<Link href="/" className={buttonStyles()}>Discover sweets</Link>} />
-      ) : <ProductGrid products={visible} className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 xl:grid-cols-4" />}
+      ) : <ProductGrid products={visible} />}
     </div>
   );
 }

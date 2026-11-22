@@ -6,6 +6,7 @@ import type { ProductCard as Product } from "@naamdev/api-client";
 import { SectionHeading } from "@naamdev/ui";
 import { useI18n } from "@/lib/i18n";
 import { ProductCard } from "./product-card";
+import { MenuList } from "./menu-item";
 
 export function ProductRail({ title, subtitle, products, href, eyebrow }: { title: string; subtitle?: string | null; products: Product[]; href?: string; eyebrow?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -38,9 +39,5 @@ export function ProductRail({ title, subtitle, products, href, eyebrow }: { titl
 }
 
 export function ProductGrid({ products, className }: { products: Product[]; className?: string }) {
-  return (
-    <div className={className ?? "grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-4 xl:grid-cols-5"}>
-      {products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
-    </div>
-  );
+  return <MenuList products={products} className={className} />;
 }

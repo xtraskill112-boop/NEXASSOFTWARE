@@ -45,13 +45,18 @@
   --color-pista-600: #4f7a24;
 
   --color-veg: #1f8a3c;
+  /* Action green (ADD, cart bar) */
+  --color-go-50: #e9f7ef;
+  --color-go-500: #1aa260;
+  --color-go-600: #128a50;
+  --color-go-700: #0d7243;
   --color-nonveg: #b3261e;
 
-  /* Typography — Martel (headings) and Mukta (text), both drawn for Latin and Devanagari. */
-  /* Every var() has a fallback: an app that doesn't load the Devanagari files must not lose the whole stack. */
-  --font-display: var(--font-martel, Georgia), var(--font-martel-deva, Georgia), Georgia, serif;
-  --font-sans: var(--font-mukta, system-ui), var(--font-mukta-deva, system-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-deva: var(--font-mukta-deva, system-ui), var(--font-mukta, system-ui), "Noto Sans Devanagari", sans-serif;
+  /* Typography — Outfit (Latin) everywhere, Mukta for Devanagari. Every var() has a fallback so
+     an app that doesn't load a family keeps the rest of the stack. */
+  --font-display: var(--font-outfit, system-ui), var(--font-mukta-deva, system-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-outfit, system-ui), var(--font-mukta-deva, system-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-deva: var(--font-mukta-deva, system-ui), var(--font-outfit, system-ui), "Noto Sans Devanagari", sans-serif;
 
   /* Radii — kept small and consistent: 6px controls, 10–14px cards and photos. */
   --radius-lg: 0.5rem;
@@ -62,8 +67,8 @@
   --radius-5xl: 1.25rem;
 
   /* Elevation — flat by default; borders do the separating. */
-  --shadow-card: 0 1px 0 rgb(31 26 23 / 0.03);
-  --shadow-lift: 0 8px 24px -12px rgb(31 26 23 / 0.22);
+  --shadow-card: 0 1px 2px rgb(16 16 24 / 0.06);
+  --shadow-lift: 0 8px 24px -10px rgb(16 16 24 / 0.25);
   --shadow-glow: 0 0 0 0 transparent;
   --shadow-inset: 0 0 0 0 transparent;
 
@@ -93,16 +98,17 @@
 
 /* Semantic surface tokens — switch between light and dark themes */
 :root {
-  --nd-bg: #faf6ef;
+  /* App palette: white screens, cool greys, near-black text (food-delivery app conventions). */
+  --nd-bg: #ffffff;
   --nd-bg-elevated: #ffffff;
   --nd-surface: #ffffff;
-  --nd-surface-2: #f3ede3;
-  --nd-surface-3: #e9e1d4;
-  --nd-ink: #1f1a17;
-  --nd-ink-soft: #4a423d;
-  --nd-muted: #7b726b;
-  --nd-line: #e2d9cb;
-  --nd-line-soft: #ece5da;
+  --nd-surface-2: #f2f2f5;
+  --nd-surface-3: #e7e7ec;
+  --nd-ink: #1b1b1f;
+  --nd-ink-soft: #3e3e47;
+  --nd-muted: #6c6c78;
+  --nd-line: #e3e3e9;
+  --nd-line-soft: #efeff3;
   --nd-brand: #7a1b2d;
   --nd-accent: #c8641a;
   --nd-ring: #c8641a;
@@ -110,16 +116,16 @@
 }
 
 .dark {
-  --nd-bg: #151211;
-  --nd-bg-elevated: #1c1817;
-  --nd-surface: #1e1a19;
-  --nd-surface-2: #282321;
-  --nd-surface-3: #332d2a;
-  --nd-ink: #f4eee7;
-  --nd-ink-soft: #d8cfc6;
-  --nd-muted: #a39990;
-  --nd-line: #3a3330;
-  --nd-line-soft: #2c2725;
+  --nd-bg: #121214;
+  --nd-bg-elevated: #18181b;
+  --nd-surface: #1a1a1d;
+  --nd-surface-2: #242428;
+  --nd-surface-3: #2f2f34;
+  --nd-ink: #f2f2f4;
+  --nd-ink-soft: #d0d0d6;
+  --nd-muted: #9a9aa6;
+  --nd-line: #33333a;
+  --nd-line-soft: #26262b;
   --nd-brand: #f2c9cf;
   --nd-accent: #f0a050;
   --nd-ring: #f0a050;

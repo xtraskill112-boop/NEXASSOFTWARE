@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronDown, Heart, MapPin, Moon, Search, ShoppingBag, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
-import { Avatar, Logo, buttonStyles, cn } from "@naamdev/ui";
+import { Avatar, Emblem, Logo, buttonStyles, cn } from "@naamdev/ui";
 import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
@@ -53,8 +53,8 @@ export function LanguageToggle({ className }: { className?: string }) {
 export function SearchTrigger({ className }: { className?: string }) {
   const { t } = useI18n();
   return (
-    <Link href="/search" className={cn("flex h-11 min-w-0 items-center gap-2.5 rounded-lg border border-line bg-surface-2/60 px-3.5 text-muted transition-colors hover:border-ink-soft/40 hover:bg-surface", className)} aria-label={t("common.search")}>
-      <Search className="h-[18px] w-[18px] shrink-0 text-ink-soft" />
+    <Link href="/search" className={cn("flex h-12 min-w-0 items-center gap-3 rounded-xl border border-line bg-surface px-4 text-muted shadow-[0_2px_8px_rgb(16_16_24/0.06)] transition-colors hover:border-ink-soft/40", className)} aria-label={t("common.search")}>
+      <Search className="h-5 w-5 shrink-0 text-maroon-700 dark:text-maroon-200" />
       <span className="truncate text-[15px]">{t("common.searchPlaceholder")}</span>
     </Link>
   );
@@ -66,10 +66,15 @@ function LocationButton({ onClick, compact }: { onClick: () => void; compact?: b
   const place = location ? `${location.area ?? location.city ?? ""} ${location.pincode}`.trim() : t("common.selectLocation");
   if (compact)
     return (
-      <button type="button" onClick={onClick} aria-label={`${t("common.deliverTo")}: ${place}`} className="flex h-11 max-w-[38%] shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-left">
-        <MapPin className="h-4 w-4 shrink-0 text-maroon-700 dark:text-maroon-200" />
-        <span className="truncate text-[13px] font-semibold text-ink">{location ? location.pincode : t("common.location")}</span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" />
+      <button type="button" onClick={onClick} aria-label={`${t("common.deliverTo")}: ${place}`} className="flex min-w-0 items-center gap-2 text-left">
+        <MapPin className="h-5 w-5 shrink-0 text-maroon-700 dark:text-maroon-200" fill="currentColor" fillOpacity={0.12} />
+        <span className="min-w-0 leading-tight">
+          <span className="flex items-center gap-0.5 text-[16px] font-extrabold text-ink">
+            <span className="truncate">{location ? location.area ?? location.city ?? location.pincode : t("common.selectLocation")}</span>
+            <ChevronDown className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+          </span>
+          <span className="block truncate text-[12px] text-muted">{location ? `${t("common.deliverTo")} ${location.pincode}` : t("common.deliverTo")}</span>
+        </span>
       </button>
     );
   return (
@@ -115,12 +120,13 @@ export function Header() {
           {announcement.link ? <Link href={announcement.link} className="underline underline-offset-2">{announcement.text}</Link> : announcement.text}
         </div>
       )}
-      <header ref={headerRef} className="sticky top-0 z-50 border-b border-line bg-bg-elevated no-print">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 sm:px-6">
+      <header ref={headerRef} className="sticky top-0 z-50 bg-bg-elevated shadow-[0_1px_0_var(--nd-line)] no-print">
+        <div className="mx-auto flex h-[60px] max-w-7xl items-center gap-2.5 px-4 sm:h-16 sm:px-6">
           <Link href="/" aria-label="NAAMDEV SWEETS home" className="shrink-0">
-            <Logo size="sm" className="sm:hidden" />
+            <Emblem size={32} className="sm:hidden" />
             <Logo size="md" className="hidden sm:inline-flex" />
           </Link>
+          <div className="min-w-0 flex-1 sm:hidden"><LocationButton compact onClick={() => setLocOpen(true)} /></div>
           <LocationButton onClick={() => setLocOpen(true)} />
           {!hideSearch && <SearchTrigger className="mx-3 hidden max-w-xl flex-1 lg:flex" />}
           <div className="ml-auto flex items-center gap-0.5">
@@ -146,9 +152,8 @@ export function Header() {
           </div>
         </div>
         {!hideSearch && (
-          <div className="flex gap-2 px-4 pb-3 sm:px-6 lg:hidden">
-            <div className="contents md:hidden"><LocationButton compact onClick={() => setLocOpen(true)} /></div>
-            <SearchTrigger className="flex-1" />
+          <div className="px-4 pb-3 sm:px-6 lg:hidden">
+            <SearchTrigger />
           </div>
         )}
       </header>

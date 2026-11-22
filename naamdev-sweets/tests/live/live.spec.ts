@@ -71,7 +71,7 @@ test("storefront shows the catalogue from the API", async ({ page }) => {
   await page.goto(WEB);
   try {
     // The full menu (or, if the owner hides it, the bestseller rail) — either way products show.
-    await expect(page.getByRole("heading", { name: /^(Our menu|Bestselling sweets)$/ }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^(Our menu|Bestselling sweets)/ }).first()).toBeVisible();
   } catch (e) {
     throw new Error(`${(e as Error).message}\n\nThe page shows: ${await bodyText(page)}\nProblems: ${problems.join(" | ") || "none"}`);
   }

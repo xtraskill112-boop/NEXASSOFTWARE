@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Fresh Indian sweets, gift hampers and namkeen delivered to your door.",
     start_url: "/",
     display: "standalone",
-    background_color: "#FAF6EF",
+    background_color: "#FFFFFF",
     theme_color: "#8F1D34",
     orientation: "portrait",
     categories: ["food", "shopping"],

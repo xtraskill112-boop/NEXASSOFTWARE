@@ -5,6 +5,7 @@ import { BrandLoader, ErrorState } from "@naamdev/ui";
 import { CategoryGrid } from "@/components/home/category-grid";
 import { FullMenu } from "@/components/home/full-menu";
 import { HeroCarousel } from "@/components/home/hero-carousel";
+import { BannerRow, DealsRow, ShopInfo } from "@/components/home/shop-info";
 import { CollectionShowcase, CouponsRail, OfferStrip, PersonalRail, PromoGrid, RecentlyViewed, TrustStrip } from "@/components/home/sections";
 import { ProductRail } from "@/components/product/product-rail";
 import { useI18n } from "@/lib/i18n";
@@ -36,20 +37,26 @@ export function HomeFeedView() {
 
   return (
     <div className="pb-4">
-      <HeroCarousel banners={feed.banners.hero} />
-      <TrustStrip />
-      {/* With the full menu on the page, products come first and the offer cards follow them. */}
-      {!hasMenu && <OfferStrip banners={feed.banners.strip} />}
+      {hasMenu ? (
+        <>
+          {/* Shop header, offers and banners, then the whole menu — like a food-delivery shop page. */}
+          <ShopInfo freeDeliveryPaise={feed.freeDeliveryThresholdPaise} />
+          <DealsRow coupons={feed.sections.find((s) => s.type === "OFFERS")?.coupons ?? []} strip={feed.banners.strip} />
+          <BannerRow banners={feed.banners.hero} />
+        </>
+      ) : (
+        <>
+          <HeroCarousel banners={feed.banners.hero} />
+          <TrustStrip />
+          <OfferStrip banners={feed.banners.strip} />
+        </>
+      )}
       {feed.sections.map((s, idx) => {
+        if (hasMenu && s.type === "OFFERS") return null;
         const node = (() => {
           switch (s.type) {
             case "FULL_MENU":
-              return (
-                <>
-                  <FullMenu section={s} />
-                  <OfferStrip banners={feed.banners.strip} />
-                </>
-              );
+              return <FullMenu section={s} />;
             case "CATEGORY_GRID":
               return <CategoryGrid title={title(s)} categories={s.categories ?? []} />;
             case "OFFERS":
