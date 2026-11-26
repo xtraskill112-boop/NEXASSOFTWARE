@@ -1,0 +1,9 @@
+{
+  "name": "SF360 Seller Dashboard",
+  "short_name": "SF360",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#4338ca",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

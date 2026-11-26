@@ -1,0 +1,12 @@
+{
+  "name": "sf360-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Local end-to-end test: Firebase emulators + a fake Shadowfax server + Playwright.",
+  "scripts": {
+    "e2e": "bash ./run.sh"
+  },
+  "devDependencies": {
+    "firebase-tools": "15.35.0"
+  }
+}

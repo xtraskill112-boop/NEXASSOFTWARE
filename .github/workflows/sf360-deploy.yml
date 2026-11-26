@@ -1,0 +1,151 @@
+name: SF360 dashboard deploy
+
+# Tests and deploys sf360-dashboard (Shadowfax seller dashboard) to Firebase:
+#   Firestore rules + indexes · Cloud Functions (codebase "sf360", asia-south1) · Hosting
+# Runs on every push to main that touches sf360-dashboard/, or by hand from the Actions tab.
+# One-time setup: sf360-dashboard/README.md → "GitHub se auto-deploy".
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sf360-dashboard/**"
+      - ".github/workflows/sf360-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sf360-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.SF360_FIREBASE_PROJECT_ID }}
+  SHADOWFAX_ENV: ${{ vars.SF360_SHADOWFAX_ENV || 'staging' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sf360-dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            sf360-dashboard/functions/package-lock.json
+            sf360-dashboard/web/package-lock.json
+      - run: npm ci --prefix functions
+      - run: npm ci --prefix web
+      - name: Functions — type check and tests
+        run: npm --prefix functions run typecheck && npm --prefix functions test
+      - name: Web — tests and build
+        run: npm --prefix web test && npm --prefix web run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: sf360-dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check setup
+        env:
+          SA: ${{ secrets.SF360_FIREBASE_SERVICE_ACCOUNT }}
+          EMAILS: ${{ secrets.SF360_ALLOWED_EMAILS }}
+        run: |
+          missing=0
+          [ -n "$PROJECT_ID" ] || { echo "::error::Add the repository variable SF360_FIREBASE_PROJECT_ID (README: GitHub se auto-deploy)."; missing=1; }
+          [ -n "$SA" ] || { echo "::error::Add the repository secret SF360_FIREBASE_SERVICE_ACCOUNT."; missing=1; }
+          [ -n "$EMAILS" ] || { echo "::error::Add the repository secret SF360_ALLOWED_EMAILS (the e-mail that may log in)."; missing=1; }
+          case "$SHADOWFAX_ENV" in staging|production) ;; *) echo "::error::SF360_SHADOWFAX_ENV must be staging or production."; missing=1;; esac
+          exit $missing
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.SF360_FIREBASE_SERVICE_ACCOUNT }}
+          project_id: ${{ env.PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            sf360-dashboard/functions/package-lock.json
+            sf360-dashboard/web/package-lock.json
+      - run: npm ci --prefix functions
+      - run: npm ci --prefix web
+
+      - name: Enable Google Cloud APIs
+        run: |
+          gcloud services enable cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
+            run.googleapis.com eventarc.googleapis.com pubsub.googleapis.com cloudscheduler.googleapis.com \
+            secretmanager.googleapis.com firestore.googleapis.com firebasehosting.googleapis.com \
+            identitytoolkit.googleapis.com firebaserules.googleapis.com --project "$PROJECT_ID"
+
+      - name: Email/password sign-in
+        run: |
+          TOKEN="$(gcloud auth print-access-token)"
+          if ! curl -sf -X PATCH "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT_ID/config?updateMask=signIn.email.enabled,signIn.email.passwordRequired" \
+              -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT_ID" -H "Content-Type: application/json" \
+              -d '{"signIn":{"email":{"enabled":true,"passwordRequired":true}}}' >/dev/null; then
+            echo "::warning::Could not enable Email/Password sign-in automatically. Enable it in Firebase console → Authentication → Sign-in method."
+          fi
+
+      - name: Secrets (Shadowfax token and webhook key)
+        env:
+          SF_TOKEN: ${{ secrets.SF360_SHADOWFAX_API_TOKEN }}
+        run: |
+          # Optional: keep the token in GitHub and let this step copy it into Secret Manager.
+          if [ -n "$SF_TOKEN" ]; then
+            echo "::add-mask::$SF_TOKEN"
+            if ! gcloud secrets describe SHADOWFAX_API_TOKEN --project "$PROJECT_ID" >/dev/null 2>&1; then
+              printf %s "$SF_TOKEN" | gcloud secrets create SHADOWFAX_API_TOKEN --data-file=- --replication-policy=automatic --project "$PROJECT_ID" >/dev/null
+            elif [ "$(gcloud secrets versions access latest --secret=SHADOWFAX_API_TOKEN --project "$PROJECT_ID")" != "$SF_TOKEN" ]; then
+              printf %s "$SF_TOKEN" | gcloud secrets versions add SHADOWFAX_API_TOKEN --data-file=- --project "$PROJECT_ID" >/dev/null
+            fi
+          fi
+          if ! gcloud secrets describe SHADOWFAX_API_TOKEN --project "$PROJECT_ID" >/dev/null 2>&1; then
+            echo "::error::The SHADOWFAX_API_TOKEN secret does not exist yet. Run: firebase functions:secrets:set SHADOWFAX_API_TOKEN --project $PROJECT_ID (README: Shadowfax key badalna)."
+            exit 1
+          fi
+          # The webhook key is generated once and never printed here; the app shows it on Settings.
+          if ! gcloud secrets describe SF_WEBHOOK_KEY --project "$PROJECT_ID" >/dev/null 2>&1; then
+            openssl rand -hex 24 | tr -d '\n' | gcloud secrets create SF_WEBHOOK_KEY --data-file=- --replication-policy=automatic --project "$PROJECT_ID" >/dev/null
+          fi
+
+      - name: Prepare rules and function settings
+        env:
+          SF360_ALLOWED_EMAILS: ${{ secrets.SF360_ALLOWED_EMAILS }}
+          SF360_SHADOWFAX_ENV: ${{ env.SHADOWFAX_ENV }}
+        run: node scripts/prepare-deploy.mjs
+
+      - name: Build web app
+        run: npm --prefix web run build
+
+      - name: Deploy (Firestore, Functions, Hosting)
+        run: npx --yes firebase-tools@15.35.0 deploy --project "$PROJECT_ID" --only firestore,functions:sf360,hosting --non-interactive --force
+
+      - name: Auto-delete old webhook logs and cache entries (Firestore TTL)
+        run: |
+          for group in webhookEvents serviceabilityCache; do
+            gcloud firestore fields ttls update expireAt --collection-group="$group" --enable-ttl --project "$PROJECT_ID" --async --quiet >/dev/null 2>&1 || \
+              echo "::warning::Could not set the TTL policy on $group.expireAt (needs the Datastore Owner role). Old entries will simply stay."
+          done
+
+      - name: Summary
+        run: |
+          {
+            echo "### SF360 dashboard deployed"
+            echo "- Site: https://$PROJECT_ID.web.app"
+            echo "- Shadowfax environment: **$SHADOWFAX_ENV**"
+            echo "- Webhook URL for the SFX 360 panel: https://$PROJECT_ID.web.app/api/shadowfax-webhook (header: Settings page in the app)"
+          } >> "$GITHUB_STEP_SUMMARY"

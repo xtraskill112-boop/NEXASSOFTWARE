@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// Generated into firestore.rules by scripts/prepare-deploy.mjs — edit this template, not the output.
+// The placeholder inside isOwner() is replaced with the allow-listed e-mail addresses (SF360_ALLOWED_EMAILS).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Only the allow-listed, e-mail-verified account. Everyone else is denied everything.
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [__ALLOWED_EMAILS__];
+    }
+
+    function str(v, max) { return v is string && v.size() <= max; }
+    function optStr(data, key, max) { return !(key in data) || data[key] == null || str(data[key], max); }
+
+    // Shipments, counters, bulk jobs and webhook logs are written only by Cloud Functions (Admin SDK).
+    match /shipments/{awb} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+    match /stats/{env}/shards/{shard} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+    match /bulkJobs/{jobId} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+    match /webhookEvents/{id} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
+    // Dashboard preferences.
+    match /settings/app {
+      allow read: if isOwner();
+      allow write: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          'supplyChain', 'defaultOrderType', 'defaultReturnType', 'defaultPickupId', 'defaultReturnId',
+          'pickupSlots', 'sellerGstin', 'updatedAt'
+        ])
+        && (!('supplyChain' in request.resource.data) || request.resource.data.supplyChain in ['regular', 'surface'])
+        && (!('defaultOrderType' in request.resource.data) || request.resource.data.defaultOrderType in ['marketplace', 'warehouse'])
+        && (!('defaultReturnType' in request.resource.data) || request.resource.data.defaultReturnType in ['seller', 'origin'])
+        && optStr(request.resource.data, 'defaultPickupId', 40)
+        && optStr(request.resource.data, 'defaultReturnId', 40)
+        && optStr(request.resource.data, 'sellerGstin', 50)
+        && (!('pickupSlots' in request.resource.data) || (request.resource.data.pickupSlots is list && request.resource.data.pickupSlots.size() <= 10));
+    }
+
+    // Saved pickup / warehouse / return addresses.
+    match /addresses/{id} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          'label', 'name', 'contact', 'alternateContact', 'address1', 'address2', 'city', 'state',
+          'pincode', 'email', 'uniqueCode', 'updatedAt'
+        ])
+        && str(request.resource.data.label, 60)
+        && str(request.resource.data.address1, 500)
+        && str(request.resource.data.city, 50)
+        && request.resource.data.pincode is int
+        && request.resource.data.pincode >= 100000 && request.resource.data.pincode <= 999999
+        && optStr(request.resource.data, 'name', 100)
+        && optStr(request.resource.data, 'contact', 14)
+        && optStr(request.resource.data, 'alternateContact', 14)
+        && optStr(request.resource.data, 'address2', 250)
+        && optStr(request.resource.data, 'state', 40)
+        && optStr(request.resource.data, 'email', 100)
+        && optStr(request.resource.data, 'uniqueCode', 255);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
