@@ -50,8 +50,11 @@ test('the owner scanner image is served as the QR', async () => {
 
 test('admin routes need a login', async () => {
   assert.equal((await json('GET', '/api/admin/payments')).status, 401);
-  assert.equal((await json('POST', '/api/admin/login', { password: 'nope' })).status, 401);
-  const res = await json('POST', '/api/admin/login', { password: 'test-password' });
+  assert.equal((await json('POST', '/api/admin/login', { username: 'admin', password: 'nope' })).status, 401);
+  assert.equal((await json('POST', '/api/admin/login', { username: 'someone', password: 'test-password' })).status, 401);
+  assert.equal((await json('POST', '/api/admin/login', { password: 'test-password' })).status, 401);
+  // The ID is not case-sensitive (phones often capitalise the first letter).
+  const res = await json('POST', '/api/admin/login', { username: 'Admin ', password: 'test-password' });
   assert.equal(res.status, 200);
   cookie = res.headers.get('set-cookie').split(';')[0];
   assert.equal((await json('GET', '/api/admin/payments')).status, 200);

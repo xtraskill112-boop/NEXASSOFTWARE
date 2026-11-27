@@ -88,9 +88,11 @@ function removeUpload(stored) {
 saveDb();
 
 // ---------------------------------------------------------------------------
-// Admin password and session cookie
+// Admin login (ID + password) and session cookie
 // ---------------------------------------------------------------------------
 
+// The password comes only from the environment, never from this (public) code.
+const adminUsername = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
 let adminPassword = process.env.ADMIN_PASSWORD;
 if (!adminPassword) {
   if (!db.generatedAdminPassword) {
@@ -100,8 +102,8 @@ if (!adminPassword) {
   adminPassword = db.generatedAdminPassword;
 }
 
-// Changing ADMIN_PASSWORD signs every existing session out.
-const sessionKey = crypto.createHmac('sha256', db.secret).update(adminPassword).digest();
+// Changing the admin ID or password signs every existing session out.
+const sessionKey = crypto.createHmac('sha256', db.secret).update(`${adminUsername}\n${adminPassword}`).digest();
 
 function sign(value) {
   return crypto.createHmac('sha256', sessionKey).update(value).digest('base64url');
@@ -369,8 +371,11 @@ const loginLimit = rateLimit({
 });
 
 app.post('/api/admin/login', loginLimit, (req, res) => {
-  if (!safeEqual((req.body || {}).password ?? '', adminPassword)) {
-    return res.status(401).json({ error: 'Wrong password.' });
+  const body = req.body || {};
+  const idOk = safeEqual(String(body.username ?? '').trim().toLowerCase(), adminUsername);
+  const passwordOk = safeEqual(body.password ?? '', adminPassword);
+  if (!idOk || !passwordOk) {
+    return res.status(401).json({ error: 'Wrong ID or password.' });
   }
   res.cookie('admin_session', newSession(), {
     httpOnly: true,
@@ -538,7 +543,7 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Payment page : http://localhost:${PORT}/`);
-    console.log(`Admin panel  : http://localhost:${PORT}/admin`);
+    console.log(`Admin panel  : http://localhost:${PORT}/admin   (ID: ${adminUsername})`);
     if (!process.env.ADMIN_PASSWORD) {
       console.log(`Admin password: ${adminPassword}   (set the ADMIN_PASSWORD environment variable to choose your own)`);
     }

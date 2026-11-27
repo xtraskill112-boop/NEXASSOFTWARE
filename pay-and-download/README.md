@@ -44,9 +44,11 @@ ADMIN_PASSWORD='अपना-पासवर्ड' npm start
 ```
 
 - पेमेंट पेज: http://localhost:3000/
-- एडमिन: http://localhost:3000/admin
+- एडमिन: http://localhost:3000/admin — **ID: `admin`**, पासवर्ड: जो `ADMIN_PASSWORD` में दिया
 
-`ADMIN_PASSWORD` न दें तो सर्वर खुद एक पासवर्ड बनाकर टर्मिनल में दिखा देता है।
+पासवर्ड जानबूझकर कोड में नहीं लिखा गया है (यह GitHub repo public है, कोड में लिखा पासवर्ड कोई भी पढ़ सकता है)।
+उसे हमेशा सर्वर की environment setting `ADMIN_PASSWORD` में डालें। न डालें तो सर्वर खुद एक पासवर्ड बनाकर
+टर्मिनल में दिखा देता है।
 
 ## सर्वर पर लगाना (Live)
 
@@ -64,6 +66,7 @@ docker run -d -p 3000:3000 -e ADMIN_PASSWORD='अपना-पासवर्ड
 
 | Environment variable | मतलब | Default |
 |---|---|---|
+| `ADMIN_USERNAME` | एडमिन पैनल की ID | `admin` |
 | `ADMIN_PASSWORD` | एडमिन पैनल का पासवर्ड | अपने-आप बनता है और टर्मिनल में दिखता है |
 | `PORT` | पोर्ट | `3000` |
 | `DATA_DIR` | डेटा और फ़ाइलों का फ़ोल्डर | `./data` |

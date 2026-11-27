@@ -62,7 +62,7 @@
     clearInterval(timer);
     $('app-view').hidden = true;
     $('login-view').hidden = false;
-    $('password').focus();
+    $($('username').value ? 'password' : 'username').focus();
   }
 
   async function showApp() {
@@ -81,7 +81,10 @@
     const err = $('login-error');
     err.hidden = true;
     try {
-      await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: $('password').value }) });
+      await api('/api/admin/login', {
+        method: 'POST',
+        body: JSON.stringify({ username: $('username').value, password: $('password').value }),
+      });
       $('password').value = '';
       await showApp();
     } catch (e) {
