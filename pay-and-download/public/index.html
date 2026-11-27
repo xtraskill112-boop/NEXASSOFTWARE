@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1f4fd8" />
+    <title>Pay &amp; Download</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section id="loading" class="card center-text muted">Loading…</section>
+
+      <section id="unavailable" class="card stack center-text" hidden>
+        <h1 class="title">Coming soon</h1>
+        <p class="muted" id="unavailable-text">This payment page is not ready yet. Please check back later.</p>
+      </section>
+
+      <section id="flow" class="card" hidden>
+        <header class="product">
+          <h1 class="title" id="product-name"></h1>
+          <p class="muted small" id="product-desc"></p>
+          <p class="price">₹<span id="price"></span><small>One-time payment</small></p>
+        </header>
+
+        <ol class="steps" aria-label="Progress">
+          <li data-step="1">Pay</li>
+          <li data-step="2">UTR</li>
+          <li data-step="3">Download</li>
+        </ol>
+
+        <!-- Step 1: scan & pay -->
+        <div class="step stack" id="step-1">
+          <div class="qr-box"><img id="qr" alt="UPI QR code to pay" width="256" height="256" /></div>
+          <p class="center-text small"><strong>Scan this QR with any UPI app</strong><br /><span class="muted">किसी भी UPI ऐप से QR स्कैन करके पेमेंट करें</span></p>
+          <div class="apps" aria-hidden="true"><span>Google Pay</span><span>PhonePe</span><span>Paytm</span><span>BHIM</span><span>Any UPI app</span></div>
+          <div class="upi-row" id="upi-row">
+            <div>
+              <span class="label">UPI ID · <span id="payee"></span></span>
+              <code id="upi-id"></code>
+            </div>
+            <button class="btn ghost sm" type="button" id="copy-upi">Copy</button>
+          </div>
+          <p class="notice">Pay exactly <strong>₹<span class="amount"></span></strong>. After paying, note the <strong>12-digit UTR / UPI Ref. No.</strong> shown in your app.</p>
+          <a class="btn primary block" id="pay-app" hidden><span>Pay ₹<span class="amount"></span> with UPI app</span></a>
+          <button class="btn primary block" type="button" id="paid">I have paid — Next</button>
+        </div>
+
+        <!-- Step 2: UTR -->
+        <form class="step stack" id="step-2" novalidate hidden>
+          <label class="field">
+            <span>UTR / UPI Ref. No. <span class="counter" id="utr-count">0/12</span></span>
+            <input
+              class="utr-input"
+              type="text"
+              id="utr"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="16"
+              placeholder="12-digit number"
+              aria-describedby="utr-hint"
+              required
+            />
+          </label>
+          <details class="where" id="utr-hint">
+            <summary>Where do I find the UTR? · UTR कहाँ मिलेगा?</summary>
+            <ul>
+              <li><strong>Google Pay:</strong> payment → UPI transaction ID</li>
+              <li><strong>PhonePe:</strong> History → payment → UTR</li>
+              <li><strong>Paytm:</strong> Balance &amp; History → payment → UPI Ref. No.</li>
+              <li><strong>BHIM / bank app:</strong> Transaction details → UPI Ref. No. / RRN</li>
+            </ul>
+          </details>
+          <label class="field">
+            <span>Your name <em>(optional)</em></span>
+            <input type="text" id="name" maxlength="80" autocomplete="name" />
+          </label>
+          <label class="field">
+            <span>Mobile number <em>(optional)</em></span>
+            <input type="tel" id="phone" maxlength="15" autocomplete="tel" inputmode="tel" />
+          </label>
+          <p class="error" id="utr-error" role="alert" hidden></p>
+          <button class="btn primary block" type="submit" id="submit">Submit</button>
+          <button class="btn link block" type="button" id="back">← Back to QR code</button>
+        </form>
+
+        <!-- Step 3: success & download -->
+        <div class="step stack center-text" id="step-3" hidden>
+          <div class="success-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="title">Payment Successful</h2>
+            <p class="muted small">पेमेंट सफल रहा — अपनी फ़ाइल डाउनलोड करें</p>
+          </div>
+          <dl class="receipt">
+            <div><dt>Amount</dt><dd>₹<span id="r-amount"></span></dd></div>
+            <div><dt>UTR</dt><dd id="r-utr"></dd></div>
+            <div><dt>Date</dt><dd id="r-date"></dd></div>
+          </dl>
+          <p class="error" id="blocked" hidden>The seller has stopped this download. Please contact them with your UTR number.</p>
+          <a class="btn success block download" id="download" href="#">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" />
+            </svg>
+            Download Your File
+          </a>
+          <p class="small muted" id="file-name"></p>
+          <p class="small muted">You can open this page again on this phone to download again.</p>
+          <button class="btn link block small" type="button" id="restart">Make another payment</button>
+        </div>
+      </section>
+
+      <p class="foot small muted">Secure UPI payment · Instant download</p>
+    </main>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Payments Admin</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Login -->
+    <div class="login-wrap" id="login-view" hidden>
+      <form class="card stack" id="login-form">
+        <div>
+          <h1 class="title">Admin login</h1>
+          <p class="muted small">Payments, settings and your file.</p>
+        </div>
+        <label class="field">
+          <span>Password</span>
+          <input type="password" id="password" autocomplete="current-password" required />
+        </label>
+        <p class="error" id="login-error" role="alert" hidden></p>
+        <button class="btn primary block" type="submit">Log in</button>
+      </form>
+    </div>
+
+    <!-- Panel -->
+    <div id="app-view" hidden>
+      <header class="topbar">
+        <div class="topbar-inner">
+          <strong>Payments Admin</strong>
+          <nav>
+            <a class="btn ghost sm" href="/" target="_blank" rel="noopener">Open payment page ↗</a>
+            <button class="btn ghost sm" type="button" id="logout">Log out</button>
+          </nav>
+        </div>
+      </header>
+
+      <main class="admin-shell">
+        <div class="share">
+          <span class="muted">Payment page link to share:</span>
+          <code id="share-link"></code>
+          <button class="btn ghost sm" type="button" id="copy-link">Copy link</button>
+        </div>
+
+        <div class="banner warn" id="setup-banner" hidden>
+          <strong>Buyers can't pay yet. Finish setup in the Settings tab:</strong>
+          <ul id="setup-list"></ul>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" id="tab-btn-payments" aria-controls="tab-payments" aria-selected="true">
+            Payments<span class="badge" id="new-badge" hidden></span>
+          </button>
+          <button type="button" role="tab" id="tab-btn-settings" aria-controls="tab-settings" aria-selected="false">Settings</button>
+        </div>
+
+        <!-- Payments tab -->
+        <section id="tab-payments" role="tabpanel" aria-labelledby="tab-btn-payments">
+          <div class="stats">
+            <div class="stat"><div class="label">Today</div><div class="value" id="s-today-amt">₹0</div><div class="sub" id="s-today-count">0 payments</div></div>
+            <div class="stat"><div class="label">All time</div><div class="value" id="s-all-amt">₹0</div><div class="sub" id="s-all-count">0 payments</div></div>
+            <div class="stat"><div class="label">To check in your UPI app</div><div class="value" id="s-new">0</div><div class="sub">Status “New”</div></div>
+            <div class="stat"><div class="label">Downloads</div><div class="value" id="s-downloads">0</div><div class="sub">All buyers</div></div>
+          </div>
+
+          <div class="toolbar">
+            <input type="search" id="search" placeholder="Search UTR, name or mobile" aria-label="Search payments" />
+            <div class="chips" id="filters" role="group" aria-label="Filter by status">
+              <button type="button" class="chip" data-filter="all" aria-pressed="true">All</button>
+              <button type="button" class="chip" data-filter="new" aria-pressed="false">New</button>
+              <button type="button" class="chip" data-filter="received" aria-pressed="false">Received</button>
+              <button type="button" class="chip" data-filter="blocked" aria-pressed="false">Blocked</button>
+            </div>
+            <a class="btn ghost sm" href="/api/admin/payments.csv" download>Export CSV</a>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date &amp; time</th>
+                  <th>UTR</th>
+                  <th>Buyer</th>
+                  <th class="num">Amount</th>
+                  <th class="num">Downloads</th>
+                  <th>Status</th>
+                  <th><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+            <p class="empty" id="empty" hidden>No payments yet. They appear here as soon as a buyer submits a UTR.</p>
+          </div>
+          <p class="hint">Match each UTR with your UPI app's history. <strong>Received</strong> marks it checked; <strong>Block</strong> stops that buyer's download link. The list refreshes by itself.</p>
+        </section>
+
+        <!-- Settings tab -->
+        <section id="tab-settings" role="tabpanel" aria-labelledby="tab-btn-settings" hidden>
+          <div class="settings-layout">
+            <form class="panel stack" id="settings-form">
+              <h2>Product &amp; payment</h2>
+              <label class="field">
+                <span>Product name</span>
+                <input type="text" id="f-productName" maxlength="100" required />
+              </label>
+              <label class="field">
+                <span>Description <em>(shown under the name)</em></span>
+                <textarea id="f-description" maxlength="400"></textarea>
+              </label>
+              <div class="grid-2">
+                <label class="field">
+                  <span>Price (₹)</span>
+                  <input type="number" id="f-amount" min="1" max="100000" step="0.01" required />
+                </label>
+                <label class="field">
+                  <span>Payment note <em>(in UPI app)</em></span>
+                  <input type="text" id="f-note" maxlength="50" />
+                </label>
+                <label class="field">
+                  <span>UPI ID</span>
+                  <input type="text" id="f-upiId" maxlength="320" placeholder="9876543210@ybl" autocapitalize="off" spellcheck="false" />
+                </label>
+                <label class="field">
+                  <span>Payee name</span>
+                  <input type="text" id="f-payeeName" maxlength="60" />
+                </label>
+              </div>
+              <p class="error" id="settings-error" role="alert" hidden></p>
+              <div class="row"><button class="btn primary" type="submit">Save settings</button></div>
+            </form>
+
+            <div>
+              <div class="panel stack">
+                <h2>File buyers download</h2>
+                <div class="file-box" id="file-box">
+                  <div class="file-icon" id="file-ext">FILE</div>
+                  <div>
+                    <div><strong id="file-name">No file yet</strong></div>
+                    <div class="small muted" id="file-meta">Upload the file buyers get after paying.</div>
+                  </div>
+                </div>
+                <div class="row">
+                  <label class="btn primary sm" for="file-input">Upload file</label>
+                  <input type="file" id="file-input" hidden />
+                  <a class="btn ghost sm" id="file-check" href="/api/admin/file" hidden>Download to check</a>
+                </div>
+                <div class="progress" id="file-progress" hidden><span></span></div>
+                <p class="hint" id="file-hint"></p>
+              </div>
+
+              <div class="panel stack">
+                <h2>Scanner (QR code)</h2>
+                <div class="row" style="align-items: flex-start; gap: 16px">
+                  <div class="qr-preview"><img id="qr-preview" alt="Current QR code" /></div>
+                  <div class="stack" style="flex: 1 1 160px">
+                    <p class="small" id="qr-mode"></p>
+                    <div class="row">
+                      <label class="btn ghost sm" for="qr-input">Upload scanner image</label>
+                      <input type="file" id="qr-input" accept="image/png,image/jpeg,image/webp" hidden />
+                      <button class="btn ghost sm" type="button" id="qr-remove" hidden>Use auto QR</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" hidden></div>
+    <script src="/admin.js"></script>
+  </body>
+</html>

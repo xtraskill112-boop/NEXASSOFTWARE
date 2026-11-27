@@ -1,0 +1,19 @@
+{
+  "name": "pay-and-download",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UPI QR payment page: the buyer pays, enters the UTR and downloads the file. Admin panel lists every payment.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "5.3.0",
+    "multer": "2.5.0",
+    "qrcode": "1.5.4"
+  }
+}
