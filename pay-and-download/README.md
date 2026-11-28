@@ -50,11 +50,31 @@ ADMIN_PASSWORD='अपना-पासवर्ड' npm start
 उसे हमेशा सर्वर की environment setting `ADMIN_PASSWORD` में डालें। न डालें तो सर्वर खुद एक पासवर्ड बनाकर
 टर्मिनल में दिखा देता है।
 
-## सर्वर पर लगाना (Live)
+## Live (अभी कैसे चल रहा है)
 
-सारा डेटा (पेमेंट लिस्ट, सेटिंग, अपलोड की गई फ़ाइल) `data/` फ़ोल्डर में रहता है, इसलिए ऐसा होस्ट चुनें जिसमें
-**स्थायी डिस्क / volume** हो — जैसे कोई VPS, Render (Disk के साथ) या Railway (Volume के साथ)।
-Firebase Hosting / Cloud Run जैसी जगह पर डिस्क हर बार मिट जाती है, वहाँ डेटा नहीं बचेगा।
+GitHub Actions का workflow **Pay & Download deploy** (`.github/workflows/pay-and-download-deploy.yml`)
+इस फ़ोल्डर में बदलाव push होते ही ऐप को लाइव करता है — NAAMDEV वाले ही खातों से, free plans पर:
+
+- **Render free web service** पर ऐप चलता है (`pay-and-download`)।
+- **Cloud Firestore** (Firebase प्रोजेक्ट) में पेमेंट, सेटिंग और फ़ाइलें रहती हैं (`payDownload_*` collections,
+  अपना अलग service account `paydl-run`)। Render का free सर्वर restart पर डिस्क मिटा देता है, पर डेटा Firestore
+  में सुरक्षित रहता है।
+- Free सर्वर ~15 मिनट कोई न आए तो सो जाता है; अगली बार खुलने में लगभग 1 मिनट लगता है।
+
+यह repo public है, इसलिए एडमिन पासवर्ड और ग्राहकों वाली फ़ाइल यहाँ कभी नहीं रखी जाती। वे
+`deploy/setup.enc` में **encrypted** आते हैं: workflow एक deploy key बनाता है (उसकी private key सिर्फ़ Firestore में
+रहती है और public key log में छपती है), `scripts/encrypt-setup.js` उस public key से पासवर्ड का hash और फ़ाइल
+encrypt करता है, और अगला deploy उसे लागू करके private key मिटा देता है — उसके बाद वह फ़ाइल कभी खुल नहीं सकती।
+हर deploy के अंत में एक असली खरीदारी (UTR → डाउनलोड → फ़ाइल मिलान) जाँची जाती है और वह test entry मिटा दी जाती है।
+
+Local टेस्ट Firestore के साथ: `firebase emulators:start --only firestore --project demo-paydl` और फिर
+`FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 npm test`।
+
+## अपने सर्वर पर लगाना
+
+बिना Firestore के सारा डेटा `data/` फ़ोल्डर में रहता है, इसलिए ऐसा होस्ट चुनें जिसमें **स्थायी डिस्क / volume** हो
+(कोई VPS, या Disk/Volume वाला होस्ट)। Firestore इस्तेमाल करना हो तो `FIREBASE_PROJECT_ID` और
+`FIREBASE_SERVICE_ACCOUNT_BASE64` (service account key JSON, base64) सेट करें।
 
 Docker से:
 
@@ -70,7 +90,9 @@ docker run -d -p 3000:3000 -e ADMIN_PASSWORD='अपना-पासवर्ड
 | `ADMIN_PASSWORD` | एडमिन पैनल का पासवर्ड | अपने-आप बनता है और टर्मिनल में दिखता है |
 | `PORT` | पोर्ट | `3000` |
 | `DATA_DIR` | डेटा और फ़ाइलों का फ़ोल्डर | `./data` |
-| `MAX_FILE_MB` | अपलोड फ़ाइल की अधिकतम साइज़ | `200` |
+| `MAX_FILE_MB` | अपलोड फ़ाइल की अधिकतम साइज़ | `200` (Firestore के साथ `25`) |
+| `FIREBASE_PROJECT_ID` | सेट हो तो डेटा Cloud Firestore में रहता है | बंद (local disk) |
+| `FIREBASE_SERVICE_ACCOUNT_BASE64` | Firestore के लिए service account key (base64) | Google default credentials |
 | `TRUST_PROXY` | होस्ट के proxy/HTTPS के पीछे चलने पर `1` रखें (सही IP और secure cookie के लिए) | बंद |
 
 HTTPS वाला डोमेन इस्तेमाल करें ताकि एडमिन लॉगिन सुरक्षित रहे।
@@ -88,6 +110,9 @@ npm test
 | फ़ाइल | काम |
 |---|---|
 | `server.js` | सर्वर (Express): पेमेंट, डाउनलोड, एडमिन API |
+| `lib/store.js` | डेटा कहाँ रहे: local disk या Cloud Firestore |
+| `lib/auth.js`, `lib/state.js` | एडमिन लॉगिन (scrypt hash, signed cookie), शुरुआती सेटिंग |
+| `scripts/deploy-setup.js`, `scripts/encrypt-setup.js` | encrypted setup (एडमिन पासवर्ड, फ़ाइल) deploy के समय लागू करना |
 | `public/index.html`, `public/app.js` | ग्राहक का पेमेंट पेज |
 | `public/admin.html`, `public/admin.js` | एडमिन पैनल |
 | `public/styles.css` | डिज़ाइन (लाइट और डार्क मोड, मोबाइल) |

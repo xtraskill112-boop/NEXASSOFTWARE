@@ -1,0 +1,105 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const { after, before, describe, test } = require('node:test');
+const { EMULATOR, PROJECT, tempDir, clearFirestore, start } = require('./helpers');
+
+describe('deploy with an encrypted setup (Firestore emulator)', { skip: !EMULATOR && 'set FIRESTORE_EMULATOR_HOST' }, () => {
+  const { prepare, adminCookie, fileSha } = require('../scripts/deploy-setup');
+  const { buildSetup, encryptSetup } = require('../scripts/encrypt-setup');
+  const { createStore } = require('../lib/store');
+
+  const env = { FIREBASE_PROJECT_ID: PROJECT };
+  const work = tempDir();
+  const setupFile = path.join(work, 'setup.enc');
+  const pdf = Buffer.from('%PDF-1.4 certificate bytes');
+  const pdfPath = path.join(work, 'upload-AA0811.pdf');
+  const logs = [];
+  const log = (line) => logs.push(line);
+  let store;
+  let site;
+
+  before(async () => {
+    await clearFirestore();
+    fs.writeFileSync(pdfPath, pdf);
+    store = createStore({ dataDir: tempDir(), env });
+  });
+
+  after(async () => {
+    if (site) await site.close();
+    await store.close();
+    fs.rmSync(work, { recursive: true, force: true });
+  });
+
+  test('first deploy: prints a public key, nothing private to apply, site not ready', async () => {
+    const first = await prepare(store, { setupFile, log });
+    assert.equal(first.applied, false);
+    assert.ok(logs.some((l) => l.includes('BEGIN PUBLIC KEY')));
+
+    // The site starts with a random admin password nobody knows yet.
+    site = await start({ env, dataDir: tempDir() });
+    assert.ok(site.app.locals.generatedPassword);
+    assert.equal((await (await fetch(`${site.base}/api/config`)).json()).ready, false);
+    await site.close();
+    site = null;
+
+    // Running again keeps the same key until a setup is applied.
+    const second = await prepare(store, { setupFile, log });
+    assert.equal(second.keyId, first.keyId);
+  });
+
+  test('second deploy: the encrypted admin login and file are applied, then the key is deleted', async () => {
+    const { publicKeyPem } = await prepare(store, { setupFile, log });
+    const setup = buildSetup({ username: 'Admin', password: 'secret-pass-1', filePath: pdfPath, fileName: 'AA0811.pdf' });
+    const envelope = encryptSetup(setup, publicKeyPem);
+    assert.ok(!JSON.stringify(envelope).includes('secret-pass-1'));
+    assert.ok(!JSON.stringify(envelope).includes(pdf.toString('base64')));
+    fs.writeFileSync(setupFile, JSON.stringify(envelope));
+
+    const result = await prepare(store, { setupFile, log });
+    assert.equal(result.applied, true);
+    assert.equal((await store.collection('meta').doc('deployKey').get()).exists, false);
+
+    // A later deploy makes a new key and ignores the old file.
+    const later = await prepare(store, { setupFile, log });
+    assert.equal(later.applied, false);
+    assert.notEqual(later.keyId, result.keyId);
+  });
+
+  test('the site uses the new admin login and serves the file', async () => {
+    site = await start({ env, dataDir: tempDir() });
+    assert.equal(site.app.locals.generatedPassword, null);
+    const config = await (await fetch(`${site.base}/api/config`)).json();
+    assert.equal(config.ready, true);
+    assert.equal(config.fileName, 'AA0811.pdf');
+
+    const login = await fetch(`${site.base}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'secret-pass-1' }),
+    });
+    assert.equal(login.status, 200);
+
+    const pay = await (
+      await fetch(`${site.base}/api/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ utr: '000012345678' }),
+      })
+    ).json();
+    const got = Buffer.from(await (await fetch(site.base + pay.downloadUrl)).arrayBuffer());
+    assert.equal(crypto.createHash('sha256').update(got).digest('hex'), await fileSha(store));
+    assert.deepEqual(got, pdf);
+  });
+
+  test('the smoke-test cookie opens the admin API', async () => {
+    const cookie = `admin_session=${await adminCookie(store)}`;
+    const { payments } = await (await fetch(`${site.base}/api/admin/payments`, { headers: { cookie } })).json();
+    const entry = payments.find((p) => p.utr === '000012345678');
+    const del = await fetch(`${site.base}/api/admin/payments/${entry.id}`, { method: 'DELETE', headers: { cookie } });
+    assert.equal(del.status, 200);
+  });
+});
