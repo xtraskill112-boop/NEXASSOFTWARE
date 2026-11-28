@@ -7,6 +7,7 @@ cd "$ROOT"
 
 export SF360_ALLOWED_EMAILS="owner@example.com"
 export SF360_SHADOWFAX_ENV="staging"
+export SF360_FIREBASE_PROJECT_ID="demo-sf360"
 node scripts/prepare-deploy.mjs
 
 # Emulator-only secrets and the fake Shadowfax address (both files are git-ignored).

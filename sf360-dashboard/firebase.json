@@ -1,8 +1,12 @@
 {
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
+  "firestore": [
+    {
+      "database": "sf360",
+      "location": "asia-south1",
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    }
+  ],
   "functions": [
     {
       "source": "functions",
@@ -23,6 +27,7 @@
     }
   ],
   "hosting": {
+    "target": "sf360",
     "public": "web/dist",
     "ignore": [
       "firebase.json",

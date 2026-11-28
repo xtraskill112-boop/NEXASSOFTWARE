@@ -39,6 +39,12 @@ export const BASE_URLS: Record<SfEnv, string> = {
 /** The SFX 360 partner portal, linked from the docs. Used for everything the API cannot do. */
 export const PANEL_URL = "https://shadowfax360.in/";
 
+/**
+ * SF360 keeps its data in its own Firestore database, so it can share a Firebase project
+ * (e.g. with the NAAMDEV shop) without touching that project's data or security rules.
+ */
+export const DATABASE_ID = "sf360";
+
 export const COLLECTIONS = {
   shipments: "shipments",
   stats: "stats",

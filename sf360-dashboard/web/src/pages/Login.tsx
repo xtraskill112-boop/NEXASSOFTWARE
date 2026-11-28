@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
 import { MailCheck, ShieldX } from "lucide-react";
 import { auth } from "../firebase";
@@ -29,6 +29,10 @@ function authMessage(err: unknown): string {
         return "Too many attempts. Wait a few minutes or reset your password.";
       case "auth/network-request-failed":
         return "No internet connection.";
+      case "auth/email-already-in-use":
+        return "This e-mail already has an account. Log in, or use “Forgot password”.";
+      case "auth/weak-password":
+        return "Use a stronger password (at least 8 characters).";
       default:
         return err.message;
     }
@@ -37,6 +41,7 @@ function authMessage(err: unknown): string {
 }
 
 export function LoginPage() {
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,7 +53,14 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (mode === "signup") {
+        if (password.length < 8) throw new Error("Use a password of at least 8 characters.");
+        // Anyone can create an account, but only the allow-listed, verified e-mail can open the dashboard.
+        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        await sendEmailVerification(cred.user).catch(() => undefined);
+      } else {
+        await signInWithEmailAndPassword(auth, email.trim(), password);
+      }
     } catch (err) {
       setError(authMessage(err));
     } finally {
@@ -71,15 +83,40 @@ export function LoginPage() {
     <Shell>
       <form onSubmit={submit} className="space-y-3">
         <TextInput label="E-mail" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <TextInput label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <TextInput
+          label="Password"
+          type="password"
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={mode === "signup" ? 8 : undefined}
+          hint={mode === "signup" ? "At least 8 characters" : undefined}
+        />
         {error && <Alert tone="critical">{error}</Alert>}
         {info && <Alert tone="good">{info}</Alert>}
         <Button type="submit" variant="primary" loading={busy} className="w-full">
-          Log in
+          {mode === "signup" ? "Create account" : "Log in"}
         </Button>
-        <button type="button" onClick={() => void reset()} className="w-full text-center text-sm text-brand hover:underline">
-          Forgot password
-        </button>
+        {mode === "login" && (
+          <button type="button" onClick={() => void reset()} className="w-full text-center text-sm text-brand hover:underline">
+            Forgot password
+          </button>
+        )}
+        <p className="pt-2 text-center text-sm text-ink-3">
+          {mode === "login" ? "First time here? " : "Already have an account? "}
+          <button
+            type="button"
+            className="font-medium text-brand hover:underline"
+            onClick={() => {
+              setMode(mode === "login" ? "signup" : "login");
+              setError(null);
+              setInfo(null);
+            }}
+          >
+            {mode === "login" ? "Create your account" : "Log in"}
+          </button>
+        </p>
       </form>
     </Shell>
   );

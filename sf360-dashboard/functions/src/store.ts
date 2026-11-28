@@ -1,13 +1,13 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, Timestamp, getFirestore, type Firestore } from "firebase-admin/firestore";
-import { COLLECTIONS, STAT_SHARDS, type SfEnv } from "./config";
+import { COLLECTIONS, DATABASE_ID, STAT_SHARDS, type SfEnv } from "./config";
 import { contributions, finalize, statsDelta, type Shipment } from "./model";
 
 let db: Firestore | undefined;
 export function firestore(): Firestore {
   if (!db) {
     if (!getApps().length) initializeApp();
-    db = getFirestore();
+    db = getFirestore(DATABASE_ID);
     db.settings({ ignoreUndefinedProperties: true });
   }
   return db;

@@ -102,7 +102,7 @@ try {
     await field(section(page, "Booking defaults"), "Default pickup address").selectOption({ label: "Main warehouse" });
     await page.getByRole("button", { name: "Save defaults" }).click();
     await page.getByText("Settings saved").waitFor();
-    const doc = await (await fetch("http://127.0.0.1:8080/v1/projects/demo-sf360/databases/(default)/documents/settings/app", { headers: { Authorization: "Bearer owner" } })).json();
+    const doc = await (await fetch("http://127.0.0.1:8080/v1/projects/demo-sf360/databases/sf360/documents/settings/app", { headers: { Authorization: "Bearer owner" } })).json();
     if (!doc.fields?.defaultPickupId?.stringValue) throw new Error(`default pickup not saved: ${JSON.stringify(doc.fields)}`);
   });
 
@@ -286,7 +286,7 @@ try {
     // Firestore rules also refuse direct reads for this account.
     const denied = await p.evaluate(async () => {
       try {
-        const r = await fetch("http://127.0.0.1:8080/v1/projects/demo-sf360/databases/(default)/documents/shipments");
+        const r = await fetch("http://127.0.0.1:8080/v1/projects/demo-sf360/databases/sf360/documents/shipments");
         return r.status;
       } catch {
         return -1;
@@ -300,6 +300,18 @@ try {
     const c = await browser.newContext();
     const p = await c.newPage();
     await login(p, "unverified@example.com", "Unverified-pass-123");
+    await p.getByRole("button", { name: "Send verification link" }).waitFor({ timeout: 30000 });
+    await c.close();
+  });
+
+  await step("first-time account creation leads to e-mail verification", async () => {
+    const c = await browser.newContext();
+    const p = await c.newPage();
+    await p.goto(APP);
+    await p.getByRole("button", { name: "Create your account" }).click();
+    await p.getByLabel(/^E-mail/).fill("newcomer@example.com");
+    await p.getByLabel(/^Password/).fill("Newcomer-pass-123");
+    await p.getByRole("button", { name: "Create account" }).click();
     await p.getByRole("button", { name: "Send verification link" }).waitFor({ timeout: 30000 });
     await c.close();
   });

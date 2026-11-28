@@ -10,6 +10,8 @@ import {
 import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
 
 export const REGION = "asia-south1";
+/** SF360 has its own Firestore database (see functions/src/config.ts). */
+export const DATABASE_ID = "sf360";
 
 let app: FirebaseApp;
 export let auth: Auth;
@@ -41,9 +43,11 @@ export async function initFirebase(): Promise<void> {
   const config = await loadConfig();
   app = initializeApp(config);
   auth = getAuth(app);
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-  });
+  db = initializeFirestore(
+    app,
+    { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
+    DATABASE_ID,
+  );
   functions = getFunctions(app, REGION);
   // Only for local end-to-end tests (e2e/run.sh); never set for a real deploy. Must run before any auth call.
   if (import.meta.env.VITE_USE_EMULATORS === "true") {

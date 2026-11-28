@@ -29,53 +29,58 @@ Shadowfax में पिकअप "शेड्यूल" करने का 
 
 ## लॉग इन कैसे करें
 
-1. Firebase console → **Authentication → Users → Add user** में अपना ई-मेल और पासवर्ड डालें। यह वही ई-मेल हो जो `SF360_ALLOWED_EMAILS` में है।
-2. ऐप खोलें (`https://<project-id>.web.app`) और लॉग इन करें।
-3. पहली बार ऐप ई-मेल वेरिफ़िकेशन माँगेगा। **Send verification link** दबाएँ, ई-मेल में आया लिंक खोलें, फिर **I have verified** दबाएँ।
+1. ऐप खोलें: `https://naamdevseets-sf360.web.app`। अगर दूसरा project या site चुना है, तो उसका पता GitHub Actions की deploy summary में दिखता है।
+2. **पहली बार:** **Create your account** दबाएँ। वही ई-मेल डालें जो `SF360_ALLOWED_EMAILS` में है, और एक नया पासवर्ड (कम से कम 8 अक्षर)।
+   - अगर इस ई-मेल से NAAMDEV में पहले से अकाउंट है, तो सीधे उसी पासवर्ड से **Log in** करें।
+3. ऐप ई-मेल वेरिफ़िकेशन माँगेगा। **Send verification link** दबाएँ, ई-मेल में आया लिंक खोलें, फिर **I have verified** दबाएँ।
 4. पासवर्ड भूल जाएँ तो लॉग इन पेज पर **Forgot password** दबाएँ।
 
-कोई दूसरा ई-मेल लॉग इन करे तो उसे "This account cannot use the dashboard" दिखेगा। उसके लिए डेटाबेस भी पूरी तरह बंद रहता है।
+कोई भी अकाउंट बना सकता है, पर डैशबोर्ड सिर्फ़ allow-list वाले, वेरिफ़ाइड ई-मेल के लिए खुलता है। किसी और को "This account cannot use the dashboard" दिखेगा, और उसके लिए डेटाबेस भी पूरी तरह बंद रहता है।
 
 ## पहली बार सेटअप
 
-1. **Blaze प्लान ज़रूरी है।** Cloud Functions, Secret Manager और Cloud Scheduler सिर्फ़ Blaze (pay-as-you-go) प्लान पर चलते हैं। Firebase console → ⚙️ → Usage and billing → प्लान बदलें। एक सेलर के इस्तेमाल में खर्च आम तौर पर बहुत कम या मुफ़्त सीमा के अंदर रहता है।
-2. Firebase console में **Firestore Database** बनाएँ (Native mode, region `asia-south1`)।
-3. **Authentication** → Get started → Sign-in method → **Email/Password** चालू करें। GitHub वाला deploy इसे खुद चालू करने की कोशिश भी करता है।
-4. Shadowfax का token Secret Manager में डालें (अगला सेक्शन देखें)।
-5. नीचे दिए तरीके से GitHub से deploy करें।
+यह ऐप आपके मौजूदा **NAAMDEV वाले Firebase project (`naamdevseets`)** में, पर उससे बिल्कुल अलग चलता है:
 
-### GitHub से auto-deploy
+- इसका अपना Firestore database `sf360` है।
+- इसकी अपनी website है: `naamdevseets-sf360.web.app`।
+- इसके अपने Cloud Functions हैं (codebase `sf360`)।
 
-`.github/workflows/sf360-deploy.yml` हर बार `main` ब्रांच पर `sf360-dashboard/` में बदलाव पुश होने पर टेस्ट चलाता है और deploy करता है। Actions टैब से हाथ से भी चला सकते हैं।
+NAAMDEV का डेटा, rules, sites और Render वाला API इससे नहीं बदलते। GitHub पहले से इस project में बिना key के deploy कर सकता है (NAAMDEV वाला keyless setup), इसलिए कोई service-account key नहीं चाहिए।
 
-GitHub repo → **Settings → Secrets and variables → Actions** में ये डालें:
+आपको बस ये करना है:
 
-| नाम | किस टैब में | क्या डालें |
-|---|---|---|
-| `SF360_FIREBASE_PROJECT_ID` | Variables | आपका Firebase project ID |
-| `SF360_SHADOWFAX_ENV` | Variables | `staging` (शुरुआत में) या `production` |
-| `SF360_ALLOWED_EMAILS` | Secrets | वह ई-मेल जिससे लॉग इन करना है। एक से ज़्यादा हों तो कॉमा से अलग करें |
-| `SF360_FIREBASE_SERVICE_ACCOUNT` | Secrets | सर्विस-अकाउंट की JSON key (नीचे देखें) |
-| `SF360_SHADOWFAX_API_TOKEN` | Secrets | *(ज़रूरी नहीं)* अगर token GitHub से Secret Manager में भेजना है |
+1. **Blaze प्लान:** Cloud Functions सिर्फ़ Blaze (pay-as-you-go) पर चलते हैं।
+   - https://console.firebase.google.com/project/naamdevseets/usage/details खोलें → **Modify plan** → **Blaze** → पेमेंट का तरीका जोड़ें।
+   - एक सेलर के इस्तेमाल में खर्च आम तौर पर मुफ़्त सीमा के अंदर रहता है।
+   - सुरक्षा के लिए वहीं ₹100 जैसा **budget alert** लगा दें।
+2. **दो GitHub secrets** (repo → Settings → Secrets and variables → Actions → New repository secret):
 
-**सर्विस-अकाउंट कैसे बनाएँ:**
+   | Name | Value |
+   |---|---|
+   | `SF360_SHADOWFAX_API_TOKEN` | Shadowfax पोर्टल → Integrations → **Get Testing Token** |
+   | `SF360_ALLOWED_EMAILS` | वह ई-मेल जिससे लॉग इन करना है। एक से ज़्यादा हों तो कॉमा से अलग करें |
 
-1. Google Cloud console → IAM → Service Accounts → नया अकाउंट बनाएँ।
-2. उसे ये रोल दें: *Firebase Admin, Cloud Functions Admin, Service Account User, Secret Manager Admin, Cloud Scheduler Admin, Artifact Registry Administrator, Cloud Build Editor, Service Usage Admin, Datastore Owner*।
-3. Keys → Add key → JSON डाउनलोड करें।
-4. उस फ़ाइल का पूरा टेक्स्ट ऊपर वाले secret में चिपका दें।
-5. JSON फ़ाइल को कभी git में न डालें। `.gitignore` उसे पहले से रोकता है।
+3. **Deploy:** `main` पर push होते ही अपने आप होता है। Actions टैब → **SF360 dashboard deploy** → **Run workflow** से हाथ से भी चला सकते हैं।
+   - Workflow ख़ुद ये सब करता है: Blaze की जाँच, ज़रूरी Google APIs चालू करना, `sf360` database और site बनाना, token को Secret Manager में डालना, फिर deploy।
+
+**ज़रूरी नहीं (अलग project चाहिए तो):** Variables में ये डालें:
+- `SF360_FIREBASE_PROJECT_ID` और `SF360_FIREBASE_PROJECT_NUMBER`
+- चाहें तो `SF360_HOSTING_SITE`
+
+साथ में एक service-account JSON को secret `SF360_FIREBASE_SERVICE_ACCOUNT` में डालें। उस account को ये roles दें: Firebase Admin, Cloud Functions Admin, Service Account User, Secret Manager Admin, Cloud Scheduler Admin, Artifact Registry Administrator, Cloud Build Editor, Service Usage Admin, Datastore Owner। या उस project में भी NAAMDEV वाली keyless सेटिंग चलाएँ।
 
 ## Shadowfax key बदलना
 
-Token सिर्फ़ **Firebase Secret Manager** में रहता है। वह कोड या GitHub में नहीं दिखता, और ऐप उसे कभी दिखाता या लॉग नहीं करता। दो में से कोई एक तरीका अपनाएँ।
+Token कोड में कभी नहीं जाता, और ऐप उसे कभी दिखाता या लॉग नहीं करता। Cloud Functions उसे **Firebase Secret Manager** से पढ़ते हैं। दो में से कोई एक तरीका अपनाएँ।
+
+ध्यान दें: अगर GitHub secret `SF360_SHADOWFAX_API_TOKEN` मौजूद है, तो हर deploy उसी की key Secret Manager में डाल देता है। इसलिए key बदलनी हो तो GitHub secret बदलें (तरीका 2)। अगर तरीका 1 इस्तेमाल करना है, तो पहले वह GitHub secret हटा दें।
 
 **तरीका 1 — Firebase CLI से (सबसे सीधा):**
 
 ```bash
 npm install -g firebase-tools
 firebase login
-firebase functions:secrets:set SHADOWFAX_API_TOKEN --project <project-id>
+firebase functions:secrets:set SHADOWFAX_API_TOKEN --project naamdevseets
 # token पेस्ट करें (स्क्रीन पर नहीं दिखेगा), फिर दोबारा deploy करें:
 #   GitHub → Actions → "SF360 dashboard deploy" → Run workflow
 ```
@@ -91,7 +96,7 @@ firebase functions:secrets:set SHADOWFAX_API_TOKEN --project <project-id>
 
 ऐप पहले **staging** (टेस्ट) से जुड़ा है। ऊपर पीली पट्टी "TEST MODE" दिखती है, और वहाँ के ऑर्डर असली नहीं होते। staging में सब (बुकिंग, ट्रैकिंग, कैंसल) जाँचने के बाद production पर जाने के लिए:
 
-1. `SHADOWFAX_API_TOKEN` में **production** वाली key डालें।
+1. Shadowfax पोर्टल → Integrations → **Get Production Token** से key लें और GitHub secret `SF360_SHADOWFAX_API_TOKEN` में डालें (या ऊपर का तरीका 1)।
 2. `SF360_SHADOWFAX_ENV` variable को `production` करें।
 3. Workflow चलाएँ।
 
@@ -99,7 +104,7 @@ Staging वाले ऑर्डर और उनकी गिनती अल�
 
 ## Webhook (लाइव स्टेटस)
 
-1. ऐप में **Settings → Live status updates** में URL मिलेगा: `https://<project-id>.web.app/api/shadowfax-webhook`
+1. ऐप में **Settings → Live status updates** में URL मिलेगा: `https://naamdevseets-sf360.web.app/api/shadowfax-webhook`
 2. वहीं **Show header to paste** दबाने पर header दिखेगा: `Authorization: Token …`
 3. SFX 360 पोर्टल → **Webhook** टैब में यह URL और header, forward और reverse दोनों के लिए डालें। staging और production के लिए अलग-अलग डालना होता है।
 
@@ -107,9 +112,10 @@ Staging वाले ऑर्डर और उनकी गिनती अल�
 
 ## सुरक्षा
 
+- SF360 का डेटा अलग Firestore database (`sf360`) में है, NAAMDEV के डेटा से अलग।
 - Firestore rules: सिर्फ़ allow-list वाला और **वेरिफ़ाइड** ई-मेल पढ़ सकता है। शिपमेंट सिर्फ़ Cloud Functions लिखते हैं, बाकी सब के लिए सब कुछ बंद है।
 - हर Cloud Function सबसे पहले Firebase Auth token, allow-list और ई-मेल वेरिफ़िकेशन जाँचता है, फिर हर input को validate करता है।
-- `firestore.rules` और `functions/.env` deploy के समय `scripts/prepare-deploy.mjs` से बनते हैं, इसलिए आपका ई-मेल git में नहीं जाता।
+- `firestore.rules`, `functions/.env` और `.firebaserc` deploy के समय `scripts/prepare-deploy.mjs` से बनते हैं, इसलिए आपका ई-मेल git में नहीं जाता।
 - Hosting पर सख़्त security headers (CSP, HSTS, X-Frame-Options) लगे हैं।
 
 ## डेवलपर नोट्स

@@ -1,9 +1,11 @@
 name: SF360 dashboard deploy
 
 # Tests and deploys sf360-dashboard (Shadowfax seller dashboard) to Firebase:
-#   Firestore rules + indexes · Cloud Functions (codebase "sf360", asia-south1) · Hosting
+#   its own Firestore database "sf360" (rules + indexes) · Cloud Functions (codebase "sf360", asia-south1)
+#   · its own Hosting site (<project>-sf360.web.app)
+# It can share the NAAMDEV Firebase project without touching NAAMDEV's data, rules, sites or Render API.
 # Runs on every push to main that touches sf360-dashboard/, or by hand from the Actions tab.
-# One-time setup: sf360-dashboard/README.md → "GitHub se auto-deploy".
+# Setup: sf360-dashboard/README.md → "पहली बार सेटअप".
 on:
   push:
     branches: [main]
@@ -14,14 +16,20 @@ on:
 
 permissions:
   contents: read
+  id-token: write # keyless sign-in to Google Cloud (Workload Identity Federation)
 
 concurrency:
   group: sf360-deploy
   cancel-in-progress: false
 
 env:
-  PROJECT_ID: ${{ vars.SF360_FIREBASE_PROJECT_ID }}
+  # Defaults to the existing NAAMDEV Firebase project; override with repository variables.
+  PROJECT_ID: ${{ vars.SF360_FIREBASE_PROJECT_ID || 'naamdevseets' }}
+  PROJECT_NUMBER: ${{ vars.SF360_FIREBASE_PROJECT_NUMBER || vars.FIREBASE_PROJECT_NUMBER || '1008791450524' }}
+  HOSTING_SITE: ${{ vars.SF360_HOSTING_SITE }}
   SHADOWFAX_ENV: ${{ vars.SF360_SHADOWFAX_ENV || 'staging' }}
+  REGION: asia-south1
+  DATABASE: sf360
 
 jobs:
   test:
@@ -58,21 +66,48 @@ jobs:
 
       - name: Check setup
         env:
-          SA: ${{ secrets.SF360_FIREBASE_SERVICE_ACCOUNT }}
           EMAILS: ${{ secrets.SF360_ALLOWED_EMAILS }}
         run: |
           missing=0
-          [ -n "$PROJECT_ID" ] || { echo "::error::Add the repository variable SF360_FIREBASE_PROJECT_ID (README: GitHub se auto-deploy)."; missing=1; }
-          [ -n "$SA" ] || { echo "::error::Add the repository secret SF360_FIREBASE_SERVICE_ACCOUNT."; missing=1; }
-          [ -n "$EMAILS" ] || { echo "::error::Add the repository secret SF360_ALLOWED_EMAILS (the e-mail that may log in)."; missing=1; }
+          [ -n "$EMAILS" ] || { echo "::error::Add the repository secret SF360_ALLOWED_EMAILS — the e-mail that may log in (README: पहली बार सेटअप)."; missing=1; }
           case "$SHADOWFAX_ENV" in staging|production) ;; *) echo "::error::SF360_SHADOWFAX_ENV must be staging or production."; missing=1;; esac
+          [ -n "$HOSTING_SITE" ] || echo "HOSTING_SITE=$PROJECT_ID-sf360" >> "$GITHUB_ENV"
           exit $missing
 
+      # A service-account key (SF360_FIREBASE_SERVICE_ACCOUNT, or NAAMDEV's FIREBASE_SERVICE_ACCOUNT) when one is
+      # stored, otherwise keyless sign-in through the Workload Identity Federation NAAMDEV already set up.
+      - name: Choose how to sign in to Google Cloud
+        id: cred
+        env:
+          SA: ${{ secrets.SF360_FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if printf %s "$SA" | jq -e '.type == "service_account"' >/dev/null 2>&1; then
+            echo "mode=key" >> "$GITHUB_OUTPUT"; echo "Using a service-account key."
+          else
+            echo "mode=keyless" >> "$GITHUB_OUTPUT"; echo "Using keyless sign-in."
+          fi
       - uses: google-github-actions/auth@v2
+        if: steps.cred.outputs.mode == 'key'
         with:
-          credentials_json: ${{ secrets.SF360_FIREBASE_SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.SF360_FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT }}
           project_id: ${{ env.PROJECT_ID }}
+      - uses: google-github-actions/auth@v2
+        if: steps.cred.outputs.mode == 'keyless'
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deploy@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
       - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Blaze plan check
+        run: |
+          gcloud services enable cloudbilling.googleapis.com --project "$PROJECT_ID" >/dev/null
+          BILLING="$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingEnabled)' 2>/dev/null || true)"
+          if [ "$BILLING" != "True" ]; then
+            echo "::error::Project $PROJECT_ID is on the free Spark plan. Cloud Functions need Blaze: https://console.firebase.google.com/project/$PROJECT_ID/usage/details → Modify plan → Blaze. Then run this workflow again."
+            exit 1
+          fi
+          echo "Blaze plan is on."
 
       - uses: actions/setup-node@v4
         with:
@@ -91,20 +126,32 @@ jobs:
             secretmanager.googleapis.com firestore.googleapis.com firebasehosting.googleapis.com \
             identitytoolkit.googleapis.com firebaserules.googleapis.com --project "$PROJECT_ID"
 
+      - name: SF360's own Firestore database
+        run: |
+          if ! gcloud firestore databases describe --database="$DATABASE" --project "$PROJECT_ID" >/dev/null 2>&1; then
+            gcloud firestore databases create --database="$DATABASE" --location="$REGION" --type=firestore-native --project "$PROJECT_ID"
+          fi
+
+      - name: SF360's own Hosting site
+        run: |
+          if ! npx --yes firebase-tools@15.35.0 hosting:sites:get "$HOSTING_SITE" --project "$PROJECT_ID" >/dev/null 2>&1; then
+            npx --yes firebase-tools@15.35.0 hosting:sites:create "$HOSTING_SITE" --project "$PROJECT_ID" --non-interactive
+          fi
+
       - name: Email/password sign-in
         run: |
           TOKEN="$(gcloud auth print-access-token)"
           if ! curl -sf -X PATCH "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT_ID/config?updateMask=signIn.email.enabled,signIn.email.passwordRequired" \
               -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT_ID" -H "Content-Type: application/json" \
               -d '{"signIn":{"email":{"enabled":true,"passwordRequired":true}}}' >/dev/null; then
-            echo "::warning::Could not enable Email/Password sign-in automatically. Enable it in Firebase console → Authentication → Sign-in method."
+            echo "::warning::Could not confirm Email/Password sign-in. Check Firebase console → Authentication → Sign-in method."
           fi
 
       - name: Secrets (Shadowfax token and webhook key)
         env:
           SF_TOKEN: ${{ secrets.SF360_SHADOWFAX_API_TOKEN }}
         run: |
-          # Optional: keep the token in GitHub and let this step copy it into Secret Manager.
+          # The token is kept in GitHub and copied into Secret Manager; it is never printed.
           if [ -n "$SF_TOKEN" ]; then
             echo "::add-mask::$SF_TOKEN"
             if ! gcloud secrets describe SHADOWFAX_API_TOKEN --project "$PROJECT_ID" >/dev/null 2>&1; then
@@ -114,38 +161,40 @@ jobs:
             fi
           fi
           if ! gcloud secrets describe SHADOWFAX_API_TOKEN --project "$PROJECT_ID" >/dev/null 2>&1; then
-            echo "::error::The SHADOWFAX_API_TOKEN secret does not exist yet. Run: firebase functions:secrets:set SHADOWFAX_API_TOKEN --project $PROJECT_ID (README: Shadowfax key badalna)."
+            echo "::error::No Shadowfax token yet. Add the repository secret SF360_SHADOWFAX_API_TOKEN (README: Shadowfax key badalna)."
             exit 1
           fi
-          # The webhook key is generated once and never printed here; the app shows it on Settings.
+          # The webhook key is generated once and never printed; the app shows it on its Settings page.
           if ! gcloud secrets describe SF_WEBHOOK_KEY --project "$PROJECT_ID" >/dev/null 2>&1; then
             openssl rand -hex 24 | tr -d '\n' | gcloud secrets create SF_WEBHOOK_KEY --data-file=- --replication-policy=automatic --project "$PROJECT_ID" >/dev/null
           fi
 
-      - name: Prepare rules and function settings
+      - name: Prepare rules and settings
         env:
           SF360_ALLOWED_EMAILS: ${{ secrets.SF360_ALLOWED_EMAILS }}
           SF360_SHADOWFAX_ENV: ${{ env.SHADOWFAX_ENV }}
+          SF360_FIREBASE_PROJECT_ID: ${{ env.PROJECT_ID }}
+          SF360_HOSTING_SITE: ${{ env.HOSTING_SITE }}
         run: node scripts/prepare-deploy.mjs
 
       - name: Build web app
         run: npm --prefix web run build
 
-      - name: Deploy (Firestore, Functions, Hosting)
-        run: npx --yes firebase-tools@15.35.0 deploy --project "$PROJECT_ID" --only firestore,functions:sf360,hosting --non-interactive --force
+      - name: Deploy (SF360 database rules, functions, site)
+        run: npx --yes firebase-tools@15.35.0 deploy --project "$PROJECT_ID" --only firestore,functions:sf360,hosting:sf360 --non-interactive --force
 
       - name: Auto-delete old webhook logs and cache entries (Firestore TTL)
         run: |
           for group in webhookEvents serviceabilityCache; do
-            gcloud firestore fields ttls update expireAt --collection-group="$group" --enable-ttl --project "$PROJECT_ID" --async --quiet >/dev/null 2>&1 || \
-              echo "::warning::Could not set the TTL policy on $group.expireAt (needs the Datastore Owner role). Old entries will simply stay."
+            gcloud firestore fields ttls update expireAt --collection-group="$group" --database="$DATABASE" --enable-ttl \
+              --project "$PROJECT_ID" --async --quiet >/dev/null 2>&1 || echo "::warning::Could not set the TTL policy on $group.expireAt."
           done
 
       - name: Summary
         run: |
           {
             echo "### SF360 dashboard deployed"
-            echo "- Site: https://$PROJECT_ID.web.app"
+            echo "- App: https://$HOSTING_SITE.web.app"
             echo "- Shadowfax environment: **$SHADOWFAX_ENV**"
-            echo "- Webhook URL for the SFX 360 panel: https://$PROJECT_ID.web.app/api/shadowfax-webhook (header: Settings page in the app)"
+            echo "- Webhook URL for the SFX 360 portal: https://$HOSTING_SITE.web.app/api/shadowfax-webhook (header: app → Settings)"
           } >> "$GITHUB_STEP_SUMMARY"
