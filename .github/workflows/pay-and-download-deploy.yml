@@ -103,8 +103,14 @@ jobs:
           SA="$RUN_SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
           gcloud iam service-accounts describe "$SA" --project "$PROJECT_ID" >/dev/null 2>&1 || \
             gcloud iam service-accounts create "$RUN_SA_NAME" --display-name="Pay & Download server" --project "$PROJECT_ID"
-          gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:$SA" --role=roles/datastore.user --condition=None --quiet >/dev/null
-          gcloud iam service-accounts keys create "$RUNNER_TEMP/run-key.json" --iam-account="$SA" --project "$PROJECT_ID" --quiet
+          # A brand-new service account takes a little while to show up everywhere in Google Cloud.
+          for i in $(seq 1 12); do
+            gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:$SA" --role=roles/datastore.user --condition=None --quiet >/dev/null \
+              && gcloud iam service-accounts keys create "$RUNNER_TEMP/run-key.json" --iam-account="$SA" --project "$PROJECT_ID" --quiet \
+              && break
+            echo "Service account not ready yet; retrying in 10 s ($i/12)…"; sleep 10
+          done
+          [ -s "$RUNNER_TEMP/run-key.json" ] || { echo "::error::Couldn't create a key for $SA."; exit 1; }
           echo "NEW_KEY=$(jq -r .private_key_id "$RUNNER_TEMP/run-key.json")" >> "$GITHUB_ENV"
           B64="$(base64 -w0 "$RUNNER_TEMP/run-key.json")"
           rm -f "$RUNNER_TEMP/run-key.json"
