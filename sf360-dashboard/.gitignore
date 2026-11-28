@@ -1,0 +1,36 @@
+# Dependencies and build output
+node_modules/
+web/dist/
+functions/lib/
+*.tsbuildinfo
+coverage/
+
+# Generated at deploy time (contain the allow-listed e-mail) — see scripts/prepare-deploy.mjs
+firestore.rules
+functions/.env
+functions/.env.*
+
+# Local Firebase / environment files and credentials — never commit these
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+!web/.env.example
+.firebaserc
+.firebase/
+*-debug.log
+firebase-debug.*.log
+ui-debug.log
+service-account*.json
+*serviceAccount*.json
+*-credentials.json
+*.pem
+*.p12
+*.key
+.runtimeconfig.json
+.secret.local
+
+# End-to-end test output
+web/dist-e2e/
+e2e/node_modules/

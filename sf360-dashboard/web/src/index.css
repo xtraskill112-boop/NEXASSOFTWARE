@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/* Design tokens. Utilities reference these, so dark mode only swaps values here. */
+@theme {
+  --color-page: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-subtle: #f1f3f6;
+  --color-line: #e3e6eb;
+  --color-ink: #191919;
+  --color-ink-2: #4b5260;
+  --color-ink-3: #6b7280;
+  --color-brand: #4338ca;
+  --color-brand-strong: #3730a3;
+  --color-brand-soft: #eef0ff;
+  --color-on-brand: #ffffff;
+
+  /* Categorical slots 1–2 (validated pair) for the COD / prepaid split. */
+  --color-series-1: #257de0;
+  --color-series-2: #f47230;
+
+  /* Status (always shown with a label, never colour alone). */
+  --color-good: #0a8a1f;
+  --color-good-soft: #e7f6ea;
+  --color-warn: #a16207;
+  --color-warn-soft: #fdf6e3;
+  --color-serious: #c2410c;
+  --color-serious-soft: #fdeee6;
+  --color-critical: #c62828;
+  --color-critical-soft: #fdecec;
+  --color-info: #1d4ed8;
+  --color-info-soft: #e8f0fe;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-page: #111214;
+    --color-surface: #191919;
+    --color-subtle: #222326;
+    --color-line: #2e3036;
+    --color-ink: #efefef;
+    --color-ink-2: #c4c7cd;
+    --color-ink-3: #9c9c9c;
+    --color-brand: #8b86f0;
+    --color-brand-strong: #a5a1f5;
+    --color-brand-soft: #24233d;
+    --color-on-brand: #111214;
+    --color-series-1: #338ced;
+    --color-series-2: #e76624;
+    --color-good: #3fca55;
+    --color-good-soft: #15291a;
+    --color-warn: #fbb315;
+    --color-warn-soft: #2d2513;
+    --color-serious: #f18a59;
+    --color-serious-soft: #2f1d14;
+    --color-critical: #f06a6b;
+    --color-critical-soft: #331a1a;
+    --color-info: #7aa7ff;
+    --color-info-soft: #18233a;
+  }
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Comfortable tap targets and visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
