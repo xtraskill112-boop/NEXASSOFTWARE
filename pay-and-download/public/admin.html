@@ -13,7 +13,7 @@
       <form class="card stack" id="login-form">
         <div>
           <h1 class="title">Admin login</h1>
-          <p class="muted small">Payments, settings and your file.</p>
+          <p class="muted small">Payments, links and settings.</p>
         </div>
         <label class="field">
           <span>ID</span>
@@ -34,21 +34,14 @@
         <div class="topbar-inner">
           <strong>Payments Admin</strong>
           <nav>
-            <a class="btn ghost sm" href="/" target="_blank" rel="noopener">Open payment page ↗</a>
+            <button class="btn ghost sm" type="button" id="sound" aria-pressed="true">🔔 Sound on</button>
             <button class="btn ghost sm" type="button" id="logout">Log out</button>
           </nav>
         </div>
       </header>
 
       <main class="admin-shell">
-        <div class="share">
-          <span class="muted">Payment page link to share:</span>
-          <code id="share-link"></code>
-          <button class="btn ghost sm" type="button" id="copy-link">Copy link</button>
-        </div>
-
         <div class="banner warn" id="setup-banner" hidden>
-          <strong>Buyers can't pay yet. Finish setup in the Settings tab:</strong>
           <ul id="setup-list"></ul>
         </div>
 
@@ -56,25 +49,27 @@
           <button type="button" role="tab" id="tab-btn-payments" aria-controls="tab-payments" aria-selected="true">
             Payments<span class="badge" id="new-badge" hidden></span>
           </button>
+          <button type="button" role="tab" id="tab-btn-links" aria-controls="tab-links" aria-selected="false">Links</button>
           <button type="button" role="tab" id="tab-btn-settings" aria-controls="tab-settings" aria-selected="false">Settings</button>
         </div>
 
         <!-- Payments tab -->
         <section id="tab-payments" role="tabpanel" aria-labelledby="tab-btn-payments">
           <div class="stats">
-            <div class="stat"><div class="label">Today</div><div class="value" id="s-today-amt">₹0</div><div class="sub" id="s-today-count">0 payments</div></div>
-            <div class="stat"><div class="label">All time</div><div class="value" id="s-all-amt">₹0</div><div class="sub" id="s-all-count">0 payments</div></div>
-            <div class="stat"><div class="label">To check in your UPI app</div><div class="value" id="s-new">0</div><div class="sub">Status “New”</div></div>
+            <div class="stat" id="stat-waiting"><div class="label">Waiting for you</div><div class="value" id="s-waiting">0</div><div class="sub">Check UPI app → click Received</div></div>
+            <div class="stat"><div class="label">Received today</div><div class="value" id="s-today-amt">₹0</div><div class="sub" id="s-today-count">0 payments</div></div>
+            <div class="stat"><div class="label">Received all time</div><div class="value" id="s-all-amt">₹0</div><div class="sub" id="s-all-count">0 payments</div></div>
             <div class="stat"><div class="label">Downloads</div><div class="value" id="s-downloads">0</div><div class="sub">All buyers</div></div>
           </div>
 
           <div class="toolbar">
             <input type="search" id="search" placeholder="Search UTR, name or mobile" aria-label="Search payments" />
+            <select id="link-filter" aria-label="Filter by link"><option value="">All links</option></select>
             <div class="chips" id="filters" role="group" aria-label="Filter by status">
               <button type="button" class="chip" data-filter="all" aria-pressed="true">All</button>
-              <button type="button" class="chip" data-filter="new" aria-pressed="false">New</button>
+              <button type="button" class="chip" data-filter="new" aria-pressed="false">Waiting</button>
               <button type="button" class="chip" data-filter="received" aria-pressed="false">Received</button>
-              <button type="button" class="chip" data-filter="blocked" aria-pressed="false">Blocked</button>
+              <button type="button" class="chip" data-filter="blocked" aria-pressed="false">Not received</button>
             </div>
             <a class="btn ghost sm" href="/api/admin/payments.csv" download>Export CSV</a>
           </div>
@@ -85,90 +80,113 @@
                 <tr>
                   <th>Date &amp; time</th>
                   <th>UTR</th>
+                  <th>Link</th>
                   <th>Buyer</th>
                   <th class="num">Amount</th>
-                  <th class="num">Downloads</th>
                   <th>Status</th>
                   <th><span class="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody id="rows"></tbody>
             </table>
-            <p class="empty" id="empty" hidden>No payments yet. They appear here as soon as a buyer submits a UTR.</p>
+            <p class="empty" id="empty" hidden></p>
           </div>
-          <p class="hint">Match each UTR with your UPI app's history. <strong>Received</strong> marks it checked; <strong>Block</strong> stops that buyer's download link. The list refreshes by itself.</p>
+          <p class="hint">
+            The buyer waits on an <strong>Under Checking</strong> screen. Find the UTR in your UPI app's history, then click
+            <strong>✓ Received</strong>: their page shows the download button at once. <strong>✗ Not received</strong> tells them the payment
+            wasn't found. This list refreshes by itself and plays a sound for each new payment.
+          </p>
+        </section>
+
+        <!-- Links tab -->
+        <section id="tab-links" role="tabpanel" aria-labelledby="tab-btn-links" hidden>
+          <div class="section-head">
+            <h2>Payment links</h2>
+            <button class="btn primary sm" type="button" id="new-link">+ New link</button>
+          </div>
+
+          <form class="panel stack editor" id="editor" hidden novalidate>
+            <div class="row-between">
+              <h2 id="editor-title">New link</h2>
+              <button class="btn ghost sm" type="button" id="editor-cancel">Cancel</button>
+            </div>
+            <div class="grid-2">
+              <label class="field">
+                <span>Name <em>(what the buyer sees)</em></span>
+                <input type="text" id="e-title" maxlength="100" placeholder="GST Registration Certificate" required />
+              </label>
+              <label class="field">
+                <span>Price (₹)</span>
+                <input type="number" id="e-amount" min="1" max="100000" step="0.01" placeholder="1000" required />
+              </label>
+            </div>
+            <label class="field">
+              <span>Description <em>(optional)</em></span>
+              <textarea id="e-description" maxlength="400" placeholder="Pay the fees, enter the UTR and download your certificate."></textarea>
+            </label>
+            <label class="field">
+              <span>Payment note <em>(shown in the UPI app; optional)</em></span>
+              <input type="text" id="e-note" maxlength="50" placeholder="GST FEES" />
+            </label>
+
+            <div class="field">
+              <span>File the buyer gets</span>
+              <div class="file-box">
+                <div class="file-icon" id="e-file-ext">FILE</div>
+                <div>
+                  <div><strong id="e-file-name">No file yet</strong></div>
+                  <div class="small muted" id="e-file-meta">Choose the file for this link.</div>
+                </div>
+              </div>
+              <div class="row" style="margin-top: 8px">
+                <label class="btn ghost sm" for="e-file">Choose file</label>
+                <input type="file" id="e-file" hidden />
+                <a class="btn ghost sm" id="e-file-check" hidden>Download to check</a>
+              </div>
+              <div class="progress" id="e-progress" hidden style="margin-top: 8px"><span></span></div>
+            </div>
+
+            <div class="field">
+              <span>Scanner (QR)</span>
+              <p class="small muted" id="e-qr-mode">A QR is made from your UPI ID with this link's price filled in.</p>
+              <div class="row">
+                <label class="btn ghost sm" for="e-qr">Upload my own scanner image</label>
+                <input type="file" id="e-qr" accept="image/png,image/jpeg,image/webp" hidden />
+                <button class="btn ghost sm" type="button" id="e-qr-remove" hidden>Use auto QR</button>
+              </div>
+            </div>
+
+            <label class="check" id="e-active-row" hidden><input type="checkbox" id="e-active" /> Link is active (buyers can pay)</label>
+
+            <p class="error" id="editor-error" role="alert" hidden></p>
+            <div class="row"><button class="btn primary" type="submit" id="editor-save">Create link</button></div>
+          </form>
+
+          <div class="link-list" id="link-list"></div>
+          <p class="empty" id="links-empty" hidden>No links yet. Click <strong>+ New link</strong> to make one: give it a name, price and file, then copy the link and send it.</p>
         </section>
 
         <!-- Settings tab -->
         <section id="tab-settings" role="tabpanel" aria-labelledby="tab-btn-settings" hidden>
-          <div class="settings-layout">
-            <form class="panel stack" id="settings-form">
-              <h2>Product &amp; payment</h2>
+          <form class="panel stack" id="settings-form" style="max-width: 640px">
+            <h2>UPI details (all links)</h2>
+            <div class="grid-2">
               <label class="field">
-                <span>Product name</span>
-                <input type="text" id="f-productName" maxlength="100" required />
+                <span>UPI ID</span>
+                <input type="text" id="f-upiId" maxlength="320" placeholder="9876543210@ybl" autocapitalize="off" spellcheck="false" />
               </label>
               <label class="field">
-                <span>Description <em>(shown under the name)</em></span>
-                <textarea id="f-description" maxlength="400"></textarea>
+                <span>Payee name</span>
+                <input type="text" id="f-payeeName" maxlength="60" />
               </label>
-              <div class="grid-2">
-                <label class="field">
-                  <span>Price (₹)</span>
-                  <input type="number" id="f-amount" min="1" max="100000" step="0.01" required />
-                </label>
-                <label class="field">
-                  <span>Payment note <em>(in UPI app)</em></span>
-                  <input type="text" id="f-note" maxlength="50" />
-                </label>
-                <label class="field">
-                  <span>UPI ID</span>
-                  <input type="text" id="f-upiId" maxlength="320" placeholder="9876543210@ybl" autocapitalize="off" spellcheck="false" />
-                </label>
-                <label class="field">
-                  <span>Payee name</span>
-                  <input type="text" id="f-payeeName" maxlength="60" />
-                </label>
-              </div>
-              <p class="error" id="settings-error" role="alert" hidden></p>
-              <div class="row"><button class="btn primary" type="submit">Save settings</button></div>
-            </form>
-
-            <div>
-              <div class="panel stack">
-                <h2>File buyers download</h2>
-                <div class="file-box" id="file-box">
-                  <div class="file-icon" id="file-ext">FILE</div>
-                  <div>
-                    <div><strong id="file-name">No file yet</strong></div>
-                    <div class="small muted" id="file-meta">Upload the file buyers get after paying.</div>
-                  </div>
-                </div>
-                <div class="row">
-                  <label class="btn primary sm" for="file-input">Upload file</label>
-                  <input type="file" id="file-input" hidden />
-                  <a class="btn ghost sm" id="file-check" href="/api/admin/file" hidden>Download to check</a>
-                </div>
-                <div class="progress" id="file-progress" hidden><span></span></div>
-                <p class="hint" id="file-hint"></p>
-              </div>
-
-              <div class="panel stack">
-                <h2>Scanner (QR code)</h2>
-                <div class="row" style="align-items: flex-start; gap: 16px">
-                  <div class="qr-preview"><img id="qr-preview" alt="Current QR code" /></div>
-                  <div class="stack" style="flex: 1 1 160px">
-                    <p class="small" id="qr-mode"></p>
-                    <div class="row">
-                      <label class="btn ghost sm" for="qr-input">Upload scanner image</label>
-                      <input type="file" id="qr-input" accept="image/png,image/jpeg,image/webp" hidden />
-                      <button class="btn ghost sm" type="button" id="qr-remove" hidden>Use auto QR</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
-          </div>
+            <label class="field">
+              <span>Home page <em>(what <code id="home-url"></code> opens)</em></span>
+              <select id="f-homeLinkId"><option value="">Nothing — "Open your payment link" notice</option></select>
+            </label>
+            <p class="error" id="settings-error" role="alert" hidden></p>
+            <div class="row"><button class="btn primary" type="submit">Save settings</button></div>
+          </form>
         </section>
       </main>
     </div>

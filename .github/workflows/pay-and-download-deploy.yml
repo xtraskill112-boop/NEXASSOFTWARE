@@ -169,54 +169,62 @@ jobs:
             [ "$k" != "$NEW_KEY" ] && gcloud iam service-accounts keys delete "$k" --iam-account="$SA" --project "$PROJECT_ID" --quiet || true
           done
 
-      - name: Smoke test (a real purchase and download; the test entry is then deleted)
+      - name: Smoke test (a full purchase on a temporary link, which is then deleted)
         env:
           FIREBASE_PROJECT_ID: ${{ env.PROJECT_ID }}
         run: |
+          fail() { echo "::error::$1"; exit 1; }
+          code() { curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$@"; }
           for i in $(seq 1 30); do curl -sf --max-time 30 "$APP_URL/healthz" >/dev/null && break; sleep 10; done
-          for path in / /admin /styles.css /api/qr; do
-            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$APP_URL$path")"
-            echo "$code $path"; [ "$code" = 200 ] || { echo "::error::$path returned $code"; exit 1; }
+          for path in /admin /styles.css /app.js; do
+            c="$(code "$APP_URL$path")"; echo "$c $path"; [ "$c" = 200 ] || fail "$path returned $c"
           done
-          CONFIG="$(curl -sf "$APP_URL/api/config")"
-          echo "$CONFIG" | jq '{productName, amount, upiId, payeeName, fileName, ready}'
+          echo "$(code "$APP_URL/") / (302 = opens the home-page link)"
 
           COOKIE="$(node scripts/deploy-setup.js cookie)"
           echo "::add-mask::$COOKIE"
-          code="$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: admin_session=$COOKIE" "$APP_URL/api/admin/session")"
-          [ "$code" = 200 ] || { echo "::error::Admin session check returned $code"; exit 1; }
+          A="Cookie: admin_session=$COOKIE"
+          [ "$(code -H "$A" "$APP_URL/api/admin/session")" = 200 ] || fail "Admin session check failed"
           echo "Admin login works."
 
-          if [ "$(echo "$CONFIG" | jq -r .ready)" != true ]; then
-            echo "READY=false" >> "$GITHUB_ENV"
-            echo "::notice::The site is up; it shows 'Coming soon' until the file buyers download is set (deploy/setup.enc or the admin panel)."
-            exit 0
-          fi
-          echo "READY=true" >> "$GITHUB_ENV"
-          UTR="0000$(shuf -i 10000000-99999999 -n 1)"
-          PAY="$(curl -sf -X POST "$APP_URL/api/payments" -H 'Content-Type: application/json' -d "{\"utr\":\"$UTR\",\"name\":\"Deploy check\"}")"
-          curl -sf -o "$RUNNER_TEMP/download" "$APP_URL$(echo "$PAY" | jq -r .downloadUrl)"
-          GOT="$(sha256sum "$RUNNER_TEMP/download" | cut -d' ' -f1)"
-          WANT="$(node scripts/deploy-setup.js file-sha)"
-          rm -f "$RUNNER_TEMP/download"
-          [ "$GOT" = "$WANT" ] || { echo "::error::The downloaded file doesn't match the uploaded one."; exit 1; }
-          echo "Buyer flow works: UTR accepted and the downloaded file matches ($GOT)."
-          ID="$(curl -sf -H "Cookie: admin_session=$COOKIE" "$APP_URL/api/admin/payments" | jq -r --arg u "$UTR" '.payments[] | select(.utr == $u) | .id')"
-          curl -sf -X DELETE -H "Cookie: admin_session=$COOKIE" "$APP_URL/api/admin/payments/$ID" >/dev/null
-          echo "Test entry $UTR deleted."
+          LINKS="$(curl -sf -H "$A" "$APP_URL/api/admin/links")"
+          echo "Payment links:"
+          echo "$LINKS" | jq -r --arg u "$APP_URL" '.links[] | "  \(.title) — ₹\(.amount) — \(.file.name // "NO FILE") — \($u)\(.path)\(if .isHome then " (home page)" else "" end)\(if .active then "" else " (paused)" end)"'
 
-      - name: Summary
-        run: |
-          echo "PAY_AND_DOWNLOAD_URL=$APP_URL"
+          LINK="$(curl -sf -X POST -H "$A" -H 'Content-Type: application/json' -d '{"title":"Deploy check (temporary)","amount":1,"note":"TEST"}' "$APP_URL/api/admin/links")"
+          LID="$(echo "$LINK" | jq -r .id)"; LCODE="$(echo "$LINK" | jq -r .code)"
+          trap 'curl -s -X DELETE -H "$A" "$APP_URL/api/admin/links/$LID" >/dev/null || true' EXIT
+          head -c 4096 /dev/urandom > "$RUNNER_TEMP/check.bin"
+          curl -sf -H "$A" -F "file=@$RUNNER_TEMP/check.bin;filename=check.bin" "$APP_URL/api/admin/links/$LID/file" >/dev/null
+          [ "$(code "$APP_URL/p/$LCODE")" = 200 ] || fail "The link page doesn't open"
+          CONF="$(curl -sf "$APP_URL/api/links/$LCODE")"
+          [ "$(echo "$CONF" | jq -r .ready)" = true ] || fail "The new link isn't ready"
+          [ "$(code "$APP_URL$(echo "$CONF" | jq -r .qrUrl)")" = 200 ] || fail "The QR code doesn't load"
+
+          UTR="0000$(shuf -i 10000000-99999999 -n 1)"
+          PAY="$(curl -sf -X POST -H 'Content-Type: application/json' -d "{\"utr\":\"$UTR\",\"name\":\"Deploy check\"}" "$APP_URL/api/links/$LCODE/payments")"
+          TOKEN="$(echo "$PAY" | jq -r .token)"
+          [ "$(echo "$PAY" | jq -r .status)" = new ] || fail "A new payment should wait for checking"
+          [ "$(code "$APP_URL/download/$TOKEN")" = 403 ] || fail "The file could be downloaded before Received"
+          echo "UTR submitted: waiting for the owner, download locked."
+
+          PID="$(curl -sf -H "$A" "$APP_URL/api/admin/payments" | jq -r --arg u "$UTR" '.payments[] | select(.utr == $u) | .id')"
+          curl -sf -X PATCH -H "$A" -H 'Content-Type: application/json' -d '{"status":"received"}' "$APP_URL/api/admin/payments/$PID" >/dev/null
+          [ "$(curl -sf "$APP_URL/api/payments/$TOKEN" | jq -r .status)" = received ] || fail "Received didn't reach the buyer"
+          curl -sf -o "$RUNNER_TEMP/got.bin" "$APP_URL/download/$TOKEN"
+          cmp -s "$RUNNER_TEMP/check.bin" "$RUNNER_TEMP/got.bin" || fail "The downloaded file doesn't match"
+          echo "Received clicked: the buyer downloads the right file."
+          curl -sf -X DELETE -H "$A" "$APP_URL/api/admin/payments/$PID" >/dev/null
+          echo "Test payment and temporary link deleted."
+
           {
             echo "### Pay & Download is live"
             echo ""
-            echo "| | Address |"
-            echo "|---|---|"
-            echo "| Payment page | $APP_URL/ |"
-            echo "| Admin panel | $APP_URL/admin |"
+            echo "Admin panel: $APP_URL/admin"
             echo ""
-            if [ "$READY" = true ]; then echo "Buyers can pay and download now."; else echo "Shows *Coming soon* until the file is uploaded."; fi
+            echo "| Link | Price | File | Address |"
+            echo "|---|---|---|---|"
+            echo "$LINKS" | jq -r --arg u "$APP_URL" '.links[] | "| \(.title)\(if .isHome then " (home page)" else "" end) | ₹\(.amount) | \(.file.name // "none") | \($u)\(.path) |"'
             echo ""
             echo "The free server sleeps after ~15 minutes without visitors; the next visit takes about a minute to wake it."
           } >> "$GITHUB_STEP_SUMMARY"

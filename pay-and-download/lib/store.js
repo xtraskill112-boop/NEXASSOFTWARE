@@ -9,8 +9,8 @@
  *                   copied to the local disk, which then serves as a cache.
  *
  * Both expose the same methods:
- *   load() -> { meta, payments }      meta = { secret, settings, admin } or null on a brand-new site
- *   saveMeta(meta) · savePayment(p) · deletePayment(id)
+ *   load() -> { meta, payments, links }   meta = { secret, settings, admin } or null on a brand-new site
+ *   saveMeta(meta) · savePayment(p) · deletePayment(id) · saveLink(link) · deleteLink(id)
  *   putBlob(name, buffer?)            store a file (without a buffer: the file already in uploadDir)
  *   ensureLocal(name)                 make sure uploadDir has the file
  *   deleteBlob(name) · blobInfo(name) · localPath(name)
@@ -31,6 +31,8 @@ class FileStore {
     this.dbFile = path.join(dataDir, 'db.json');
     this.meta = null;
     this.payments = new Map();
+    this.links = new Map();
+    this.writing = Promise.resolve();
     fs.mkdirSync(this.uploadDir, { recursive: true });
   }
 
@@ -39,18 +41,42 @@ class FileStore {
   }
 
   async load() {
-    if (!fs.existsSync(this.dbFile)) return { meta: null, payments: [] };
+    if (!fs.existsSync(this.dbFile)) return { meta: null, payments: [], links: [] };
     const saved = JSON.parse(await fsp.readFile(this.dbFile, 'utf8'));
     this.meta = { secret: saved.secret, settings: saved.settings, admin: saved.admin || null };
     this.payments = new Map((saved.payments || []).map((p) => [p.id, p]));
-    return { meta: this.meta, payments: [...this.payments.values()].sort(byCreatedAt) };
+    this.links = new Map((saved.links || []).map((l) => [l.id, l]));
+    return {
+      meta: this.meta,
+      payments: [...this.payments.values()].sort(byCreatedAt),
+      links: [...this.links.values()].sort(byCreatedAt),
+    };
   }
 
-  async flush() {
-    const data = { ...this.meta, payments: [...this.payments.values()].sort(byCreatedAt) };
-    const tmp = `${this.dbFile}.${process.pid}.tmp`;
-    await fsp.writeFile(tmp, JSON.stringify(data, null, 2));
-    await fsp.rename(tmp, this.dbFile);
+  /** Writes db.json; writes are queued so two saves never race on the temporary file. */
+  flush() {
+    const write = async () => {
+      const data = {
+        ...this.meta,
+        links: [...this.links.values()].sort(byCreatedAt),
+        payments: [...this.payments.values()].sort(byCreatedAt),
+      };
+      const tmp = `${this.dbFile}.${process.pid}.tmp`;
+      await fsp.writeFile(tmp, JSON.stringify(data, null, 2));
+      await fsp.rename(tmp, this.dbFile);
+    };
+    this.writing = this.writing.then(write, write);
+    return this.writing;
+  }
+
+  async saveLink(link) {
+    this.links.set(link.id, link);
+    await this.flush();
+  }
+
+  async deleteLink(id) {
+    this.links.delete(id);
+    await this.flush();
   }
 
   async saveMeta(meta) {
@@ -105,6 +131,7 @@ class FirestoreStore {
     });
     this.metaDoc = this.db.collection(`${prefix}_meta`).doc('main');
     this.paymentsCol = this.db.collection(`${prefix}_payments`);
+    this.linksCol = this.db.collection(`${prefix}_links`);
     this.blobsCol = this.db.collection(`${prefix}_blobs`);
     this.prefix = prefix;
   }
@@ -118,11 +145,20 @@ class FirestoreStore {
   }
 
   async load() {
-    const [meta, payments] = await Promise.all([this.metaDoc.get(), this.paymentsCol.get()]);
+    const [meta, payments, links] = await Promise.all([this.metaDoc.get(), this.paymentsCol.get(), this.linksCol.get()]);
     return {
       meta: meta.exists ? meta.data() : null,
       payments: payments.docs.map((d) => d.data()).sort(byCreatedAt),
+      links: links.docs.map((d) => d.data()).sort(byCreatedAt),
     };
+  }
+
+  async saveLink(link) {
+    await this.linksCol.doc(link.id).set(link);
+  }
+
+  async deleteLink(id) {
+    await this.linksCol.doc(id).delete();
   }
 
   async saveMeta(meta) {

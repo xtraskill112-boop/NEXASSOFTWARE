@@ -7,9 +7,8 @@
  *
  *   prepare   make sure the site's data exists and a deploy key exists (its public key is printed),
  *             then apply deploy/setup.enc if it was encrypted for that key: the admin ID and password
- *             hash, and the file buyers download
+ *             hash, and the file of the home-page link
  *   cookie    print an admin session cookie valid for 30 minutes (for the deploy smoke test)
- *   file-sha  print the sha256 of the file buyers download
  *
  * Why: this repository is public, so the admin password and the file can't be committed. They are
  * encrypted with scripts/encrypt-setup.js for the public key printed here. The matching private key
@@ -23,12 +22,12 @@ const os = require('node:os');
 const path = require('node:path');
 const auth = require('../lib/auth');
 const { createStore } = require('../lib/store');
-const { loadState, randomName } = require('../lib/state');
+const { loadState, makeLink, randomName } = require('../lib/state');
 
 const SETUP_FILE = path.join(__dirname, '..', 'deploy', 'setup.enc');
 const BEGIN = '-----BEGIN PAY-AND-DOWNLOAD DEPLOY KEY-----';
 const END = '-----END PAY-AND-DOWNLOAD DEPLOY KEY-----';
-const SETTINGS_KEYS = ['productName', 'description', 'amount', 'note', 'upiId', 'payeeName'];
+const SETTINGS_KEYS = ['upiId', 'payeeName'];
 
 function keyIdOf(publicKeyPem) {
   const der = crypto.createPublicKey(publicKeyPem).export({ type: 'spki', format: 'der' });
@@ -67,7 +66,7 @@ async function prepare(store, { setupFile = SETUP_FILE, log = console.log } = {}
   log(publicKeyPem.trim());
   log(END);
 
-  const { meta } = await loadState(store);
+  const { meta, links } = await loadState(store);
 
   if (!fs.existsSync(setupFile)) {
     log('No deploy/setup.enc: nothing private to apply.');
@@ -95,17 +94,26 @@ async function prepare(store, { setupFile = SETUP_FILE, log = console.log } = {}
     if (crypto.createHash('sha256').update(data).digest('hex') !== setup.file.sha256) {
       throw new Error('deploy/setup.enc: the file is damaged.');
     }
+    // The file goes to the home-page link (made if there is none yet).
+    let link = links.find((l) => l.id === meta.settings.homeLinkId);
+    if (!link) {
+      link = makeLink({ title: setup.file.title || 'Payment', amount: Number(setup.file.amount) || 1 }, links);
+      links.push(link);
+      meta.settings.homeLinkId = link.id;
+    }
     const stored = randomName();
     await store.putBlob(stored, data);
-    oldFile = meta.settings.file;
-    meta.settings.file = {
+    oldFile = link.file;
+    link.file = {
       stored,
       name: setup.file.name,
       size: data.length,
       mime: setup.file.mime || 'application/octet-stream',
       uploadedAt: new Date().toISOString(),
     };
-    log(`File buyers download set to "${setup.file.name}" (${data.length} bytes).`);
+    link.updatedAt = new Date().toISOString();
+    await store.saveLink(link);
+    log(`File of the link "${link.title}" set to "${setup.file.name}" (${data.length} bytes).`);
   }
 
   if (setup.settings) {
@@ -128,18 +136,15 @@ async function adminCookie(store) {
   return auth.newSession(key, 0.5);
 }
 
-async function fileSha(store) {
-  const { meta } = await loadState(store);
-  if (!meta.settings.file) return '';
-  return (await store.blobInfo(meta.settings.file.stored)).sha256;
-}
-
 async function main(command) {
   const store = openStore();
-  if (command === 'prepare') await prepare(store);
-  else if (command === 'cookie') console.log(await adminCookie(store));
-  else if (command === 'file-sha') console.log(await fileSha(store));
-  else throw new Error('Usage: deploy-setup.js prepare|cookie|file-sha');
+  try {
+    if (command === 'prepare') await prepare(store);
+    else if (command === 'cookie') console.log(await adminCookie(store));
+    else throw new Error('Usage: deploy-setup.js prepare|cookie');
+  } finally {
+    await store.close();
+  }
 }
 
 if (require.main === module) {
@@ -149,4 +154,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { prepare, adminCookie, fileSha, decryptSetup, keyIdOf, BEGIN, END };
+module.exports = { prepare, adminCookie, decryptSetup, keyIdOf, BEGIN, END };

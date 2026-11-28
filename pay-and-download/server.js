@@ -3,15 +3,18 @@
 /*
  * Pay & Download
  *
- *   /          buyer page: scan the UPI QR, pay, enter the UTR, download the file
- *   /admin     admin panel: every submitted payment, price/UPI settings, the file to deliver
+ *   /p/<code>   buyer page of one payment link: scan the UPI QR, pay, enter the UTR, wait while the
+ *               owner checks, then download that link's file
+ *   /           opens the link chosen as the home page (Settings), or a short notice
+ *   /admin      admin panel: payments to check, payment links (each with its own file, price and QR),
+ *               settings
  *
- * Payments are NOT verified: any well-formed 12-digit UTR that has not been used before
- * unlocks the download straight away. The admin panel lists every UTR so the owner can
- * match them against their UPI account and block the download link of a fake one.
+ * A submitted UTR is NOT trusted: the payment stays "new" (Under checking) until the owner finds the
+ * money in their UPI app and clicks Received in the admin panel. Only then does the buyer's page show
+ * the download button; "Not received" tells the buyer instead.
  *
- * Data lives on the local disk (DATA_DIR, default ./data) or, when FIREBASE_PROJECT_ID is set,
- * in Cloud Firestore (see lib/store.js).
+ * Data lives on the local disk (DATA_DIR, default ./data) or, when FIREBASE_PROJECT_ID is set, in
+ * Cloud Firestore (see lib/store.js).
  */
 
 const crypto = require('node:crypto');
@@ -21,9 +24,11 @@ const multer = require('multer');
 const QRCode = require('qrcode');
 const auth = require('./lib/auth');
 const { createStore } = require('./lib/store');
-const { loadState, randomName } = require('./lib/state');
+const { loadState, makeLink, randomName } = require('./lib/state');
 
+const PUBLIC_DIR = path.join(__dirname, 'public');
 const SESSION_HOURS = 12;
+const CHECK_SECONDS = 120; // how long the buyer is asked to wait while the owner checks
 const UTR_PATTERN = /^\d{12}$/;
 const UPI_ID_PATTERN = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z0-9]{2,64}$/;
 const QR_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -65,10 +70,9 @@ function cleanFileName(name) {
 }
 
 /** NPCI "upi://pay" link; values percent-encoded (%20, never "+") so every UPI app reads them alike. */
-function upiLink(s) {
+function upiLink({ upiId, payeeName, amount, note }) {
   const enc = (v) => encodeURIComponent(v).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-  const note = (s.note || s.productName).slice(0, 50);
-  return `upi://pay?pa=${enc(s.upiId)}&pn=${enc(s.payeeName || s.upiId)}&am=${Number(s.amount).toFixed(2)}&cu=INR&tn=${enc(note)}`;
+  return `upi://pay?pa=${enc(upiId)}&pn=${enc(payeeName || upiId)}&am=${Number(amount).toFixed(2)}&cu=INR&tn=${enc(String(note).slice(0, 50))}`;
 }
 
 function cookies(req) {
@@ -80,9 +84,25 @@ function cookies(req) {
   return out;
 }
 
-function messagePage(title, text) {
+function messagePage(title, text, backUrl = null) {
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><link rel="stylesheet" href="/styles.css"></head><body><main class="shell"><section class="card stack center-text"><h1 class="title">${esc(title)}</h1><p class="muted">${esc(text)}</p><a class="btn primary" href="/">Go to payment page</a></section></main></body></html>`;
+  const back = backUrl ? `<a class="btn primary" href="${esc(backUrl)}">Go back to the payment page</a>` : '';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><link rel="stylesheet" href="/styles.css"></head><body><main class="shell"><section class="card stack center-text"><h1 class="title">${esc(title)}</h1><p class="muted">${esc(text)}</p>${back}</section></main></body></html>`;
+}
+
+/** Validates the editable fields of a link; returns { error } or { values }. */
+function linkFields(body, current = {}) {
+  const title = clean(body.title ?? current.title, 100);
+  const description = clean(body.description ?? current.description, 400);
+  const note = clean(body.note ?? current.note, 50);
+  const amount = Number(body.amount ?? current.amount);
+  if (!title) return { error: 'Enter a name for this link.' };
+  if (!Number.isFinite(amount) || amount < 1 || amount > 100000 || Math.abs(Math.round(amount * 100) - amount * 100) > 1e-6) {
+    return { error: 'Price must be between ₹1 and ₹1,00,000 (at most 2 decimals).' };
+  }
+  const values = { title, description, note, amount: Math.round(amount * 100) / 100 };
+  if (typeof body.active === 'boolean') values.active = body.active;
+  return { values };
 }
 
 // ---------------------------------------------------------------------------
@@ -94,17 +114,19 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
   store = store || createStore({ dataDir, env });
   const maxFileMb = Number(env.MAX_FILE_MB) || (store.kind === 'firestore' ? 25 : 200);
 
-  const { meta, payments } = await loadState(store);
+  const { meta, payments, links } = await loadState(store);
   const { settings } = meta;
   const saveMeta = () => store.saveMeta({ secret: meta.secret, settings, admin: meta.admin });
 
   // Uploaded files are served from the local disk; with Firestore that disk is only a cache.
-  for (const blob of [settings.file, settings.qrImage]) {
-    if (!blob) continue;
-    try {
-      await store.ensureLocal(blob.stored);
-    } catch (err) {
-      console.error(`Could not load ${blob.name || 'the scanner image'}: ${err.message}`);
+  for (const link of links) {
+    for (const blob of [link.file, link.qrImage]) {
+      if (!blob) continue;
+      try {
+        await store.ensureLocal(blob.stored);
+      } catch (err) {
+        console.error(`Could not load a file of "${link.title}": ${err.message}`);
+      }
     }
   }
 
@@ -128,59 +150,99 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
     res.status(401).json({ error: 'Please log in again.' });
   }
 
-  // ----- views -----
+  // ----- lookups & views -----
 
-  function setupProblems() {
+  const linkById = (id) => links.find((l) => l.id === id) || null;
+  const linkByCode = (code) => links.find((l) => l.code === code) || null;
+  const linkOf = (payment) => linkById(payment.linkId || settings.homeLinkId);
+
+  function linkProblems(link) {
     const problems = [];
-    if (!settings.file) problems.push('Upload the file buyers will download.');
-    if (!settings.upiId && !settings.qrImage) problems.push('Add your UPI ID or upload your scanner (QR) image.');
-    if (!(settings.amount > 0)) problems.push('Set the price.');
+    if (!link.file) problems.push('Upload the file buyers get.');
+    if (!settings.upiId && !link.qrImage) problems.push('Add your UPI ID in Settings, or upload a scanner image for this link.');
     return problems;
   }
 
-  function publicConfig() {
-    const s = settings;
+  function linkUpi(link) {
+    return settings.upiId
+      ? upiLink({ upiId: settings.upiId, payeeName: settings.payeeName, amount: link.amount, note: link.note || link.title })
+      : null;
+  }
+
+  function qrUrl(link) {
+    return link.qrImage || settings.upiId
+      ? `/api/links/${link.code}/qr?v=${encodeURIComponent(`${link.updatedAt}|${settings.updatedAt}`)}`
+      : null;
+  }
+
+  function publicLink(link) {
     return {
-      productName: s.productName,
-      description: s.description,
-      amount: s.amount,
-      upiId: s.upiId,
-      payeeName: s.payeeName,
-      upiLink: s.upiId ? upiLink(s) : null,
-      qrUrl: s.qrImage || s.upiId ? `/api/qr?v=${encodeURIComponent(s.updatedAt)}` : null,
-      fileName: s.file ? s.file.name : null,
-      fileSize: s.file ? s.file.size : null,
-      ready: setupProblems().length === 0,
+      code: link.code,
+      title: link.title,
+      description: link.description,
+      amount: link.amount,
+      upiId: settings.upiId,
+      payeeName: settings.payeeName,
+      upiLink: linkUpi(link),
+      qrUrl: qrUrl(link),
+      customQr: Boolean(link.qrImage),
+      fileName: link.file ? link.file.name : null,
+      ready: link.active && linkProblems(link).length === 0,
+      checkSeconds: CHECK_SECONDS,
     };
   }
 
-  function adminSettings() {
+  function adminLink(link) {
+    const mine = payments.filter((p) => (p.linkId || settings.homeLinkId) === link.id);
+    const received = mine.filter((p) => p.status === 'received');
     return {
-      ...publicConfig(),
-      note: settings.note,
-      customQr: Boolean(settings.qrImage),
-      file: settings.file ? { name: settings.file.name, size: settings.file.size, uploadedAt: settings.file.uploadedAt } : null,
-      problems: setupProblems(),
-      maxFileMb,
+      id: link.id,
+      code: link.code,
+      path: `/p/${link.code}`,
+      title: link.title,
+      description: link.description,
+      amount: link.amount,
+      note: link.note,
+      active: link.active,
+      isHome: settings.homeLinkId === link.id,
+      createdAt: link.createdAt,
+      updatedAt: link.updatedAt,
+      file: link.file ? { name: link.file.name, size: link.file.size, uploadedAt: link.file.uploadedAt } : null,
+      customQr: Boolean(link.qrImage),
+      qrUrl: qrUrl(link),
+      upiLink: linkUpi(link),
+      problems: linkProblems(link),
+      stats: {
+        payments: mine.length,
+        waiting: mine.filter((p) => p.status === 'new').length,
+        received: received.length,
+        receivedAmount: received.reduce((t, p) => t + Number(p.amount), 0),
+      },
     };
   }
 
   function buyerView(p) {
+    const link = linkOf(p);
+    const received = p.status === 'received';
     return {
+      token: p.token,
+      status: p.status,
       utr: p.utr,
       amount: p.amount,
-      productName: p.productName,
+      title: link ? link.title : p.linkTitle,
+      linkCode: link ? link.code : p.linkCode,
       createdAt: p.createdAt,
-      token: p.token,
-      downloadUrl: `/download/${p.token}`,
-      blocked: p.status === 'blocked',
-      fileName: settings.file ? settings.file.name : null,
+      checkSeconds: CHECK_SECONDS,
+      elapsedSeconds: Math.max(0, Math.floor((Date.now() - Date.parse(p.createdAt)) / 1000)),
+      downloadUrl: received ? `/download/${p.token}` : null,
+      fileName: received && link && link.file ? link.file.name : null,
     };
   }
 
-  function adminView(p) {
+  function adminPayment(p) {
     const { token, ...rest } = p;
-    return rest;
+    const link = linkOf(p);
+    return { ...rest, linkTitle: link ? link.title : p.linkTitle || '(deleted link)', linkCode: link ? link.code : p.linkCode || null };
   }
 
   function findByToken(token) {
@@ -188,13 +250,13 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
     return payments.find((p) => auth.safeEqual(p.token, token)) || null;
   }
 
-  async function touchSettings() {
-    settings.updatedAt = new Date().toISOString();
-    await saveMeta();
-  }
-
   function removeBlobLater(stored) {
     if (stored) store.deleteBlob(stored).catch((err) => console.error(`Could not delete ${stored}: ${err.message}`));
+  }
+
+  async function saveLink(link) {
+    link.updatedAt = new Date().toISOString();
+    await store.saveLink(link);
   }
 
   const app = express();
@@ -216,24 +278,46 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
     next();
   });
   app.use(express.json({ limit: '20kb' }));
-  app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
   app.get('/healthz', (req, res) => res.type('text').send('ok'));
 
+  // ----- pages -----
+
+  app.get('/', (req, res) => {
+    const home = linkById(settings.homeLinkId);
+    if (home && home.active) return res.redirect(302, `/p/${home.code}`);
+    res.sendFile(path.join(PUBLIC_DIR, 'home.html'));
+  });
+  app.get('/p/:code', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'pay.html')));
+  app.use(express.static(PUBLIC_DIR, { index: false, extensions: ['html'] }));
+
   // ----- buyer -----
 
-  app.get('/api/config', (req, res) => {
-    res.set('Cache-Control', 'no-store').json(publicConfig());
+  function activeLink(req, res) {
+    const link = linkByCode(req.params.code);
+    if (!link || !link.active) {
+      res.status(404).json({ error: 'This payment link is not active. Please ask the seller for a new link.' });
+      return null;
+    }
+    return link;
+  }
+
+  app.get('/api/links/:code', (req, res) => {
+    const link = activeLink(req, res);
+    if (link) res.set('Cache-Control', 'no-store').json(publicLink(link));
   });
 
-  app.get('/api/qr', async (req, res) => {
+  app.get('/api/links/:code/qr', async (req, res) => {
+    const link = activeLink(req, res);
+    if (!link) return;
     res.set('Cache-Control', 'no-cache');
-    if (settings.qrImage) {
-      await store.ensureLocal(settings.qrImage.stored);
-      return res.type(settings.qrImage.mime).sendFile(store.localPath(settings.qrImage.stored));
+    if (link.qrImage) {
+      await store.ensureLocal(link.qrImage.stored);
+      return res.type(link.qrImage.mime).sendFile(store.localPath(link.qrImage.stored));
     }
-    if (!settings.upiId) return res.status(404).end();
-    const svg = await QRCode.toString(upiLink(settings), { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
+    const upi = linkUpi(link);
+    if (!upi) return res.status(404).end();
+    const svg = await QRCode.toString(upi, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
     res.type('image/svg+xml').send(svg);
   });
 
@@ -243,28 +327,32 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
     message: 'Too many tries. Please wait a few minutes and try again.',
   });
 
-  app.post('/api/payments', submitLimit, async (req, res) => {
-    const body = req.body || {};
-    if (setupProblems().length) {
+  app.post('/api/links/:code/payments', submitLimit, async (req, res) => {
+    const link = activeLink(req, res);
+    if (!link) return;
+    if (linkProblems(link).length) {
       return res.status(503).json({ error: 'This page is not ready yet. Please try again later.' });
     }
+    const body = req.body || {};
     const utr = String(body.utr ?? '').replace(/[\s-]/g, '');
     if (!UTR_PATTERN.test(utr)) {
       return res.status(400).json({ error: 'Enter the 12-digit UTR / UPI Ref. No. from your payment app.' });
     }
     if (payments.some((p) => p.utr === utr)) {
       return res.status(409).json({
-        error: 'This UTR number has already been used. If you submitted it earlier, open this page on the same phone to download again.',
+        error: 'This UTR number has already been submitted. If it was you, open this page on the same phone to see its status.',
       });
     }
     const payment = {
       id: crypto.randomUUID(),
       token: crypto.randomBytes(24).toString('base64url'),
+      linkId: link.id,
+      linkTitle: link.title,
+      linkCode: link.code,
       utr,
       name: clean(body.name, 80),
       phone: clean(body.phone, 20),
-      amount: settings.amount,
-      productName: settings.productName,
+      amount: link.amount,
       status: 'new',
       createdAt: new Date().toISOString(),
       ip: req.ip,
@@ -290,29 +378,36 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
 
   app.get('/download/:token', async (req, res) => {
     const payment = findByToken(req.params.token);
-    const file = settings.file;
     if (!payment) {
       return res.status(404).type('html').send(messagePage('Link not found', 'This download link is not valid.'));
+    }
+    const link = linkOf(payment);
+    const back = link ? `/p/${link.code}` : null;
+    if (payment.status === 'new') {
+      return res
+        .status(403)
+        .type('html')
+        .send(messagePage('Payment under checking', 'Your download unlocks on the payment page as soon as the seller confirms your payment.', back));
     }
     if (payment.status === 'blocked') {
       return res
         .status(403)
         .type('html')
-        .send(messagePage('Download stopped', 'The seller has stopped this download. Please contact them with your UTR number.'));
+        .send(messagePage('Payment not received', 'The seller could not find this payment. If you have paid, contact them with your UTR number.', back));
     }
-    if (!file) {
-      return res.status(404).type('html').send(messagePage('File not available', 'The file is not available right now. Please try again later.'));
+    if (!link || !link.file) {
+      return res.status(404).type('html').send(messagePage('File not available', 'The file is not available right now. Please contact the seller.'));
     }
-    await store.ensureLocal(file.stored);
+    await store.ensureLocal(link.file.stored);
     payment.downloads += 1;
     payment.lastDownloadAt = new Date().toISOString();
     store.savePayment(payment).catch((err) => console.error(`Could not save the download count: ${err.message}`));
-    res.download(store.localPath(file.stored), file.name, {
-      headers: { 'Cache-Control': 'private, no-store', 'Content-Type': file.mime || 'application/octet-stream' },
+    res.download(store.localPath(link.file.stored), link.file.name, {
+      headers: { 'Cache-Control': 'private, no-store', 'Content-Type': link.file.mime || 'application/octet-stream' },
     });
   });
 
-  // ----- admin -----
+  // ----- admin: login -----
 
   const loginLimit = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -344,8 +439,10 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
 
   app.get('/api/admin/session', requireAdmin, (req, res) => res.json({ ok: true }));
 
+  // ----- admin: payments -----
+
   app.get('/api/admin/payments', requireAdmin, (req, res) => {
-    res.set('Cache-Control', 'no-store').json({ payments: payments.map(adminView).reverse() });
+    res.set('Cache-Control', 'no-store').json({ payments: payments.map(adminPayment).reverse() });
   });
 
   app.get('/api/admin/payments.csv', requireAdmin, (req, res) => {
@@ -355,9 +452,10 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
       if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
       return `"${s.replace(/"/g, '""')}"`;
     };
-    const rows = [['Date', 'UTR', 'Name', 'Mobile', 'Amount', 'Product', 'Status', 'Downloads', 'Last download', 'IP']];
-    for (const p of [...payments].reverse()) {
-      rows.push([p.createdAt, p.utr, p.name, p.phone, p.amount, p.productName, p.status, p.downloads, p.lastDownloadAt || '', p.ip]);
+    const label = { new: 'Waiting', received: 'Received', blocked: 'Not received' };
+    const rows = [['Date', 'UTR', 'Name', 'Mobile', 'Amount', 'Link', 'Status', 'Downloads', 'Last download', 'IP']];
+    for (const p of [...payments].reverse().map(adminPayment)) {
+      rows.push([p.createdAt, p.utr, p.name, p.phone, p.amount, p.linkTitle, label[p.status], p.downloads, p.lastDownloadAt || '', p.ip]);
     }
     res
       .set('Cache-Control', 'no-store')
@@ -373,8 +471,9 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
     if (!STATUSES.has(status)) return res.status(400).json({ error: 'Unknown status.' });
     payment.status = status;
     payment.updatedAt = new Date().toISOString();
+    if (status === 'received') payment.receivedAt = payment.updatedAt;
     await store.savePayment(payment);
-    res.json(adminView(payment));
+    res.json(adminPayment(payment));
   });
 
   app.delete('/api/admin/payments/:id', requireAdmin, async (req, res) => {
@@ -385,32 +484,49 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
     res.json({ ok: true });
   });
 
-  app.get('/api/admin/settings', requireAdmin, (req, res) => {
-    res.set('Cache-Control', 'no-store').json(adminSettings());
+  // ----- admin: links -----
+
+  app.get('/api/admin/links', requireAdmin, (req, res) => {
+    res.set('Cache-Control', 'no-store').json({ links: links.map(adminLink).reverse() });
   });
 
-  app.put('/api/admin/settings', requireAdmin, async (req, res) => {
-    const body = req.body || {};
-    const productName = clean(body.productName, 100);
-    const description = clean(body.description, 400);
-    const note = clean(body.note, 50);
-    const payeeName = clean(body.payeeName, 60);
-    const upiId = clean(body.upiId, 320);
-    const amount = Number(body.amount);
+  app.post('/api/admin/links', requireAdmin, async (req, res) => {
+    const { error, values } = linkFields(req.body || {});
+    if (error) return res.status(400).json({ error });
+    const link = makeLink(values, links);
+    await store.saveLink(link);
+    links.push(link);
+    res.status(201).json(adminLink(link));
+  });
 
-    if (!productName) return res.status(400).json({ error: 'Enter the product name.' });
-    if (!Number.isFinite(amount) || amount < 1 || amount > 100000 || Math.abs(Math.round(amount * 100) - amount * 100) > 1e-6) {
-      return res.status(400).json({ error: 'Price must be between ₹1 and ₹1,00,000 (at most 2 decimals).' });
+  function adminLinkParam(req, res) {
+    const link = linkById(req.params.id);
+    if (!link) res.status(404).json({ error: 'Link not found.' });
+    return link;
+  }
+
+  app.put('/api/admin/links/:id', requireAdmin, async (req, res) => {
+    const link = adminLinkParam(req, res);
+    if (!link) return;
+    const { error, values } = linkFields(req.body || {}, link);
+    if (error) return res.status(400).json({ error });
+    Object.assign(link, values);
+    await saveLink(link);
+    res.json(adminLink(link));
+  });
+
+  app.delete('/api/admin/links/:id', requireAdmin, async (req, res) => {
+    const link = adminLinkParam(req, res);
+    if (!link) return;
+    await store.deleteLink(link.id);
+    links.splice(links.indexOf(link), 1);
+    if (settings.homeLinkId === link.id) {
+      settings.homeLinkId = null;
+      await saveMeta();
     }
-    if (upiId && !UPI_ID_PATTERN.test(upiId)) {
-      return res.status(400).json({ error: 'That does not look like a UPI ID (example: 9876543210@ybl).' });
-    }
-    if (!upiId && !settings.qrImage) {
-      return res.status(400).json({ error: 'Enter your UPI ID (or upload your scanner image first).' });
-    }
-    Object.assign(settings, { productName, description, note, payeeName, upiId, amount: Math.round(amount * 100) / 100 });
-    await touchSettings();
-    res.json(adminSettings());
+    removeBlobLater(link.file && link.file.stored);
+    removeBlobLater(link.qrImage && link.qrImage.stored);
+    res.json({ ok: true });
   });
 
   const storage = multer.diskStorage({
@@ -430,55 +546,94 @@ async function createApp({ env = process.env, dataDir, store } = {}) {
   }).single('qr');
 
   function handleUpload(middleware, maxMb) {
-    return (req, res, next) =>
+    return (req, res, next) => {
+      if (!linkById(req.params.id)) return res.status(404).json({ error: 'Link not found.' });
       middleware(req, res, (err) => {
         if (!err) return next();
         const message = err.code === 'LIMIT_FILE_SIZE' ? `File is too large (max ${maxMb} MB).` : 'Upload failed. Please try again.';
         res.status(400).json({ error: message });
       });
+    };
   }
 
-  app.post('/api/admin/file', requireAdmin, handleUpload(fileUpload, maxFileMb), async (req, res) => {
+  app.post('/api/admin/links/:id/file', requireAdmin, handleUpload(fileUpload, maxFileMb), async (req, res) => {
+    const link = adminLinkParam(req, res);
+    if (!link) return;
     if (!req.file) return res.status(400).json({ error: 'Choose a file to upload.' });
     await store.putBlob(req.file.filename);
-    const old = settings.file;
-    settings.file = {
+    const old = link.file;
+    link.file = {
       stored: req.file.filename,
       name: cleanFileName(req.file.originalname),
       size: req.file.size,
       mime: req.file.mimetype || 'application/octet-stream',
       uploadedAt: new Date().toISOString(),
     };
-    await touchSettings();
+    await saveLink(link);
     if (old) removeBlobLater(old.stored);
-    res.json(adminSettings());
+    res.json(adminLink(link));
   });
 
-  app.get('/api/admin/file', requireAdmin, async (req, res) => {
-    const file = settings.file;
-    if (!file) return res.status(404).json({ error: 'No file uploaded yet.' });
-    await store.ensureLocal(file.stored);
-    res.download(store.localPath(file.stored), file.name, { headers: { 'Cache-Control': 'private, no-store' } });
+  app.get('/api/admin/links/:id/file', requireAdmin, async (req, res) => {
+    const link = adminLinkParam(req, res);
+    if (!link) return;
+    if (!link.file) return res.status(404).json({ error: 'No file uploaded yet.' });
+    await store.ensureLocal(link.file.stored);
+    res.download(store.localPath(link.file.stored), link.file.name, { headers: { 'Cache-Control': 'private, no-store' } });
   });
 
-  app.post('/api/admin/qr', requireAdmin, handleUpload(qrUpload, 5), async (req, res) => {
+  app.post('/api/admin/links/:id/qr', requireAdmin, handleUpload(qrUpload, 5), async (req, res) => {
+    const link = adminLinkParam(req, res);
+    if (!link) return;
     if (!req.file) return res.status(400).json({ error: 'Upload a PNG, JPG or WebP image of your scanner.' });
     await store.putBlob(req.file.filename);
-    const old = settings.qrImage;
-    settings.qrImage = { stored: req.file.filename, mime: req.file.mimetype, uploadedAt: new Date().toISOString() };
-    await touchSettings();
+    const old = link.qrImage;
+    link.qrImage = { stored: req.file.filename, mime: req.file.mimetype, uploadedAt: new Date().toISOString() };
+    await saveLink(link);
     if (old) removeBlobLater(old.stored);
-    res.json(adminSettings());
+    res.json(adminLink(link));
   });
 
-  app.delete('/api/admin/qr', requireAdmin, async (req, res) => {
+  app.delete('/api/admin/links/:id/qr', requireAdmin, async (req, res) => {
+    const link = adminLinkParam(req, res);
+    if (!link) return;
     if (!settings.upiId) {
-      return res.status(400).json({ error: 'Save your UPI ID first, so a QR code can be made from it.' });
+      return res.status(400).json({ error: 'Save your UPI ID in Settings first, so a QR code can be made from it.' });
     }
-    const old = settings.qrImage;
-    settings.qrImage = null;
-    await touchSettings();
+    const old = link.qrImage;
+    link.qrImage = null;
+    await saveLink(link);
     if (old) removeBlobLater(old.stored);
+    res.json(adminLink(link));
+  });
+
+  // ----- admin: settings -----
+
+  function adminSettings() {
+    return {
+      upiId: settings.upiId,
+      payeeName: settings.payeeName,
+      homeLinkId: settings.homeLinkId,
+      maxFileMb,
+      checkSeconds: CHECK_SECONDS,
+    };
+  }
+
+  app.get('/api/admin/settings', requireAdmin, (req, res) => {
+    res.set('Cache-Control', 'no-store').json(adminSettings());
+  });
+
+  app.put('/api/admin/settings', requireAdmin, async (req, res) => {
+    const body = req.body || {};
+    const upiId = clean(body.upiId ?? settings.upiId, 320);
+    const payeeName = clean(body.payeeName ?? settings.payeeName, 60);
+    const homeLinkId = body.homeLinkId === undefined ? settings.homeLinkId : body.homeLinkId || null;
+    if (upiId && !UPI_ID_PATTERN.test(upiId)) {
+      return res.status(400).json({ error: 'That does not look like a UPI ID (example: 9876543210@ybl).' });
+    }
+    if (homeLinkId && !linkById(homeLinkId)) return res.status(400).json({ error: 'That link no longer exists.' });
+    Object.assign(settings, { upiId, payeeName, homeLinkId, updatedAt: new Date().toISOString() });
+    await saveMeta();
     res.json(adminSettings());
   });
 
@@ -502,7 +657,7 @@ if (require.main === module) {
     .then((app) => {
       app.listen(port, () => {
         console.log(`Storage      : ${app.locals.store.kind === 'firestore' ? 'Cloud Firestore' : 'local disk'}`);
-        console.log(`Payment page : http://localhost:${port}/`);
+        console.log(`Site         : http://localhost:${port}/`);
         console.log(`Admin panel  : http://localhost:${port}/admin   (ID: ${app.locals.adminUsername})`);
         if (app.locals.generatedPassword) {
           console.log(`Admin password (shown only now): ${app.locals.generatedPassword}`);

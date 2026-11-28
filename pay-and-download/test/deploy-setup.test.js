@@ -1,14 +1,13 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { after, before, describe, test } = require('node:test');
 const { EMULATOR, PROJECT, tempDir, clearFirestore, start } = require('./helpers');
 
 describe('deploy with an encrypted setup (Firestore emulator)', { skip: !EMULATOR && 'set FIRESTORE_EMULATOR_HOST' }, () => {
-  const { prepare, adminCookie, fileSha } = require('../scripts/deploy-setup');
+  const { prepare, adminCookie } = require('../scripts/deploy-setup');
   const { buildSetup, encryptSetup } = require('../scripts/encrypt-setup');
   const { createStore } = require('../lib/store');
 
@@ -34,15 +33,15 @@ describe('deploy with an encrypted setup (Firestore emulator)', { skip: !EMULATO
     fs.rmSync(work, { recursive: true, force: true });
   });
 
-  test('first deploy: prints a public key, nothing private to apply, site not ready', async () => {
+  test('first deploy: prints a public key, nothing private to apply', async () => {
     const first = await prepare(store, { setupFile, log });
     assert.equal(first.applied, false);
     assert.ok(logs.some((l) => l.includes('BEGIN PUBLIC KEY')));
 
-    // The site starts with a random admin password nobody knows yet.
+    // The site starts with a random admin password nobody knows yet, and no links.
     site = await start({ env, dataDir: tempDir() });
     assert.ok(site.app.locals.generatedPassword);
-    assert.equal((await (await fetch(`${site.base}/api/config`)).json()).ready, false);
+    assert.equal((await fetch(`${site.base}/`, { redirect: 'manual' })).status, 200);
     await site.close();
     site = null;
 
@@ -69,12 +68,14 @@ describe('deploy with an encrypted setup (Firestore emulator)', { skip: !EMULATO
     assert.notEqual(later.keyId, result.keyId);
   });
 
-  test('the site uses the new admin login and serves the file', async () => {
+  test('the site uses the new admin login; the file belongs to the home-page link', async () => {
     site = await start({ env, dataDir: tempDir() });
     assert.equal(site.app.locals.generatedPassword, null);
-    const config = await (await fetch(`${site.base}/api/config`)).json();
-    assert.equal(config.ready, true);
-    assert.equal(config.fileName, 'AA0811.pdf');
+    const home = await fetch(`${site.base}/`, { redirect: 'manual' });
+    assert.equal(home.status, 302);
+    const code = home.headers.get('location').split('/')[2];
+    const link = await (await fetch(`${site.base}/api/links/${code}`)).json();
+    assert.equal(link.fileName, 'AA0811.pdf');
 
     const login = await fetch(`${site.base}/api/admin/login`, {
       method: 'POST',
@@ -82,24 +83,12 @@ describe('deploy with an encrypted setup (Firestore emulator)', { skip: !EMULATO
       body: JSON.stringify({ username: 'admin', password: 'secret-pass-1' }),
     });
     assert.equal(login.status, 200);
-
-    const pay = await (
-      await fetch(`${site.base}/api/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ utr: '000012345678' }),
-      })
-    ).json();
-    const got = Buffer.from(await (await fetch(site.base + pay.downloadUrl)).arrayBuffer());
-    assert.equal(crypto.createHash('sha256').update(got).digest('hex'), await fileSha(store));
-    assert.deepEqual(got, pdf);
   });
 
   test('the smoke-test cookie opens the admin API', async () => {
     const cookie = `admin_session=${await adminCookie(store)}`;
-    const { payments } = await (await fetch(`${site.base}/api/admin/payments`, { headers: { cookie } })).json();
-    const entry = payments.find((p) => p.utr === '000012345678');
-    const del = await fetch(`${site.base}/api/admin/payments/${entry.id}`, { method: 'DELETE', headers: { cookie } });
-    assert.equal(del.status, 200);
+    const res = await fetch(`${site.base}/api/admin/links`, { headers: { cookie } });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).links.length, 1);
   });
 });

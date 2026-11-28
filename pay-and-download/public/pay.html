@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#1f4fd8" />
+    <meta name="robots" content="noindex" />
     <title>Pay &amp; Download</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -12,8 +13,8 @@
       <section id="loading" class="card center-text muted">Loading…</section>
 
       <section id="unavailable" class="card stack center-text" hidden>
-        <h1 class="title">Coming soon</h1>
-        <p class="muted" id="unavailable-text">This payment page is not ready yet. Please check back later.</p>
+        <h1 class="title" id="unavailable-title">Link not active</h1>
+        <p class="muted" id="unavailable-text">This payment link is not active. Please ask the seller for a new link.</p>
       </section>
 
       <section id="flow" class="card" hidden>
@@ -26,11 +27,12 @@
         <ol class="steps" aria-label="Progress">
           <li data-step="1">Pay</li>
           <li data-step="2">UTR</li>
-          <li data-step="3">Download</li>
+          <li data-step="3">Checking</li>
+          <li data-step="4">Download</li>
         </ol>
 
         <!-- Step 1: scan & pay -->
-        <div class="step stack" id="step-1">
+        <div class="step stack" id="step-pay">
           <div class="qr-box"><img id="qr" alt="UPI QR code to pay" width="256" height="256" /></div>
           <p class="center-text small"><strong>Scan this QR with any UPI app</strong><br /><span class="muted">किसी भी UPI ऐप से QR स्कैन करके पेमेंट करें</span></p>
           <div class="apps" aria-hidden="true"><span>Google Pay</span><span>PhonePe</span><span>Paytm</span><span>BHIM</span><span>Any UPI app</span></div>
@@ -47,7 +49,7 @@
         </div>
 
         <!-- Step 2: UTR -->
-        <form class="step stack" id="step-2" novalidate hidden>
+        <form class="step stack" id="step-utr" novalidate hidden>
           <label class="field">
             <span>UTR / UPI Ref. No. <span class="counter" id="utr-count">0/12</span></span>
             <input
@@ -84,8 +86,36 @@
           <button class="btn link block" type="button" id="back">← Back to QR code</button>
         </form>
 
-        <!-- Step 3: success & download -->
-        <div class="step stack center-text" id="step-3" hidden>
+        <!-- Step 3: under checking -->
+        <div class="step stack center-text" id="step-checking" hidden>
+          <div class="countdown" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle class="track" cx="60" cy="60" r="52" />
+              <circle class="bar" id="ring" cx="60" cy="60" r="52" />
+            </svg>
+            <div class="countdown-text"><strong id="seconds">120</strong><span>sec</span></div>
+          </div>
+          <div>
+            <h2 class="title">Under Checking</h2>
+            <p class="muted small">पेमेंट चेक हो रहा है</p>
+          </div>
+          <p class="notice" id="checking-text" role="status">
+            <strong>Kindly wait for <span id="wait-seconds">120</span> sec. Don't close this page.</strong><br />
+            कृपया <span id="wait-seconds-hi">120</span> सेकंड रुकें, पेज बंद न करें।
+          </p>
+          <p class="notice" id="checking-late" role="status" hidden>
+            <strong>Still checking… Please keep this page open.</strong> Your download will appear here by itself as soon as the payment is confirmed.<br />
+            अभी चेक हो रहा है… पेज खुला रखें, पेमेंट कन्फ़र्म होते ही डाउनलोड बटन यहीं आ जाएगा।
+          </p>
+          <dl class="receipt">
+            <div><dt>Amount</dt><dd>₹<span class="r-amount"></span></dd></div>
+            <div><dt>UTR</dt><dd class="r-utr"></dd></div>
+            <div><dt>Submitted</dt><dd class="r-date"></dd></div>
+          </dl>
+        </div>
+
+        <!-- Step 4: received & download -->
+        <div class="step stack center-text" id="step-done" hidden>
           <div class="success-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
               <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -96,11 +126,10 @@
             <p class="muted small">पेमेंट सफल रहा — अपनी फ़ाइल डाउनलोड करें</p>
           </div>
           <dl class="receipt">
-            <div><dt>Amount</dt><dd>₹<span id="r-amount"></span></dd></div>
-            <div><dt>UTR</dt><dd id="r-utr"></dd></div>
-            <div><dt>Date</dt><dd id="r-date"></dd></div>
+            <div><dt>Amount</dt><dd>₹<span class="r-amount"></span></dd></div>
+            <div><dt>UTR</dt><dd class="r-utr"></dd></div>
+            <div><dt>Date</dt><dd class="r-date"></dd></div>
           </dl>
-          <p class="error" id="blocked" hidden>The seller has stopped this download. Please contact them with your UTR number.</p>
           <a class="btn success block download" id="download" href="#">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" />
@@ -108,12 +137,26 @@
             Download Your File
           </a>
           <p class="small muted" id="file-name"></p>
-          <p class="small muted">You can open this page again on this phone to download again.</p>
-          <button class="btn link block small" type="button" id="restart">Make another payment</button>
+          <p class="small muted">You can open this link again on this phone to download again.</p>
+        </div>
+
+        <!-- Not received -->
+        <div class="step stack center-text" id="step-rejected" hidden>
+          <div class="fail-mark" aria-hidden="true">!</div>
+          <div>
+            <h2 class="title">Payment not received</h2>
+            <p class="muted small">पेमेंट नहीं मिला</p>
+          </div>
+          <p class="error">The seller could not find this payment. If you have paid, contact the seller with your UTR number.</p>
+          <dl class="receipt">
+            <div><dt>Amount</dt><dd>₹<span class="r-amount"></span></dd></div>
+            <div><dt>UTR</dt><dd class="r-utr"></dd></div>
+          </dl>
+          <button class="btn ghost block" type="button" id="retry">Enter a different UTR</button>
         </div>
       </section>
 
-      <p class="foot small muted">Secure UPI payment · Instant download</p>
+      <p class="foot small muted">Secure UPI payment</p>
     </main>
     <div class="toast" id="toast" role="status" hidden></div>
     <script src="/app.js"></script>
